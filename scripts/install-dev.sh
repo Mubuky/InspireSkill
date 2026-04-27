@@ -150,6 +150,14 @@ install_launch_agent() {
   local log_file="$HOME/Library/Logs/inspire-skill-update-check.log"
   mkdir -p "$(dirname "$plist")" "$(dirname "$log_file")"
 
+  local user_http="${http_proxy:-${HTTP_PROXY:-}}"
+  local user_https="${https_proxy:-${HTTPS_PROXY:-${user_http:-}}}"
+  local proxy_block=""
+  if [[ -n "$user_http" || -n "$user_https" ]]; then
+    proxy_block=$(printf '    <key>http_proxy</key>                <string>%s</string>\n    <key>https_proxy</key>               <string>%s</string>\n    <key>HTTP_PROXY</key>                <string>%s</string>\n    <key>HTTPS_PROXY</key>               <string>%s</string>\n' \
+      "$user_http" "$user_https" "$user_http" "$user_https")
+  fi
+
   cat >"$plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -166,11 +174,7 @@ install_launch_agent() {
   <key>EnvironmentVariables</key>
   <dict>
     <key>INSPIRE_SKIP_UPDATE_CHECK</key> <string>1</string>
-    <key>http_proxy</key>                <string>http://127.0.0.1:7897</string>
-    <key>https_proxy</key>               <string>http://127.0.0.1:7897</string>
-    <key>HTTP_PROXY</key>                <string>http://127.0.0.1:7897</string>
-    <key>HTTPS_PROXY</key>               <string>http://127.0.0.1:7897</string>
-  </dict>
+${proxy_block}  </dict>
   <key>StartInterval</key>         <integer>86400</integer>
   <key>RunAtLoad</key>             <true/>
   <key>StandardOutPath</key>       <string>${log_file}</string>

@@ -101,10 +101,21 @@ def _upgrade_cli(silent: bool) -> bool:
     else:
         if not silent:
             click.secho(
-                "✗ Can't auto-upgrade: this build isn't managed by uv tool / pipx "
-                f"(python={sys.executable}). Reinstall via scripts/install.sh or rerun "
-                "./scripts/install-dev.sh from a local clone.",
+                "✗ Can't auto-upgrade in place: this build isn't managed by "
+                "`uv tool install` or `pipx install`.",
                 fg="red",
+                err=True,
+            )
+            click.secho(f"  python = {sys.executable}", fg="red", err=True)
+            click.secho(f"  prefix = {sys.prefix}", fg="red", err=True)
+            click.echo(
+                "\n  Pick whichever fits your install:\n"
+                "    • Custom venv / `pip install -e .`:\n"
+                "        pip install -U inspire-skill\n"
+                "    • Reinstall fresh via the official installer:\n"
+                "        curl -fsSL https://raw.githubusercontent.com/realZillionX/InspireSkill/main/scripts/install.sh | bash\n"
+                "    • Working from a local clone:\n"
+                "        cd <repo> && git pull --ff-only && ./scripts/install-dev.sh",
                 err=True,
             )
         return False
@@ -115,11 +126,25 @@ def _upgrade_cli(silent: bool) -> bool:
         subprocess.run(cmd, check=True)
     except FileNotFoundError:
         if not silent:
-            click.secho(f"✗ `{cmd[0]}` not on PATH.", fg="red", err=True)
+            click.secho(
+                f"✗ `{cmd[0]}` not on PATH — you said this build was managed "
+                f"by {cmd[0]} but the binary is gone.\n"
+                f"  Reinstall via scripts/install.sh or run `{cmd[0]} --version` "
+                f"to confirm.",
+                fg="red",
+                err=True,
+            )
         return False
     except subprocess.CalledProcessError as e:
         if not silent:
-            click.secho(f"✗ {cmd[0]} upgrade failed: exit {e.returncode}", fg="red", err=True)
+            click.secho(
+                f"✗ {cmd[0]} upgrade failed (exit {e.returncode}). "
+                f"If this looks like a network / mirror error, retry; if it "
+                f"keeps failing, run `{' '.join(cmd)}` manually to see the "
+                f"underlying message.",
+                fg="red",
+                err=True,
+            )
         return False
     return True
 
@@ -138,15 +163,40 @@ def _download_tarball(timeout: int = 30) -> bytes | None:
 
 
 def _extract_assets(tarball: bytes, dest: Path) -> Path | None:
-    """Extract the tarball into `dest` and return the top-level extracted dir."""
+    """Extract the tarball into `dest` and return the top-level extracted dir.
+
+    Defensive about two things:
+    - **Top-level dir detection**: GitHub codeload tarballs always wrap
+      content under a single ``<repo>-<ref>/`` directory, but we don't
+      trust that ``members[0]`` is that directory entry — different tar
+      tools order entries differently. Find the unique top segment by
+      scanning all members.
+    - **Path traversal**: pin ``filter='data'`` on Python 3.12+ where
+      that's a documented safe default. Older Pythons silently use the
+      legacy 'fully trusting' filter (``extractall`` without a filter
+      kwarg), which is what we used before — codeload is GitHub-trusted
+      so this is low-risk, but the explicit filter is strictly safer.
+    """
     try:
         with tarfile.open(fileobj=io.BytesIO(tarball), mode="r:gz") as tf:
-            # GitHub codeload tarballs use a single top-level dir like InspireSkill-main/
             members = tf.getmembers()
             if not members:
                 return None
-            top = members[0].name.split("/", 1)[0]
-            tf.extractall(dest)
+            top_segments = {m.name.split("/", 1)[0] for m in members if m.name}
+            if len(top_segments) != 1:
+                click.secho(
+                    f"✗ tarball has unexpected layout (top-level dirs: {sorted(top_segments)}).",
+                    fg="red",
+                    err=True,
+                )
+                return None
+            top = top_segments.pop()
+            try:
+                tf.extractall(dest, filter="data")  # type: ignore[arg-type]
+            except TypeError:
+                # Python < 3.11.4 (no `filter=` kwarg). codeload is GitHub
+                # which we trust, so the legacy extract is acceptable.
+                tf.extractall(dest)
             extracted = dest / top
             return extracted if extracted.is_dir() else None
     except (tarfile.TarError, OSError) as e:

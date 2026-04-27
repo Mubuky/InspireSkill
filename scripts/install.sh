@@ -107,38 +107,77 @@ fi
 
 if (( INSTALL_CLI )); then
   if command -v uv >/dev/null 2>&1; then
+    INSTALLER="uv"
     log "installing $SPEC_LABEL via $(bold 'uv tool')"
-    uv tool install --force "$SPEC"
+    uv tool install --force "$SPEC" || die "uv tool install failed — check the spec '$SPEC' and try again."
+    # If a previous run installed the same package via pipx, leave that alone
+    # would be confusing — we'd have two `inspire` shims competing for
+    # ~/.local/bin/inspire and the dev-install symlink resolution gets weird.
+    if command -v pipx >/dev/null 2>&1 && pipx list --short 2>/dev/null | grep -q "^${PACKAGE} "; then
+      log "removing earlier pipx install of $(bold "$PACKAGE") (uv tool now owns it)"
+      pipx uninstall "$PACKAGE" >/dev/null 2>&1 || true
+    fi
   elif command -v pipx >/dev/null 2>&1; then
+    INSTALLER="pipx"
     log "installing $SPEC_LABEL via $(bold pipx)"
-    pipx install --force "$SPEC"
+    pipx install --force "$SPEC" || die "pipx install failed — check the spec '$SPEC' and try again."
   else
     die "need uv or pipx. Install uv:  curl -LsSf https://astral.sh/uv/install.sh | sh"
   fi
 
-  if command -v inspire >/dev/null 2>&1; then
-    ok "$(inspire --version 2>/dev/null || echo "$PACKAGE installed")"
-  else
-    warn "$(bold inspire) not on PATH yet. If you use uv tool, run $(bold 'uv tool update-shell') or restart your shell."
+  # Clean up stale shims from earlier installer paths.
+  [[ -L "$HOME/.local/bin/inspire-update" ]] && rm -f "$HOME/.local/bin/inspire-update" \
+    && ok "removed legacy shim $(dim "$HOME/.local/bin/inspire-update")"
+
+  # Make sure ~/.local/bin is on PATH so the user can run `inspire` immediately
+  # in the *next* shell. Both uv and pipx put binaries there but neither edits
+  # the user's shell rc by default, so a fresh-machine install would leave the
+  # user staring at "inspire: command not found".
+  if ! command -v inspire >/dev/null 2>&1; then
+    case "$INSTALLER" in
+      uv)
+        if uv tool update-shell >/dev/null 2>&1; then
+          ok "added ~/.local/bin to your shell rc via $(bold 'uv tool update-shell')"
+        else
+          warn "couldn't run $(bold 'uv tool update-shell'); add ~/.local/bin to PATH manually."
+        fi
+        ;;
+      pipx)
+        if pipx ensurepath --force >/dev/null 2>&1; then
+          ok "added ~/.local/bin to your shell rc via $(bold 'pipx ensurepath')"
+        else
+          warn "couldn't run $(bold 'pipx ensurepath'); add ~/.local/bin to PATH manually."
+        fi
+        ;;
+    esac
+    warn "open a new terminal or run $(bold 'exec \$SHELL') for $(bold inspire) to be on PATH."
   fi
 
-  # Clean up stale symlinks from previous dev installs / legacy Inspire-cli shims.
-  for stale in "$HOME/.local/bin/inspire-update"; do
-    if [[ -L "$stale" ]]; then
-      rm -f "$stale"
-      ok "removed legacy shim $(dim "$stale")"
-    fi
-  done
+  # Print the version we just landed on, regardless of PATH state. We invoke
+  # the binary directly via INSTALLER's known location so the message is
+  # accurate even if the user hasn't reloaded their shell yet.
+  INSPIRE_BIN=""
+  if command -v inspire >/dev/null 2>&1; then
+    INSPIRE_BIN="$(command -v inspire)"
+  elif [[ -x "$HOME/.local/bin/inspire" ]]; then
+    INSPIRE_BIN="$HOME/.local/bin/inspire"
+  fi
+  if [[ -n "$INSPIRE_BIN" ]]; then
+    ok "$(INSPIRE_SKIP_UPDATE_CHECK=1 "$INSPIRE_BIN" --version 2>/dev/null || echo "$PACKAGE installed")"
+  fi
 fi
 
 # ---- fetch SKILL.md + references/ ------------------------------------------
 TMP="$(mktemp -d -t inspire-skill.XXXXXX)"
 trap 'rm -rf "$TMP"' EXIT
 
-TAR_URL="https://codeload.github.com/${REPO_SLUG}/tar.gz/refs/heads/${REF}"
+# codeload accepts the short form `tar.gz/<ref>` for branches, tags AND
+# commit SHAs. The previous form `tar.gz/refs/heads/<ref>` 404'd for tags
+# (e.g. `--ref v3.0.0`) and SHAs — see release notes for v3.0.3.
+TAR_URL="https://codeload.github.com/${REPO_SLUG}/tar.gz/${REF}"
 log "fetching skill bundle $(dim "$TAR_URL")"
 if ! curl -fsSL "$TAR_URL" | tar -xzf - -C "$TMP"; then
-  die "tarball fetch failed — check network / proxy and that ref '$REF' exists."
+  die "tarball fetch failed — check network / proxy, and that ref '$REF' exists in the repo (try $(bold 'git ls-remote https://github.com/'"$REPO_SLUG"'.git') to confirm)."
 fi
 
 TOP="$(find "$TMP" -mindepth 1 -maxdepth 1 -type d | head -n1)"
@@ -196,6 +235,21 @@ install_launch_agent() {
   local log_file="$HOME/Library/Logs/inspire-skill-update-check.log"
   mkdir -p "$(dirname "$plist")" "$(dirname "$log_file")"
 
+  # launchd doesn't inherit the user's shell env on macOS, so the daily
+  # version check needs proxy vars baked in IF the user has them set right
+  # now. Read what's in the current env (which `curl | bash` inherits from
+  # the user's shell). If nothing's set, we leave the EnvironmentVariables
+  # block minimal — the previous version of this script hardcoded
+  # 127.0.0.1:7897 (Clash Verge default) which silently broke for everyone
+  # who didn't run that exact proxy.
+  local user_http="${http_proxy:-${HTTP_PROXY:-}}"
+  local user_https="${https_proxy:-${HTTPS_PROXY:-${user_http:-}}}"
+  local proxy_block=""
+  if [[ -n "$user_http" || -n "$user_https" ]]; then
+    proxy_block=$(printf '    <key>http_proxy</key>                <string>%s</string>\n    <key>https_proxy</key>               <string>%s</string>\n    <key>HTTP_PROXY</key>                <string>%s</string>\n    <key>HTTPS_PROXY</key>               <string>%s</string>\n' \
+      "$user_http" "$user_https" "$user_http" "$user_https")
+  fi
+
   cat >"$plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -212,11 +266,7 @@ install_launch_agent() {
   <key>EnvironmentVariables</key>
   <dict>
     <key>INSPIRE_SKIP_UPDATE_CHECK</key> <string>1</string>
-    <key>http_proxy</key>                <string>http://127.0.0.1:7897</string>
-    <key>https_proxy</key>               <string>http://127.0.0.1:7897</string>
-    <key>HTTP_PROXY</key>                <string>http://127.0.0.1:7897</string>
-    <key>HTTPS_PROXY</key>               <string>http://127.0.0.1:7897</string>
-  </dict>
+${proxy_block}  </dict>
   <key>StartInterval</key>         <integer>86400</integer>
   <key>RunAtLoad</key>             <true/>
   <key>StandardOutPath</key>       <string>${log_file}</string>
