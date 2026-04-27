@@ -87,73 +87,73 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 curl -fsSL https://raw.githubusercontent.com/realZillionX/InspireSkill/main/scripts/install.sh | bash
 ```
 
-**不需要把仓库克隆到本地。** 脚本会:
+**不需要把仓库克隆到本地。** 脚本会做这几件事：
 
-1. 从 PyPI 用 `uv tool install` / `pipx install` 拉 `inspire-skill` 进隔离 venv,`inspire` 落到 `~/.local/bin/inspire`。
-2. **自动确保 `~/.local/bin` 在 PATH 上**(若不在,自动跑 `uv tool update-shell` / `pipx ensurepath` 改 shell rc;然后提示你 `exec $SHELL` 或开新终端生效)。
-3. 自动探测本机 harness(Claude Code / Codex / Gemini CLI / OpenClaw / OpenCode),把 `SKILL.md` 与 `references/` 拷贝到对应 skills 目录;Codex 额外生成 `agents/openai.yaml`。
-4. macOS 上挂一个每日静默版本检查的 launchd agent(代理变量从你当前 shell 读取,没有就不设)。
+1. 从 PyPI 用 `uv tool install` / `pipx install` 拉 `inspire-skill` 进隔离 venv，`inspire` 落到 `~/.local/bin/inspire`。
+2. **自动确保 `~/.local/bin` 在 PATH 上**（若不在，自动跑 `uv tool update-shell` / `pipx ensurepath` 改 shell rc；然后提示你 `exec $SHELL` 或开新终端生效）。
+3. 自动探测本机 harness（Claude Code / Codex / Gemini CLI / OpenClaw / OpenCode），把 `SKILL.md` 与 `references/` 拷贝到对应 skills 目录；Codex 额外生成 `agents/openai.yaml`。
+4. macOS 上挂一个每日静默版本检查的 launchd agent（代理变量从你当前 shell 读取，没有就不设）。
 
-`--ref` 可以钉到 **branch / tag / SHA** 任一种(走 git 而不是 PyPI):
+`--ref` 可以钉到 **branch / tag / SHA** 任一种（走 git 而不是 PyPI）：
 
 ```bash
 curl -fsSL .../install.sh | bash -s -- --harness claude             # 只装一家 harness
 curl -fsSL .../install.sh | bash -s -- --harness claude,codex       # 多家
-curl -fsSL .../install.sh | bash -s -- --no-cli                     # 仅刷 SKILL / references,不动 CLI
+curl -fsSL .../install.sh | bash -s -- --no-cli                     # 仅刷 SKILL / references，不动 CLI
 curl -fsSL .../install.sh | bash -s -- --no-schedule                # 不挂后台检查 agent
 curl -fsSL .../install.sh | bash -s -- --ref v3.0.3                 # 钉到 tag
 curl -fsSL .../install.sh | bash -s -- --ref my-feature-branch      # 或 branch
 curl -fsSL .../install.sh | bash -s -- --ref 4b7423a                # 或 SHA
 ```
 
-> **常见问题**:
-> - **装完后 `inspire: command not found`** → 安装脚本会自动把 `~/.local/bin` 加到你的 shell rc,但当前 shell 还没重新加载。运行 `exec $SHELL` 或开新终端。
-> - **`installer failed` / 镜像超时** → 中国大陆走清华镜像快很多:`UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple curl ... | bash`。
-> - **同一台机已经装过 / 想换 installer** → 直接重跑 `curl ... | bash` 即可,脚本是幂等的;若之前用 `pipx` 装过、现在 `uv` 也装了,会自动清掉旧的 pipx 副本以避免 `~/.local/bin/inspire` shim 冲突。
+> **常见问题**：
+> - **装完后 `inspire: command not found`** → 安装脚本会自动把 `~/.local/bin` 加到你的 shell rc，但当前 shell 还没重新加载。运行 `exec $SHELL` 或开新终端。
+> - **`installer failed` / 镜像超时** → 中国大陆走清华镜像快很多：`UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple curl ... | bash`。
+> - **同一台机已经装过 / 想换 installer** → 直接重跑 `curl ... | bash` 即可，脚本是幂等的；若之前用 `pipx` 装过、现在 `uv` 也装了，会自动清掉旧的 pipx 副本以避免 `~/.local/bin/inspire` shim 冲突。
 
 ### 更新
 
 ```bash
 inspire update                # CLI 包 + SKILL/references 一起升到最新
-inspire update --check        # 只检查,不动
+inspire update --check        # 只检查，不动
 inspire update --cli-only     # 仅升 Python 包
 inspire update --skill-only   # 仅刷 SKILL.md / references/
 ```
 
-`inspire update` 会自动识别你这套是 `uv tool` 还是 `pipx` 装的并调用对应升级命令。**首次升级到 v3.0.3+ 之后**所有后续 patch 都直接 `inspire update` 即可;再也不用重跑 install.sh。
+`inspire update` 会自动识别你这套是 `uv tool` 还是 `pipx` 装的并调用对应升级命令。**首次升级到 v3.0.3+ 之后**所有后续 patch 都直接 `inspire update` 即可；再也不用重跑 install.sh。
 
-如果 `inspire update` 反馈"this build isn't managed by uv tool / pipx"(几乎不应该发生 —— v3.0.3 已修),它会同时打印你这套是怎么装的 + 三条具体的修复路径。
+如果 `inspire update` 反馈 "this build isn't managed by uv tool / pipx"（几乎不应该发生 —— v3.0.3 已修），它会同时打印你这套是怎么装的 + 三条具体的修复路径。
 
-#### 从 v3.0.3 之前的版本升级 (v1.x / v2.x / v3.0.0–v3.0.2)
+#### 从 v3.0.3 之前的版本升级（v1.x / v2.x / v3.0.0–v3.0.2）
 
-v3.0.2 之前 `inspire update` 在 `uv tool` 装的环境上会因为 detector bug 拒绝自动升级,v3.0.3 之前 `install.sh` 在 `--ref v<tag>` 时会 404,这两段代码本身在你机器上就是坏的——**修好的版本得另外灌进来一次**。两条路任选:
+v3.0.2 之前 `inspire update` 在 `uv tool` 装的环境上会因为 detector bug 拒绝自动升级，v3.0.3 之前 `install.sh` 在 `--ref v<tag>` 时会 404，这两段代码本身在你机器上就是坏的 —— **修好的版本得另外灌进来一次**。两条路任选：
 
-**最简单:重跑 install.sh**(等价于"原地强制覆盖"):
+**最简单：重跑 install.sh**（等价于「原地强制覆盖」）：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/realZillionX/InspireSkill/main/scripts/install.sh | bash
 ```
 
-脚本对 `uv tool install` / `pipx install` 都加了 `--force`,会直接覆盖旧版本不需要先卸载。SKILL.md 和 references/ 也会一并刷成最新。
+脚本对 `uv tool install` / `pipx install` 都加了 `--force`，会直接覆盖旧版本不需要先卸载。SKILL.md 和 references/ 也会一并刷成最新。
 
-**或者直接调底层包管理器**(如果你清楚自己是哪套):
+**或者直接调底层包管理器**（如果你清楚自己是哪套）：
 
 ```bash
-# uv tool 用户:
+# uv tool 用户：
 uv tool upgrade inspire-skill
 
-# pipx 用户:
+# pipx 用户：
 pipx upgrade inspire-skill
 
-# 其它 venv / pip install -e 用户:
+# 其它 venv / pip install -e 用户：
 pip install -U inspire-skill
 ```
 
-落到 v3.0.3 之后 `inspire update` 就能正常自动升所有未来 patch 了,这个迁移每台机器只需要做一次。
+落到 v3.0.3 之后 `inspire update` 就能正常自动升所有未来 patch 了，这个迁移每台机器只需要做一次。
 
-### 完整初始化(安装后必跑)
+### 完整初始化（安装后必跑）
 
-分**两段**——先配账号(一次),再进每个仓库配项目(每个仓库一次):
+分**两段**—— 先配账号（一次），再进每个仓库配项目（每个仓库一次）：
 
 **① 账号级**（和仓库无关，任意目录跑；完成后该账号可用于所有仓库）
 
