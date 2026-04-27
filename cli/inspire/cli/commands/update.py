@@ -75,10 +75,16 @@ def _detect_harnesses() -> list[str]:
 def _detect_installer() -> str | None:
     """Guess which installer owns the current `inspire` process.
 
+    Probes ``sys.prefix`` (the venv root) — NOT ``sys.executable.resolve()``,
+    because resolving the venv's ``python`` symlink follows it through to the
+    underlying interpreter (e.g. ``~/.local/share/uv/python/cpython-3.11.../
+    bin/python3``), which loses the ``tools`` segment that signals "this is a
+    `uv tool install`". Same hazard applies to pipx — its venv python often
+    resolves to the system Python and falls outside the pipx tree.
+
     Returns "uv", "pipx", or None (editable / unknown).
     """
-    exe = Path(sys.executable).resolve()
-    parts = exe.parts
+    parts = Path(sys.prefix).parts
     if "uv" in parts and "tools" in parts:
         return "uv"
     if "pipx" in parts and "venvs" in parts:
