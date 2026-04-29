@@ -78,14 +78,17 @@ action_timeout = 600
 denylist = ["*.tmp", ".git/*"]
 
 [workspaces]
-# cpu = "ws-..."       # Default workspace (CPU jobs / notebooks)
-# gpu = "ws-..."       # GPU workspace (H100/H200 jobs)
-# internet = "ws-..."  # Internet-enabled GPU workspace (e.g. RTX 4090)
-# special = "ws-..."   # Custom alias (use with --workspace special)
+# Alias map for --workspace shorthand. Names are arbitrary; convention
+# below pairs naming with use case but you can rename freely. Every
+# command that needs a workspace requires --workspace <alias> explicitly
+# in v3.1.0+ (no implicit default; project does NOT auto-resolve a
+# workspace either).
+# cpu = "ws-..."       # CPU 资源空间
+# gpu = "ws-..."       # 分布式训练空间 (H100 / H200)
+# internet = "ws-..."  # workspace with public internet (e.g. RTX 4090)
 
 [job]
 # project_id = "project-..."
-# workspace_id = "ws-..."
 # image = "pytorch:latest"
 # priority = 10
 # shm_size = 32  # Default shared memory (GiB) for notebooks; jobs use it when set

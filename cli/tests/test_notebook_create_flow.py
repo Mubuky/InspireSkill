@@ -113,7 +113,6 @@ def _configure_create_happy_path(
         job_priority=9,
         projects={},
         project_shared_path_groups={},
-        job_workspace_id="ws-1111",
         workspaces={"gpu": "ws-1111"},
     )
 

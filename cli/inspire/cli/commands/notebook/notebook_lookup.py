@@ -336,12 +336,6 @@ def _collect_workspace_ids_for_lookup(
     config: Any,
 ) -> list[str]:
     candidates: list[str] = []
-    for ws_id in (
-        getattr(config, "job_workspace_id", None),
-    ):
-        if ws_id:
-            candidates.append(str(ws_id))
-
     workspaces_map = getattr(config, "workspaces", None)
     if isinstance(workspaces_map, dict):
         candidates.extend(str(value) for value in workspaces_map.values() if value)

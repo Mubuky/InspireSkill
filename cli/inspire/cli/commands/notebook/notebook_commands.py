@@ -726,11 +726,6 @@ def list_notebooks(
             workspace_ids = [resolved]
     elif all_workspaces:
         candidates: list[str] = []
-        for ws_id in (
-            config.job_workspace_id,
-        ):
-            if ws_id:
-                candidates.append(ws_id)
         if config.workspaces:
             candidates.extend(config.workspaces.values())
         if getattr(session, "workspace_id", None):
@@ -745,24 +740,20 @@ def list_notebooks(
                 return
 
     if not workspace_ids:
-        try:
-            resolved = select_workspace_id(config)
-        except ConfigError as e:
-            _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
-            return
-
-        resolved = resolved or getattr(session, "workspace_id", None)
+        # No --workspace and no --all-workspaces — fall back to the
+        # web session's currently-active workspace (which login set up
+        # for the user). Per v3.1.0 we no longer consult any config-level
+        # default workspace; only the live web session.
+        resolved = getattr(session, "workspace_id", None)
         resolved = None if resolved == _ZERO_WORKSPACE_ID else resolved
         if not resolved:
+            from inspire.config.workspaces import workspace_required_hint
             _handle_error(
                 ctx,
                 "ConfigError",
-                "No workspace_id configured or provided.",
+                "No workspace selected and the web session doesn't have one.",
                 EXIT_CONFIG_ERROR,
-                hint=(
-                    "Use set [workspaces].cpu/[workspaces].gpu in config.toml, "
-                    "or set INSPIRE_WORKSPACE_ID."
-                ),
+                hint=workspace_required_hint(config),
             )
             return
         workspace_ids = [str(resolved)]

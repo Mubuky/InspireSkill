@@ -477,7 +477,8 @@ class TestAccountConfigLayer:
             ('[paths]\nlog_pattern = "train_*.log"', "paths.log_pattern"),
             ('[github]\nrepo = "me/foo"', "github.repo"),
             ('[job]\nproject_id = "project-abc"', "job.project_id"),
-            ('[job]\nworkspace_id = "ws-xyz"', "job.workspace_id"),
+            # [job].workspace_id removed entirely in v3.1.0 — no longer
+            # rejected at account layer because the field doesn't exist.
             ('[notebook]\npost_start = "bash setup.sh"', "notebook.post_start"),
         ],
     )

@@ -35,7 +35,6 @@ def patch_hpc_config_and_auth(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -
         password="pass",
         base_url="https://example.invalid",
         job_project_id="project-default",
-        job_workspace_id="ws-00000000-0000-0000-0000-000000000001",
         job_image="registry.local/hpc:latest",
         job_cache_path=str(tmp_path / "jobs.json"),
         log_cache_dir=str(tmp_path / "logs"),
@@ -76,7 +75,10 @@ def patch_hpc_config_and_auth(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -
     quota_mod = importlib.import_module("inspire.cli.utils.quota_resolver")
 
     class _FakeWebSession:
-        workspace_id = config.job_workspace_id
+        # The HPC create flow needs an active workspace from the web session.
+        # Use the alias-mapped id we set above so resolve_workspace_id /
+        # quota lookup find a real value.
+        workspace_id = "ws-00000000-0000-0000-0000-000000000002"
 
     monkeypatch.setattr(hpc_mod, "get_web_session", lambda: _FakeWebSession())
 
@@ -164,6 +166,8 @@ def test_hpc_create_slurm_knobs_default_from_quota(
             "CG-123",
             "--quota",
             "0,32,256",
+            "--workspace",
+            "cpu-room",
         ],
     )
     assert result.exit_code == 0, result.output
@@ -210,6 +214,8 @@ def test_hpc_create_human_output_includes_priority(
             "0,32,256",
             "--priority",
             "7",
+            "--workspace",
+            "cpu-room",
         ],
     )
 
@@ -261,6 +267,8 @@ def test_hpc_create_rejects_full_slurm_script(
             "CG-123",
             "--quota",
             "0,32,256",
+            "--workspace",
+            "cpu-room",
         ],
     )
 

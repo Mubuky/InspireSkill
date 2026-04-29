@@ -42,22 +42,16 @@ def _project_name_for_id(cfg: Config, project_id: str | None) -> str | None:  # 
     return None
 
 
-def _workspace_name_for_id(cfg: Config, workspace_id: str | None) -> str | None:
-    if not workspace_id:
-        return None
-    for name, ws in (cfg.workspaces or {}).items():
-        if ws == workspace_id:
-            return name
-    return None
-
-
 def _collect_context(cfg: Config) -> dict[str, Any]:
     from inspire.accounts import current_account, list_accounts
 
     active_account = current_account() or cfg.username or None
 
     active_project_name = _project_name_for_id(cfg, cfg.job_project_id)
-    active_workspace_name = _workspace_name_for_id(cfg, cfg.job_workspace_id)
+    # `active.workspace` was the singular default-workspace concept removed
+    # in v3.1.0. The `[workspaces]` alias map below still surfaces every
+    # configured workspace, but no single one is "active" by default.
+    active_workspace_name = None
 
     # Projects: name + optional path segment (e.g. 'embodied-multimodality').
     projects_by_name: dict[str, dict[str, str]] = {}

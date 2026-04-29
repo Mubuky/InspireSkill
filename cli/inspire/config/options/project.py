@@ -33,15 +33,12 @@ JOB_OPTIONS: list[ConfigOption] = [
         category="Job",
         scope="project",
     ),
-    ConfigOption(
-        env_var="INSPIRE_WORKSPACE_ID",
-        toml_key="job.workspace_id",
-        field_name="job_workspace_id",
-        description="Default workspace ID for jobs",
-        default=None,
-        category="Job",
-        scope="project",
-    ),
+    # NOTE: `[job].workspace_id` / `INSPIRE_WORKSPACE_ID` was removed in
+    # v3.1.0. The "default workspace" concept is gone — workspace must be
+    # passed explicitly via `--workspace <alias>` (resolved against
+    # ``[workspaces]`` map) on every command that needs one. The loader
+    # warns once if it still sees the legacy field; see
+    # ``config/load_common.py::_warn_legacy_default_workspace``.
     ConfigOption(
         env_var="INSPIRE_SHM_SIZE",
         toml_key="job.shm_size",

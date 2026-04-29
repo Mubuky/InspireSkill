@@ -66,11 +66,16 @@ def make_test_config(tmp_path: Path, include_compute_groups: bool = False) -> co
         target_dir=str(tmp_path / "logs"),
         job_cache_path=str(tmp_path / "jobs.json"),
         log_cache_dir=str(tmp_path / "log_cache"),
-        job_workspace_id="ws-11111111-1111-1111-1111-111111111111",
         timeout=5,
         max_retries=0,
         retry_delay=0.0,
     )
+    # v3.1.0 dropped the implicit "default workspace" — every command path
+    # that needs a workspace now requires --workspace <alias>. Tests that
+    # exercise those paths pass --workspace cpu, which resolves through
+    # this alias map. The id format must satisfy `ws-` + UUID; the
+    # `select_workspace_id` validator rejects non-UUID test stubs.
+    config.workspaces = {"cpu": "ws-77777777-7777-7777-7777-777777777777"}
     # Add test compute groups if requested
     if include_compute_groups:
         test_group_id = "lcg-test000-0000-0000-0000-000000000000"
@@ -334,6 +339,8 @@ def test_job_create_human_output_updates_cache(monkeypatch: pytest.MonkeyPatch, 
             "1,20,200",
             "--command",
             "echo hi",
+            "--workspace",
+            "cpu",
         ],
     )
 
@@ -362,6 +369,8 @@ def test_job_create_json_output(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
             "1,20,200",
             "--command",
             "echo hi",
+            "--workspace",
+            "cpu",
         ],
     )
 
@@ -1770,7 +1779,6 @@ def test_notebook_start_accepts_name(monkeypatch: pytest.MonkeyPatch, tmp_path: 
         target_dir=str(tmp_path / "logs"),
         job_cache_path=str(tmp_path / "jobs.json"),
         log_cache_dir=str(tmp_path / "log_cache"),
-        job_workspace_id="ws-11111111-1111-1111-1111-111111111111",
         workspaces={"a": ws_cpu, "b": ws_gpu},
         timeout=5,
         max_retries=0,
@@ -1867,7 +1875,6 @@ def test_notebook_start_name_conflict_prompts_selection(
         target_dir=str(tmp_path / "logs"),
         job_cache_path=str(tmp_path / "jobs.json"),
         log_cache_dir=str(tmp_path / "log_cache"),
-        job_workspace_id="ws-11111111-1111-1111-1111-111111111111",
         workspaces={"a": ws_cpu, "b": ws_gpu},
         timeout=5,
         max_retries=0,

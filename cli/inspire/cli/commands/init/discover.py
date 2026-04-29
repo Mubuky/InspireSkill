@@ -1611,12 +1611,16 @@ def _prompt_workspace_aliases(
                 merged_workspaces.pop(alias, None)
         return
 
-    # Keep the legacy fallback only when discovery could not resolve workspace names.
-    for alias in ("cpu", "gpu", "internet"):
-        if alias in env_overrides:
-            continue
-        guess = _guess_workspace_alias(alias, discovered_workspace_ids, discovered_workspace_names)
-        merged_workspaces.setdefault(alias, guess or workspace_id)
+    # v3.1.0: removed the legacy fuzzy `cpu` / `gpu` / `internet` alias
+    # fallback. Old behavior: when discovery couldn't resolve workspace
+    # names, it guessed cpu/gpu/internet aliases by matching name
+    # substrings; if no match, fell back to the session's current
+    # workspace_id — which silently turned "I happened to be logged into
+    # CPU 临时测试空间" into "[workspaces].cpu = that random workspace's id"
+    # forever. Per v3.1.0's "no default workspace" stance, do nothing.
+    # Users without resolved workspace names can hand-edit
+    # [workspaces] in their account config.
+    return
 
 
 def _persist_workspace_aliases(

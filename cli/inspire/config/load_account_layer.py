@@ -41,7 +41,9 @@ ACCOUNT_LAYER_DISALLOWED_KEYS = frozenset(
         "paths.log_pattern",
         "github.repo",
         "job.project_id",
-        "job.workspace_id",
+        # job.workspace_id removed entirely in v3.1.0 — kept here would be
+        # double-jeopardy (legacy field rejected by load_legacy_workspace_default
+        # warning anyway).
         "notebook.post_start",
     }
 )

@@ -302,8 +302,10 @@ def create_hpc(
             explicit_workspace_name=workspace,
         )
         if resolved_workspace_id is None:
+            from inspire.config.workspaces import workspace_required_hint
             raise ConfigError(
-                "Missing workspace_id. Set --workspace or configure [job].workspace_id."
+                "--workspace is required (no longer falls back to a config default in v3.1.0). "
+                f"To proceed: {workspace_required_hint(config)}."
             )
         final_priority = priority if priority is not None else config.job_priority
         final_image = image if image is not None else config.job_image

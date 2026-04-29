@@ -1,17 +1,20 @@
 """Workspace selection utilities.
 
-The CLI never guesses a workspace by GPU type or "CPU vs GPU" role. The
-only ways to pick a workspace are:
+The CLI never guesses a workspace by GPU type or "CPU vs GPU" role. As of
+v3.1.0 there is also **no implicit "default workspace"** — workspace must
+come from one of:
 
 1. ``--workspace <name-or-id>`` on the command itself → ``explicit_*``
-2. ``[context].workspace = "<name-or-id>"`` in the repo's ``./.inspire/config.toml``
-3. ``INSPIRE_WORKSPACE_ID`` env var
+2. The ``[workspaces]`` alias map (looked up by ``--workspace cpu`` etc.)
 
-If none of those resolve to a real workspace, the call fails loudly.
-``gpu_type`` / ``cpu_only`` / ``prefer_internet`` used to route to
-``workspace_cpu_id`` / ``workspace_gpu_id`` / ``workspace_internet_id``
-role slots — those no longer exist. The kwargs are kept on the signature
-so existing callers don't break; they're silently ignored.
+There is intentionally no config-level fallback. ``[job].workspace_id`` /
+``INSPIRE_WORKSPACE_ID`` / ``[context].workspace`` were removed in v3.1.0
+because "default workspace" was a redundant concept once ``[context].project``
+exists, and made it easy for commands to silently target the wrong workspace.
+
+If none of the explicit paths resolve, ``select_workspace_id`` returns
+``None`` and the caller is expected to surface a clear error pointing at
+``--workspace`` or the alias map.
 """
 
 from __future__ import annotations
@@ -32,8 +35,8 @@ _PLACEHOLDER_WORKSPACE_ID = "ws-00000000-0000-0000-0000-000000000000"
 def _validate_workspace_id(value: str) -> None:
     if value == _PLACEHOLDER_WORKSPACE_ID:
         raise ConfigError(
-            "workspace_id is set to the placeholder value. "
-            "Configure a real workspace id in config.toml or set INSPIRE_WORKSPACE_ID."
+            "workspace_id is the placeholder. Pass a real workspace via "
+            "--workspace <alias> (configure aliases under [workspaces])."
         )
     if not _WORKSPACE_ID_RE.match(value):
         raise ConfigError(f"Invalid workspace_id format: {value!r}")
@@ -42,19 +45,22 @@ def _validate_workspace_id(value: str) -> None:
 def select_workspace_id(
     config: Config,
     *,
-    gpu_type: Optional[str] = None,  # ignored — see module docstring
+    gpu_type: Optional[str] = None,  # ignored — kept for backwards-compat signature
     cpu_only: Optional[bool] = None,  # ignored
     prefer_internet: bool = False,  # ignored
     explicit_workspace_id: Optional[str] = None,
     explicit_workspace_name: Optional[str] = None,
 ) -> Optional[str]:
-    """Resolve a workspace id from an explicit override or ``[context].workspace``.
+    """Resolve a workspace id from explicit args only — no config default.
 
     Precedence:
       1. ``explicit_workspace_id``
       2. ``explicit_workspace_name`` — looked up against ``[workspaces]``
-      3. ``config.job_workspace_id`` (from ``[context].workspace`` or
-         ``INSPIRE_WORKSPACE_ID``)
+      3. ``None`` (no fallback) — caller MUST handle by erroring out.
+
+    Removed in v3.1.0: ``config.job_workspace_id`` fallback (was sourced
+    from ``[job].workspace_id`` / ``INSPIRE_WORKSPACE_ID`` /
+    ``[context].workspace``). See module docstring.
     """
     del gpu_type, cpu_only, prefer_internet  # no longer consulted
 
@@ -85,7 +91,21 @@ def select_workspace_id(
         _validate_workspace_id(candidate)
         return candidate
 
-    candidate = config.job_workspace_id
-    if candidate:
-        _validate_workspace_id(candidate)
-    return candidate
+    return None
+
+
+def workspace_required_hint(config: Config) -> str:
+    """Build a one-line hint for the missing-workspace error path.
+
+    Lists configured aliases so the user knows what `--workspace` will accept.
+    """
+    aliases = sorted((config.workspaces or {}).keys())
+    if aliases:
+        return (
+            "pass --workspace <alias> "
+            f"(configured aliases: {', '.join(aliases)})"
+        )
+    return (
+        "pass --workspace <alias>. No aliases configured yet — "
+        "run `inspire init --discover` to populate [workspaces]"
+    )

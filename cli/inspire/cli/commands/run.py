@@ -101,11 +101,12 @@ def _run_flow(
             explicit_workspace_name=workspace,
         )
         if not selected_workspace_id:
+            from inspire.config.workspaces import workspace_required_hint
             _handle_error(
                 ctx,
                 "ConfigError",
-                "No workspace_id configured. Set [context].workspace in config.toml, "
-                "or pass --workspace <name>.",
+                f"--workspace is required (no longer falls back to a config default in v3.1.0). "
+                f"To proceed: {workspace_required_hint(config)}.",
                 EXIT_CONFIG_ERROR,
             )
             return

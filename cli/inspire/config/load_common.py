@@ -20,9 +20,11 @@ _DEFAULTS_FIELD_MAP = {
     "project_order": "project_order",
 }
 
-_CONTEXT_WORKSPACE_FIELD_MAP = {
-    "workspace": "job_workspace_id",
-}
+# `[context].workspace = ...` was the singular "default workspace" hook.
+# Removed in v3.1.0 — workspace must be passed explicitly via
+# `--workspace <alias>` on each command. Empty map kept here so the
+# loader still iterates but never writes anything.
+_CONTEXT_WORKSPACE_FIELD_MAP: dict[str, str] = {}
 
 
 @dataclass
@@ -69,7 +71,6 @@ def _default_config_values() -> dict[str, Any]:
         "job_priority": 10,
         "job_image": None,
         "job_project_id": None,
-        "job_workspace_id": None,
         "workspaces": {},
         "projects": {},
         "project_catalog": {},
