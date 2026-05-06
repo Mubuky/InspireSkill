@@ -13,16 +13,10 @@ def config_from_env(*, require_target_dir: bool = False) -> Config:
     username = os.getenv("INSPIRE_USERNAME")
     password = os.getenv("INSPIRE_PASSWORD")
 
-    if not username:
+    if not username or not password:
         raise ConfigError(
-            "Missing INSPIRE_USERNAME environment variable.\n"
-            "Set it with: export INSPIRE_USERNAME='your_username'"
-        )
-
-    if not password:
-        raise ConfigError(
-            "Missing INSPIRE_PASSWORD environment variable.\n"
-            "Set it with: export INSPIRE_PASSWORD='your_password'"
+            "Missing platform credentials. Run `inspire account add <name>` "
+            "to configure them; the active account is the supported source."
         )
 
     target_dir = os.getenv("INSPIRE_TARGET_DIR")

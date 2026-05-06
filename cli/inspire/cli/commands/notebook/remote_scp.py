@@ -84,6 +84,14 @@ def bridge_scp(
         inspire notebook scp my-notebook -d /tmp/checkpoints/ ./checkpoints/ -r
         inspire notebook scp my-notebook ./bundle.tar /tmp/
     """
+    from inspire.cli.utils.id_resolver import reject_id_at_boundary
+
+    notebook = reject_id_at_boundary(
+        ctx,
+        notebook,
+        resource_type="notebook",
+        list_command="inspire notebook connections",
+    )
     bridge = notebook
     # Validate local path exists for uploads
     if not download:

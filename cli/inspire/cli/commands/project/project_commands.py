@@ -18,6 +18,7 @@ from inspire.cli.formatters import human_formatter, json_formatter
 from inspire.cli.formatters.human_formatter import format_epoch
 from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.notebook_cli import (
+    WEB_AUTH_HINT,
     require_web_session,
     resolve_json_output,
 )
@@ -420,11 +421,7 @@ def list_projects_cmd(
 
     session = require_web_session(
         ctx,
-        hint=(
-            "Listing projects requires web authentication. "
-            "Set [auth].username/password in config.toml or "
-            "INSPIRE_USERNAME/INSPIRE_PASSWORD."
-        ),
+        hint=WEB_AUTH_HINT,
     )
 
     try:

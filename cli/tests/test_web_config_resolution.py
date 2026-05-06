@@ -11,24 +11,33 @@ from inspire.config import Config
 from inspire.platform.web.browser_api.notebooks import _config_compute_groups_fallback
 
 
-def test_notebook_cli_base_url_respects_prefer_source_toml(
+def test_notebook_cli_base_url_reads_account_toml(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    project_dir = tmp_path / ".inspire"
-    project_dir.mkdir()
-    (project_dir / "config.toml").write_text(
-        """
-[cli]
-prefer_source = "toml"
+    """v4.0.0: base_url is account-scope.
 
-[api]
-base_url = "https://toml.example"
-"""
+    With env unset, ``get_base_url()`` returns the active account's
+    stored ``[api].base_url``. Project layer cannot carry account-scope
+    keys (loader rejects them), so prefer_source no longer applies here.
+    """
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setattr(Path, "home", lambda: fake_home)
+    account_dir = fake_home / ".inspire" / "accounts" / "alice"
+    account_dir.mkdir(parents=True)
+    (account_dir / "config.toml").write_text(
+        '[auth]\nusername = "alice"\npassword = "pw"\n'
+        '[api]\nbase_url = "https://account.example"\n'
     )
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("INSPIRE_BASE_URL", "https://env.example")
+    (fake_home / ".inspire" / "current").write_text("alice\n")
 
-    assert get_base_url() == "https://toml.example"
+    project_dir = tmp_path / "repo" / ".inspire"
+    project_dir.mkdir(parents=True)
+    (project_dir / "config.toml").write_text("")
+    monkeypatch.chdir(tmp_path / "repo")
+    monkeypatch.delenv("INSPIRE_BASE_URL", raising=False)
+
+    assert get_base_url() == "https://account.example"
 
 
 def test_notebook_compute_group_fallback_uses_layered_config(

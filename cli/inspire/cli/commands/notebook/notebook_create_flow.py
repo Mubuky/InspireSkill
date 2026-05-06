@@ -11,7 +11,7 @@ import click
 from inspire.cli.context import Context, EXIT_API_ERROR, EXIT_CONFIG_ERROR
 from inspire.cli.formatters import json_formatter
 from inspire.cli.utils.errors import exit_with_error as _handle_error
-from inspire.cli.utils.notebook_cli import load_config, require_web_session, resolve_json_output
+from inspire.cli.utils.notebook_cli import WEB_AUTH_HINT, load_config, require_web_session, resolve_json_output
 from inspire.cli.utils.notebook_post_start import (
     NotebookPostStartSpec,
     NO_WAIT_POST_START_WARNING,
@@ -485,15 +485,17 @@ def _resolve_workspace_id(
         return None
 
     if not resolved:
-        resolved = session.workspace_id
+        # v3.1.0 dropped the implicit "default workspace" — including the one
+        # quietly inherited from the active web session. Force the caller to
+        # name a workspace explicitly so cross-workspace research stays safe.
+        from inspire.config.workspaces import workspace_required_hint
 
-    if not resolved:
         _handle_error(
             ctx,
             "ConfigError",
-            "No workspace_id configured.",
+            "No workspace selected.",
             EXIT_CONFIG_ERROR,
-            hint="Set [context].workspace in config.toml, or pass --workspace <name>.",
+            hint=workspace_required_hint(config),
         )
         return None
 
@@ -545,10 +547,7 @@ def run_notebook_create(
 
     session = require_web_session(
         ctx,
-        hint=(
-            "Creating notebooks requires web authentication. "
-            "Set INSPIRE_USERNAME and INSPIRE_PASSWORD."
-        ),
+        hint=WEB_AUTH_HINT,
     )
     config = load_config(ctx)
 
@@ -693,7 +692,7 @@ def run_notebook_create(
     )
 
     if not json_output:
-        click.echo(f"\nUse 'inspire notebook status {notebook_id}' to check status.")
+        click.echo(f"\nUse `inspire notebook status {name}` to check status.")
 
 
 __all__ = ["run_notebook_create", "maybe_run_post_start", "format_quota_display"]

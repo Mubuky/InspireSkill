@@ -123,9 +123,16 @@ class TestConfigSchema:
         """Test that expected options have project scope."""
         project_opts = get_options_by_scope("project")
         project_env_vars = [opt.env_var for opt in project_opts]
+        global_env_vars = [opt.env_var for opt in get_options_by_scope("global")]
 
-        # Username should be project-scoped (different repos can use different accounts)
-        assert "INSPIRE_USERNAME" in project_env_vars
+        # v4.0.0: identity (username/password) lives at the active account
+        # only. The previous "username is project-scoped because different
+        # repos may use different accounts" rationale conflicts with the
+        # `~/.inspire/accounts/<n>/` model — switching account is now
+        # `inspire account use`, not editing a per-repo TOML.
+        assert "INSPIRE_USERNAME" in global_env_vars
+        assert "INSPIRE_PASSWORD" in global_env_vars
+        assert "INSPIRE_USERNAME" not in project_env_vars
         assert "INSPIRE_PASSWORD" not in project_env_vars
 
         # Paths like target_dir should be project
@@ -254,31 +261,39 @@ class TestLayeredConfig:
         assert sources["base_url"] == SOURCE_DEFAULT
         assert sources["timeout"] == SOURCE_DEFAULT
 
-    def test_from_files_and_env_project_config(
+    def test_from_files_and_env_project_config_rejects_account_keys(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clean_env: None
     ) -> None:
-        """Test loading values from project config."""
-        # Create project config
+        """v4.0.0: project config rejects account-scope keys with ConfigError.
+
+        Identity / API / proxy keys live at the active account only; allowing
+        them to flow from a per-repo file would silently let one repo poison
+        another whenever the user `cd`s between them.
+        """
         project_dir = tmp_path / ".inspire"
         project_dir.mkdir()
-        project_config = project_dir / "config.toml"
-        project_config.write_text(
-            """
-[auth]
-username = "projectuser"
+        (project_dir / "config.toml").write_text(
+            "[auth]\nusername = \"projectuser\"\n[api]\ntimeout = 120\n"
+        )
+        monkeypatch.chdir(tmp_path)
 
-[api]
-timeout = 120
-"""
+        with pytest.raises(ConfigError, match="account-scope keys"):
+            Config.from_files_and_env(require_credentials=False)
+
+    def test_from_files_and_env_project_config_accepts_project_keys(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clean_env: None
+    ) -> None:
+        """v4.0.0: project config still loads project-scope keys."""
+        project_dir = tmp_path / ".inspire"
+        project_dir.mkdir()
+        (project_dir / "config.toml").write_text(
+            "[paths]\ntarget_dir = \"/inspire/test\"\n"
         )
         monkeypatch.chdir(tmp_path)
 
         cfg, sources = Config.from_files_and_env(require_credentials=False)
-
-        assert cfg.username == "projectuser"
-        assert cfg.timeout == 120
-        assert sources["username"] == SOURCE_PROJECT
-        assert sources["timeout"] == SOURCE_PROJECT
+        assert cfg.target_dir == "/inspire/test"
+        assert sources["target_dir"] == SOURCE_PROJECT
 
     def test_from_files_and_env_env_override(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -401,9 +416,11 @@ class TestAccountConfigLayer:
         assert cfg.username == "alice-wins"
         assert cfg.timeout == 99  # account layer, not legacy global
 
-    def test_project_config_still_overrides_account_config(
+    def test_project_config_rejects_account_scope_keys(
         self, home: Path, clean_env: None, tmp_path: Path
     ) -> None:
+        """v4.0.0: project config raising on account-scope keys is the new
+        contract; project layer is for `[paths]` / `[context]` / aliases."""
         self._write_account_config(
             home,
             "alice",
@@ -414,12 +431,8 @@ class TestAccountConfigLayer:
         project_dir.mkdir()
         (project_dir / "config.toml").write_text('[api]\ntimeout = 123\n')
 
-        cfg, sources = Config.from_files_and_env(require_credentials=False)
-
-        assert cfg.timeout == 123
-        assert sources["timeout"] == SOURCE_PROJECT
-        # username still from account layer
-        assert cfg.username == "alice-platform"
+        with pytest.raises(ConfigError, match="account-scope keys"):
+            Config.from_files_and_env(require_credentials=False)
 
     def test_accounts_section_in_account_config_is_ignored(
         self, home: Path, clean_env: None
@@ -593,7 +606,9 @@ class TestAccountConfigLayer:
     def test_require_credentials_without_active_account_raises(
         self, home: Path, clean_env: None
     ) -> None:
-        with pytest.raises(ConfigError, match="No active Inspire account"):
+        # v4.0.0 collapsed the two messages ("no active account" /
+        # "active account has no password") into a single user-action prompt.
+        with pytest.raises(ConfigError, match="Missing platform credentials"):
             Config.from_files_and_env(require_credentials=True)
 
     def test_get_config_paths_returns_account_and_project(
@@ -1318,102 +1333,76 @@ class TestPreferSource:
     def test_default_env_wins(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clean_env: None
     ) -> None:
-        """Test that env vars override project TOML by default (no prefer_source)."""
+        """env vars override project TOML by default (project-scope key)."""
         project_dir = tmp_path / ".inspire"
         project_dir.mkdir()
-        project_config = project_dir / "config.toml"
-        project_config.write_text(
-            """
-[api]
-timeout = 120
-"""
+        (project_dir / "config.toml").write_text(
+            "[paths]\ntarget_dir = \"/from-toml\"\n"
         )
         monkeypatch.chdir(tmp_path)
-        monkeypatch.setenv("INSPIRE_TIMEOUT", "90")
+        monkeypatch.setenv("INSPIRE_TARGET_DIR", "/from-env")
 
         cfg, sources = Config.from_files_and_env(require_credentials=False)
 
-        assert cfg.timeout == 90
-        assert sources["timeout"] == SOURCE_ENV
+        assert cfg.target_dir == "/from-env"
+        assert sources["target_dir"] == SOURCE_ENV
         assert cfg.prefer_source == "env"
 
     def test_prefer_source_env_explicit(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clean_env: None
     ) -> None:
-        """Test that prefer_source = 'env' lets env vars win (same as default)."""
+        """prefer_source = 'env' lets env vars win (project-scope key)."""
         project_dir = tmp_path / ".inspire"
         project_dir.mkdir()
-        project_config = project_dir / "config.toml"
-        project_config.write_text(
-            """
-[cli]
-prefer_source = "env"
-
-[api]
-timeout = 120
-"""
+        (project_dir / "config.toml").write_text(
+            "[cli]\nprefer_source = \"env\"\n[paths]\ntarget_dir = \"/from-toml\"\n"
         )
         monkeypatch.chdir(tmp_path)
-        monkeypatch.setenv("INSPIRE_TIMEOUT", "90")
+        monkeypatch.setenv("INSPIRE_TARGET_DIR", "/from-env")
 
         cfg, sources = Config.from_files_and_env(require_credentials=False)
 
-        assert cfg.timeout == 90
-        assert sources["timeout"] == SOURCE_ENV
+        assert cfg.target_dir == "/from-env"
+        assert sources["target_dir"] == SOURCE_ENV
 
     def test_prefer_source_toml_wins(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clean_env: None
     ) -> None:
-        """Test that prefer_source = 'toml' keeps project TOML values over env vars."""
+        """prefer_source = 'toml' keeps TOML values over env vars (project-scope key)."""
         project_dir = tmp_path / ".inspire"
         project_dir.mkdir()
-        project_config = project_dir / "config.toml"
-        project_config.write_text(
-            """
-[cli]
-prefer_source = "toml"
-
-[api]
-timeout = 120
-"""
+        (project_dir / "config.toml").write_text(
+            "[cli]\nprefer_source = \"toml\"\n[paths]\ntarget_dir = \"/from-toml\"\n"
         )
         monkeypatch.chdir(tmp_path)
-        monkeypatch.setenv("INSPIRE_TIMEOUT", "90")
+        monkeypatch.setenv("INSPIRE_TARGET_DIR", "/from-env")
 
         cfg, sources = Config.from_files_and_env(require_credentials=False)
 
-        assert cfg.timeout == 120
-        assert sources["timeout"] == SOURCE_PROJECT
+        assert cfg.target_dir == "/from-toml"
+        assert sources["target_dir"] == SOURCE_PROJECT
         assert cfg.prefer_source == "toml"
 
     def test_prefer_source_toml_env_fills_unset(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clean_env: None
     ) -> None:
-        """Test that prefer_source = 'toml' still picks up env vars for fields NOT in project TOML."""
+        """prefer_source = 'toml' still picks up env vars for fields NOT in project TOML."""
         project_dir = tmp_path / ".inspire"
         project_dir.mkdir()
-        project_config = project_dir / "config.toml"
-        project_config.write_text(
-            """
-[cli]
-prefer_source = "toml"
-
-[api]
-timeout = 120
-"""
+        (project_dir / "config.toml").write_text(
+            "[cli]\nprefer_source = \"toml\"\n[paths]\ntarget_dir = \"/from-toml\"\n"
         )
         monkeypatch.chdir(tmp_path)
         # Set env var for a field NOT in the project TOML
-        monkeypatch.setenv("INSPIRE_USERNAME", "envuser")
+        monkeypatch.setenv("INSP_GITHUB_REPO", "owner/repo")
 
         cfg, sources = Config.from_files_and_env(require_credentials=False)
 
-        # timeout should stay from project TOML
-        assert cfg.timeout == 120
-        assert sources["timeout"] == SOURCE_PROJECT
-        # username should come from env (not set in project TOML)
-        assert cfg.username == "envuser"
-        assert sources["username"] == SOURCE_ENV
+        assert cfg.target_dir == "/from-toml"
+        assert sources["target_dir"] == SOURCE_PROJECT
+        # github_repo (project-scope) should come from env (not in project TOML)
+        assert cfg.github_repo == "owner/repo"
+        assert sources["github_repo"] == SOURCE_ENV
 
     def test_prefer_source_toml_global_still_overridden_by_env(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clean_env: None

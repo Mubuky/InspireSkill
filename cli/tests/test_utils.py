@@ -249,19 +249,19 @@ class TestConfig:
         assert config.base_url == "https://api.example.com"
 
     def test_from_env_missing_username(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test error when username is missing."""
+        """v4.0.0 collapses identity-error wording into a single account-add prompt."""
         monkeypatch.delenv("INSPIRE_USERNAME", raising=False)
         monkeypatch.setenv("INSPIRE_PASSWORD", "testpass")
 
-        with pytest.raises(ConfigError, match="Missing INSPIRE_USERNAME"):
+        with pytest.raises(ConfigError, match="Missing platform credentials"):
             Config.from_env()
 
     def test_from_env_missing_password(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test error when password is missing."""
+        """v4.0.0 collapses identity-error wording into a single account-add prompt."""
         monkeypatch.setenv("INSPIRE_USERNAME", "testuser")
         monkeypatch.delenv("INSPIRE_PASSWORD", raising=False)
 
-        with pytest.raises(ConfigError, match="Missing INSPIRE_PASSWORD"):
+        with pytest.raises(ConfigError, match="Missing platform credentials"):
             Config.from_env()
 
     def test_from_env_require_target_dir(self, monkeypatch: pytest.MonkeyPatch) -> None:

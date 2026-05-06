@@ -51,7 +51,14 @@ def tunnel_update(
         inspire notebook refresh my-notebook --url "https://new-url.../proxy/31337/"
         inspire notebook refresh my-notebook --ssh-port 22223
     """
-    name = notebook
+    from inspire.cli.utils.id_resolver import reject_id_at_boundary
+
+    name = reject_id_at_boundary(
+        ctx,
+        notebook,
+        resource_type="notebook",
+        list_command="inspire notebook connections",
+    )
     config = load_tunnel_config()
 
     if name not in config.bridges:

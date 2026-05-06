@@ -185,6 +185,16 @@ def _normalize_project_catalog(raw_value: Any) -> dict[str, dict[str, Any]]:
 
 
 def _resolve_alias(value: Any, mapping: dict[str, str], *, id_prefix: str) -> str | None:
+    """Resolve a project / workspace alias against an account-scoped mapping.
+
+    v4.0.0 made this strict: when *value* is neither a known alias under
+    *mapping* nor an explicit platform id (``id_prefix`` like
+    ``project-`` / ``ws-``), return ``None`` instead of pretending the raw
+    text is itself a usable id. The previous lax behavior let
+    ``[context].project = "foo"`` silently flow downstream as
+    ``project_id="foo"`` after switching to an account where ``foo``
+    wasn't a known alias, which then 404'd at the platform.
+    """
     text = str(value or "").strip()
     if not text:
         return None
@@ -195,7 +205,7 @@ def _resolve_alias(value: Any, mapping: dict[str, str], *, id_prefix: str) -> st
             return mapped
     if text.startswith(id_prefix):
         return text
-    return text
+    return None
 
 
 def _coerce_project_default(field_name: str, raw_value: Any) -> Any:

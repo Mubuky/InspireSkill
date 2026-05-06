@@ -33,6 +33,7 @@ from inspire.cli.context import (
 from inspire.cli.formatters import json_formatter
 from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.notebook_cli import (
+    WEB_AUTH_HINT,
     get_base_url,
     load_config,
     require_web_session,
@@ -275,17 +276,13 @@ def stop_notebook_cmd(
 
     \b
     Examples:
-        inspire notebook stop abc123-def456
+        inspire notebook stop my-notebook
     """
     json_output = resolve_json_output(ctx, json_output)
 
     session = require_web_session(
         ctx,
-        hint=(
-            "Stopping notebooks requires web authentication. "
-            "Set [auth].username/password in config.toml or "
-            "INSPIRE_USERNAME/INSPIRE_PASSWORD."
-        ),
+        hint=WEB_AUTH_HINT,
     )
 
     base_url = get_base_url()
@@ -317,8 +314,8 @@ def stop_notebook_cmd(
         )
         return
 
-    click.echo(f"Notebook '{notebook_id}' is being stopped.")
-    click.echo(f"Use 'inspire notebook status {notebook_id}' to check status.")
+    click.echo(f"Notebook '{notebook}' is being stopped.")
+    click.echo(f"Use `inspire notebook status {notebook}` to check status.")
 
 
 @click.command("delete")
@@ -352,18 +349,14 @@ def delete_notebook_cmd(
 
     \b
     Examples:
-        inspire notebook delete abc123-def456
-        inspire notebook delete nb-abc123de --yes
+        inspire notebook delete my-notebook
+        inspire notebook delete my-notebook --yes
     """
     json_output = resolve_json_output(ctx, json_output)
 
     session = require_web_session(
         ctx,
-        hint=(
-            "Deleting notebooks requires web authentication. "
-            "Set [auth].username/password in config.toml or "
-            "INSPIRE_USERNAME/INSPIRE_PASSWORD."
-        ),
+        hint=WEB_AUTH_HINT,
     )
 
     base_url = get_base_url()
@@ -379,7 +372,7 @@ def delete_notebook_cmd(
 
     if not yes and not json_output:
         click.confirm(
-            f"Permanently delete notebook '{notebook_id}'? This cannot be undone.",
+            f"Permanently delete notebook '{notebook}'? This cannot be undone.",
             abort=True,
         )
 
@@ -401,7 +394,7 @@ def delete_notebook_cmd(
         )
         return
 
-    click.echo(f"Notebook '{notebook_id}' deleted.")
+    click.echo(f"Notebook '{notebook}' deleted.")
 
 
 @click.command("start")
@@ -442,7 +435,6 @@ def start_notebook_cmd(
 
     \b
     Examples:
-        inspire notebook start 78822a57-3830-44e7-8d45-e8b0d674fc44
         inspire notebook start ring-8h100-test
         inspire notebook start ring-8h100-test --wait
         inspire notebook start ring-8h100-test --post-start 'bash /workspace/bootstrap.sh'
@@ -456,11 +448,7 @@ def start_notebook_cmd(
 
     session = require_web_session(
         ctx,
-        hint=(
-            "Starting notebooks requires web authentication. "
-            "Set [auth].username/password in config.toml or "
-            "INSPIRE_USERNAME/INSPIRE_PASSWORD."
-        ),
+        hint=WEB_AUTH_HINT,
     )
 
     base_url = get_base_url()
@@ -547,7 +535,7 @@ def start_notebook_cmd(
         )
         return
 
-    click.echo(f"Use 'inspire notebook status {notebook_id}' to check status.")
+    click.echo(f"Use `inspire notebook status {notebook}` to check status.")
 
 
 @click.command("status")
@@ -568,17 +556,13 @@ def notebook_status(
 
     \b
     Examples:
-        inspire notebook status notebook-abc-123
+        inspire notebook status my-notebook
     """
     json_output = resolve_json_output(ctx, json_output)
 
     session = require_web_session(
         ctx,
-        hint=(
-            "Notebook status requires web authentication. "
-            "Set [auth].username/password in config.toml or "
-            "INSPIRE_USERNAME/INSPIRE_PASSWORD."
-        ),
+        hint=WEB_AUTH_HINT,
     )
 
     base_url = get_base_url()
@@ -707,11 +691,7 @@ def list_notebooks(
 
     session = require_web_session(
         ctx,
-        hint=(
-            "Listing notebooks requires web authentication. "
-            "Set [auth].username/password in config.toml or "
-            "INSPIRE_USERNAME/INSPIRE_PASSWORD."
-        ),
+        hint=WEB_AUTH_HINT,
     )
     config = load_config(ctx)
 

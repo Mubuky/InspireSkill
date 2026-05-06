@@ -17,7 +17,7 @@ from inspire.bridge.tunnel import (
 )
 from inspire.cli.context import Context, EXIT_CONFIG_ERROR, EXIT_GENERAL_ERROR, pass_context
 from inspire.cli.utils.errors import exit_with_error as _handle_error
-from inspire.cli.utils.notebook_cli import require_web_session
+from inspire.cli.utils.notebook_cli import WEB_AUTH_HINT, require_web_session
 from inspire.cli.utils.tunnel_reconnect import (
     load_ssh_public_key_material,
     rebuild_notebook_bridge_profile,
@@ -45,6 +45,15 @@ def bridge_ssh(ctx: Context, notebook: Optional[str]) -> None:
         inspire notebook ssh my-notebook
         inspire notebook shell my-notebook
     """
+    if notebook is not None:
+        from inspire.cli.utils.id_resolver import reject_id_at_boundary
+
+        notebook = reject_id_at_boundary(
+            ctx,
+            notebook,
+            resource_type="notebook",
+            list_command="inspire notebook connections",
+        )
     bridge = notebook
     try:
         config, _ = Config.from_files_and_env(require_target_dir=True, require_credentials=False)
@@ -131,14 +140,7 @@ def bridge_ssh(ctx: Context, notebook: Optional[str]) -> None:
 
             try:
                 if web_session is None:
-                    web_session = require_web_session(
-                        ctx,
-                        hint=(
-                            "Automatic tunnel rebuild needs web authentication. "
-                            "Set [auth].username and configure password via INSPIRE_PASSWORD "
-                            'or [accounts."<username>"].password.'
-                        ),
-                    )
+                    web_session = require_web_session(ctx, hint=WEB_AUTH_HINT)
                 notebook_detail = browser_api_module.get_notebook_detail(
                     notebook_id=notebook_id,
                     session=web_session,
@@ -148,14 +150,10 @@ def bridge_ssh(ctx: Context, notebook: Optional[str]) -> None:
                     _handle_error(
                         ctx,
                         "TunnelError",
-                        (
-                            "SSH tunnel not available. "
-                            f"Notebook '{bridge_name}' (id '{notebook_id}') "
-                            f"is {notebook_status}."
-                        ),
+                        f"SSH tunnel not available. Notebook '{bridge_name}' is {notebook_status}.",
                         hint=(
-                            f"Start it with 'inspire notebook start {notebook_id}' if needed, "
-                            f"or wait until 'inspire notebook status {notebook_id}' reports "
+                            f"Start it with `inspire notebook start {bridge_name}` if needed, "
+                            f"or wait until `inspire notebook status {bridge_name}` reports "
                             "RUNNING, then retry."
                         ),
                     )
@@ -176,14 +174,7 @@ def bridge_ssh(ctx: Context, notebook: Optional[str]) -> None:
                 )
             try:
                 if web_session is None:
-                    web_session = require_web_session(
-                        ctx,
-                        hint=(
-                            "Automatic tunnel rebuild needs web authentication. "
-                            "Set [auth].username and configure password via INSPIRE_PASSWORD "
-                            'or [accounts."<username>"].password.'
-                        ),
-                    )
+                    web_session = require_web_session(ctx, hint=WEB_AUTH_HINT)
                 if not ssh_public_key:
                     ssh_public_key = load_ssh_public_key_material()
                 rebuild_notebook_bridge_profile(

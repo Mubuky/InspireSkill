@@ -98,11 +98,34 @@ def account_exists(name: str) -> bool:
 
 
 def current_account() -> str | None:
+    """Return the active account, or ``None`` if there is no usable one.
+
+    Sanitizes ``~/.inspire/current`` against three failure modes:
+      * file missing or empty → no active account (return ``None``)
+      * file contains an illegal name (e.g. half-truncated, garbage)
+        → treat as no active account (return ``None``)
+      * file points at an account directory that no longer exists
+        (`account remove` ran but didn't clean ``current``, or the user
+        deleted the directory by hand) → also return ``None``
+
+    Centralizing this read makes downstream code (``writable_config_path``,
+    ``inspire account current``, every ``Config.from_files_and_env`` caller)
+    fail on the same boundary, instead of one path treating the pointer as
+    truth while another silently fixes it up.
+    """
     try:
         raw = current_file().read_text(encoding="utf-8").strip()
     except FileNotFoundError:
         return None
-    return raw or None
+    if not raw:
+        return None
+    try:
+        validated = validate_name(raw)
+    except AccountError:
+        return None
+    if not account_dir(validated).is_dir():
+        return None
+    return validated
 
 
 def set_current_account(name: str) -> None:

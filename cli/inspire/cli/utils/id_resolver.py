@@ -74,18 +74,26 @@ def resolve_partial_id(
     if len(matches) == 1:
         return matches[0][0]
 
-    # Multiple matches
+    # Multiple matches — the v2.0.0 boundary is name-only, so this is
+    # invariably a name collision (two jobs / hpc / ray / serving / image
+    # objects share the same display name in the same scope). Keep the
+    # phrasing aligned with that contract; do not invite users to type
+    # ids to disambiguate.
     if json_output:
         ids = [m[0] for m in matches]
         exit_with_error(
             ctx,
-            "AmbiguousID",
-            f"Partial ID '{partial}' matches {len(matches)} {resource_type}s: " + ", ".join(ids),
+            "AmbiguousName",
+            f"{len(matches)} {resource_type}s share the name '{partial}': "
+            + ", ".join(ids),
             EXIT_VALIDATION_ERROR,
-            hint="Provide more characters to narrow the match.",
+            hint=(
+                f"Rename one of the duplicates, or for destructive cleanup pass "
+                f"`--pick <N>` (1-indexed) on a v3-style command."
+            ),
         )
 
-    click.echo(f"Partial ID '{partial}' matches {len(matches)} {resource_type}s:")
+    click.echo(f"{len(matches)} {resource_type}s share the name '{partial}':")
     for idx, (full_id, label) in enumerate(matches, start=1):
         click.echo(f"  [{idx}] {full_id}  {label}")
 
@@ -257,3 +265,41 @@ def _looks_like_platform_id(value: str) -> bool:
         return True
     # Bare UUID — stripping only colons/underscores would be wrong, just match exactly.
     return bool(_FULL_UUID_RE.match(v))
+
+
+def reject_id_at_boundary(
+    ctx: Context,
+    value: str,
+    *,
+    resource_type: str,
+    list_command: str,
+) -> str:
+    """Reject id-shaped inputs at the user boundary, pass names through.
+
+    Used by commands that look up a cached connection by its display name
+    (``notebook shell`` / ``exec`` / ``scp`` / ``refresh`` / ``forget`` /
+    ``connections test`` / ``job logs``). v2.0.0 made names the only thing
+    that crosses the user / agent boundary; this helper enforces that on
+    cached-cache lookups too — without it, an id-shaped argument would
+    silently miss the cache key and fall through to a confusing
+    "no cached connection" error.
+    """
+    name = (value or "").strip()
+    if not name:
+        exit_with_error(
+            ctx,
+            "ValidationError",
+            f"{resource_type} name cannot be empty",
+            EXIT_VALIDATION_ERROR,
+        )
+        return ""  # unreachable
+    if _looks_like_platform_id(name):
+        exit_with_error(
+            ctx,
+            "ValidationError",
+            f"v2 CLI takes a {resource_type} name, not an id ({name!r}).",
+            EXIT_VALIDATION_ERROR,
+            hint=f"Find the name with `{list_command}` and pass that.",
+        )
+        return ""  # unreachable
+    return name

@@ -43,11 +43,10 @@ def build_next_steps(mode: str) -> list[str]:
     """Build mode-specific suggested next steps for JSON payloads."""
     if mode == "discover":
         return [
-            'Ensure a password is available via INSPIRE_PASSWORD or [accounts."<username>"].password',
             "Run: inspire config show",
         ]
     return [
-        "Set INSPIRE_USERNAME and INSPIRE_PASSWORD if needed",
+        "Run: inspire account add <name>  # if you have not configured credentials",
         "Run: inspire config show",
     ]
 

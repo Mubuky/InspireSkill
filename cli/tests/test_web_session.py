@@ -480,12 +480,15 @@ def test_browser_client_recreates_closed_thread_local_client(monkeypatch: pytest
     ws_browser_client._close_browser_client()
 
 
-def test_get_credentials_prefers_account_toml_when_prefer_source_toml(
+def test_get_credentials_reads_account_toml(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
-    """prefer_source='toml' in project config makes account TOML password
-    win over INSPIRE_PASSWORD env var. Account TOML is now the sole
-    identity source."""
+    """v4.0.0: account TOML is the sole identity source.
+
+    Identity (`[auth]`) is account-scope and cannot live in the project
+    layer at all — the loader rejects it. With env unset, get_credentials
+    returns the active account's stored values.
+    """
     fake_home = tmp_path / "home"
     fake_home.mkdir()
     monkeypatch.setattr(Path, "home", lambda: fake_home)
@@ -493,24 +496,17 @@ def test_get_credentials_prefers_account_toml_when_prefer_source_toml(
     account_dir = fake_home / ".inspire" / "accounts" / "alice"
     account_dir.mkdir(parents=True)
     (account_dir / "config.toml").write_text(
-        '[auth]\npassword = "account-pass"\n'
+        '[auth]\nusername = "account-user"\npassword = "account-pass"\n'
     )
     (fake_home / ".inspire" / "current").write_text("alice\n")
 
-    project_dir = tmp_path / ".inspire"
-    project_dir.mkdir()
-    (project_dir / "config.toml").write_text(
-        '[cli]\nprefer_source = "toml"\n\n'
-        '[auth]\nusername = "toml-user"\n'
-    )
-
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("INSPIRE_USERNAME", "env-user")
-    monkeypatch.setenv("INSPIRE_PASSWORD", "env-pass")
+    monkeypatch.delenv("INSPIRE_USERNAME", raising=False)
+    monkeypatch.delenv("INSPIRE_PASSWORD", raising=False)
 
     username, password = ws.get_credentials()
 
-    assert username == "toml-user"
+    assert username == "account-user"
     assert password == "account-pass"
 
 

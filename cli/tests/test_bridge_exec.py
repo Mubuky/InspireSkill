@@ -794,9 +794,9 @@ def test_bridge_exec_fails_fast_when_notebook_is_stopped(
     result = runner.invoke(cli_main, ["notebook", "exec", "gpu-main", "echo hi"])
 
     assert result.exit_code == EXIT_GENERAL_ERROR
-    assert "(id 'notebook-1') is STOPPED" in result.output
-    assert "inspire notebook start notebook-1" in result.output
-    assert "inspire notebook status notebook-1" in result.output
+    assert "\'gpu-main\' is STOPPED" in result.output
+    assert "inspire notebook start gpu-main" in result.output
+    assert "inspire notebook status gpu-main" in result.output
     assert calls["rebuild"] == 0
 
 
@@ -842,9 +842,9 @@ def test_bridge_exec_fails_fast_when_notebook_is_pending(
     result = runner.invoke(cli_main, ["notebook", "exec", "gpu-main", "echo hi"])
 
     assert result.exit_code == EXIT_GENERAL_ERROR
-    assert "(id 'notebook-1') is PENDING" in result.output
-    assert "inspire notebook start notebook-1" in result.output
-    assert "inspire notebook status notebook-1" in result.output
+    assert "\'gpu-main\' is PENDING" in result.output
+    assert "inspire notebook start gpu-main" in result.output
+    assert "inspire notebook status gpu-main" in result.output
     assert calls["rebuild"] == 0
 
 
@@ -896,8 +896,8 @@ def test_bridge_exec_json_fails_fast_when_notebook_is_stopped(
     payload = json.loads(result.output)
     assert payload["success"] is False
     assert payload["error"]["type"] == "TunnelError"
-    assert "(id 'notebook-1') is STOPPED" in payload["error"]["message"]
-    assert "inspire notebook status notebook-1" in payload["error"]["hint"]
+    assert "\'gpu-main\' is STOPPED" in payload["error"]["message"]
+    assert "inspire notebook status gpu-main" in payload["error"]["hint"]
     assert calls["rebuild"] == 0
 
 
@@ -1462,9 +1462,9 @@ def test_bridge_ssh_fails_fast_when_notebook_is_stopped(
     result = runner.invoke(cli_main, ["notebook", "shell", "gpu-main"])
 
     assert result.exit_code == EXIT_GENERAL_ERROR
-    assert "(id 'notebook-1') is STOPPED" in result.output
-    assert "inspire notebook start notebook-1" in result.output
-    assert "inspire notebook status notebook-1" in result.output
+    assert "\'gpu-main\' is STOPPED" in result.output
+    assert "inspire notebook start gpu-main" in result.output
+    assert "inspire notebook status gpu-main" in result.output
     assert calls["rebuild"] == 0
 
 
@@ -1510,9 +1510,9 @@ def test_bridge_ssh_fails_fast_when_notebook_is_pending(
     result = runner.invoke(cli_main, ["notebook", "shell", "gpu-main"])
 
     assert result.exit_code == EXIT_GENERAL_ERROR
-    assert "(id 'notebook-1') is PENDING" in result.output
-    assert "inspire notebook start notebook-1" in result.output
-    assert "inspire notebook status notebook-1" in result.output
+    assert "\'gpu-main\' is PENDING" in result.output
+    assert "inspire notebook start gpu-main" in result.output
+    assert "inspire notebook status gpu-main" in result.output
     assert calls["rebuild"] == 0
 
 

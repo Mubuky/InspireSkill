@@ -40,6 +40,26 @@ def _apply_env_layer(
         else:
             new_value = value
 
+        # Cross-account / cross-repo guard: if the active project's
+        # `[context].project` already resolved to a value, refuse to let
+        # an `INSPIRE_PROJECT_ID` env var silently shadow it. Two repos
+        # with different projects sharing the same shell would otherwise
+        # have one of them quietly running against the wrong project.
+        # User can override explicitly by clearing the project setting in
+        # the repo or unsetting the env var.
+        if (
+            option.env_var == "INSPIRE_PROJECT_ID"
+            and sources.get(field_name) == SOURCE_PROJECT
+            and config_dict.get(field_name)
+            and str(config_dict[field_name]) != str(new_value)
+        ):
+            raise ConfigError(
+                "INSPIRE_PROJECT_ID conflicts with the project resolved from "
+                f"this repo's [context].project ({config_dict[field_name]!r} "
+                f"vs env {new_value!r}). Pick one: unset the env var, or "
+                "remove [context].project from ./.inspire/config.toml."
+            )
+
         if prefer_source == "toml" and sources.get(field_name) == SOURCE_PROJECT:
             continue
 
@@ -78,16 +98,10 @@ def _validate_required_config(
     require_target_dir: bool,
 ) -> None:
     if require_credentials:
-        if not config_dict["username"]:
+        if not config_dict["username"] or not config_dict["password"]:
             raise ConfigError(
-                "No active Inspire account. Run 'inspire account add <name>' "
-                "to create one, then 'inspire account use <name>' if needed."
-            )
-        if not config_dict["password"]:
-            raise ConfigError(
-                "Active account has no password set. Add [auth].password to "
-                "~/.inspire/accounts/<active>/config.toml or export "
-                "INSPIRE_PASSWORD."
+                "Missing platform credentials for the active account. Run "
+                "`inspire account add <name>` to (re)configure them."
             )
 
     if require_target_dir and not config_dict["target_dir"]:

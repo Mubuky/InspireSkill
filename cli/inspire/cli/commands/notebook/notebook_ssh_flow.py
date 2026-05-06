@@ -15,7 +15,12 @@ import click
 from inspire.cli.context import Context, EXIT_API_ERROR, EXIT_CONFIG_ERROR, EXIT_TIMEOUT
 from inspire.cli.formatters import json_formatter
 from inspire.cli.utils.errors import exit_with_error as _handle_error
-from inspire.cli.utils.notebook_cli import get_base_url, load_config, require_web_session
+from inspire.cli.utils.notebook_cli import (
+    WEB_AUTH_HINT,
+    get_base_url,
+    load_config,
+    require_web_session,
+)
 from inspire.cli.utils.output import emit_success as emit_output_success
 from inspire.cli.utils.tunnel_reconnect import (
     NotebookBridgeReconnectState,
@@ -520,14 +525,7 @@ def run_notebook_ssh(
         save_tunnel_config,
     )
 
-    session = require_web_session(
-        ctx,
-        hint=(
-            "Notebook SSH requires web authentication. "
-            "Set [auth].username and configure password via INSPIRE_PASSWORD "
-            'or [accounts."<username>"].password.'
-        ),
-    )
+    session = require_web_session(ctx, hint=WEB_AUTH_HINT)
 
     base_url = get_base_url()
     config = load_config(ctx)
@@ -671,9 +669,23 @@ def run_notebook_ssh(
     # has exactly one canonical entry going forward.
     notebook_display_name = str(notebook_detail.get("name") or "").strip()
     if not notebook_display_name:
-        # Edge case: notebook has no display name; fall back to nb-<id[:8]>
-        # so the bridges file always has *some* key for this connection.
-        notebook_display_name = f"nb-{notebook_id[:8]}"
+        # If the platform returns a notebook with no name, the cache would
+        # have to fall back to an id-shaped key — which would then violate
+        # the v2.0.0 name-only-at-user-boundary contract the cached-tunnel
+        # commands (`shell` / `exec` / `scp`) rely on. Surface a clear
+        # error instead of silently fabricating an `nb-<hex>` cache key.
+        _handle_error(
+            ctx,
+            "ConfigError",
+            "Notebook has no display name; cannot create a cached SSH connection.",
+            EXIT_CONFIG_ERROR,
+            hint=(
+                "Rename the notebook in the platform UI (or recreate it with "
+                "`inspire notebook create -n <name> ...`) so it has a name to "
+                "use as the cache key."
+            ),
+        )
+        return
     if legacy_entry and legacy_entry != notebook_display_name:
         cached_config.remove_bridge(legacy_entry)
         save_tunnel_config(cached_config)
@@ -703,10 +715,9 @@ def run_notebook_ssh(
             f"Notebook/account mismatch detected before tunnel setup: {reason}.",
             EXIT_CONFIG_ERROR,
             hint=(
-                f"Notebook '{notebook_id}' appears to belong to another account. "
-                f"Switch [auth].username for this project (current: {user_label}) and ensure a "
-                "matching password is available via INSPIRE_PASSWORD or global "
-                '[accounts."<username>"].password.'
+                f"This notebook belongs to another account (current: {user_label}). "
+                f"Switch with `inspire account use <name>`, or run "
+                f"`inspire account add <name>` for the owning account."
             ),
         )
         return

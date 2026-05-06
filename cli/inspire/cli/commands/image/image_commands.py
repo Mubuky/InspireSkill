@@ -18,6 +18,7 @@ from inspire.cli.formatters import human_formatter, json_formatter
 from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.id_resolver import resolve_by_name
 from inspire.cli.utils.notebook_cli import (
+    WEB_AUTH_HINT,
     require_web_session,
     resolve_json_output,
 )
@@ -147,11 +148,7 @@ def list_images_cmd(
 
     session = require_web_session(
         ctx,
-        hint=(
-            "Listing images requires web authentication. "
-            "Set [auth].username/password in config.toml or "
-            "INSPIRE_USERNAME/INSPIRE_PASSWORD."
-        ),
+        hint=WEB_AUTH_HINT,
     )
 
     results: list[dict] = []
@@ -225,11 +222,7 @@ def image_detail(
 
     session = require_web_session(
         ctx,
-        hint=(
-            "Image detail requires web authentication. "
-            "Set [auth].username/password in config.toml or "
-            "INSPIRE_USERNAME/INSPIRE_PASSWORD."
-        ),
+        hint=WEB_AUTH_HINT,
     )
 
     image_id = _resolve_image_name(ctx, name)
@@ -335,11 +328,7 @@ def register_image_cmd(
 
     session = require_web_session(
         ctx,
-        hint=(
-            "Registering images requires web authentication. "
-            "Set [auth].username/password in config.toml or "
-            "INSPIRE_USERNAME/INSPIRE_PASSWORD."
-        ),
+        hint=WEB_AUTH_HINT,
     )
 
     visibility_value = (
@@ -385,7 +374,7 @@ def register_image_cmd(
         click.echo(f"  docker tag <local-image> {registry_url}")
         click.echo(f"  docker push {registry_url}")
     if not wait and image_id:
-        click.echo(f"\nUse 'inspire image detail {image_id}' to check status.")
+        click.echo(f"\nUse `inspire image detail {name}` to check status.")
 
 
 # ---------------------------------------------------------------------------
@@ -471,11 +460,7 @@ def save_image_cmd(
 
     session = require_web_session(
         ctx,
-        hint=(
-            "Saving images requires web authentication. "
-            "Set [auth].username/password in config.toml or "
-            "INSPIRE_USERNAME/INSPIRE_PASSWORD."
-        ),
+        hint=WEB_AUTH_HINT,
     )
 
     # Resolve the notebook name to an id via the notebook resolver
@@ -590,7 +575,7 @@ def save_image_cmd(
         label = "public" if requested_visibility == _VISIBILITY_PUBLIC else "private"
         click.echo(f"Visibility: {label}")
     if not wait and image_id:
-        click.echo(f"Use 'inspire image detail {image_id}' to check build status.")
+        click.echo(f"Use `inspire image detail {name}` to check build status.")
 
 
 # ---------------------------------------------------------------------------
@@ -640,11 +625,7 @@ def set_image_visibility_cmd(
 
     session = require_web_session(
         ctx,
-        hint=(
-            "Updating image visibility requires web authentication. "
-            "Set [auth].username/password in config.toml or "
-            "INSPIRE_USERNAME/INSPIRE_PASSWORD."
-        ),
+        hint=WEB_AUTH_HINT,
     )
 
     image_id = _resolve_image_name(ctx, name)
@@ -716,11 +697,7 @@ def delete_image_cmd(
 
     session = require_web_session(
         ctx,
-        hint=(
-            "Deleting images requires web authentication. "
-            "Set [auth].username/password in config.toml or "
-            "INSPIRE_USERNAME/INSPIRE_PASSWORD."
-        ),
+        hint=WEB_AUTH_HINT,
     )
 
     image_id = _resolve_image_name(ctx, name, pick=pick)

@@ -71,6 +71,30 @@ def _apply_project_layer(
         project_workspaces = {str(k): str(v) for k, v in raw_workspaces.items()}
 
     flat_project = _flatten_toml(project_raw)
+
+    # Enforce ConfigOption.scope at the loader: a per-repo `./.inspire/config.toml`
+    # may only carry project-scope keys. Account-scope identity / API / proxy
+    # keys must live in the active account's `~/.inspire/accounts/<n>/config.toml`,
+    # because one account is shared across many repos and silently overriding
+    # auth from a repo file would let one repo poison another.
+    from inspire.config.schema import get_option_by_toml
+
+    misplaced: list[str] = []
+    for toml_key in flat_project:
+        opt = get_option_by_toml(toml_key)
+        if opt is not None and opt.scope == "global":
+            misplaced.append(toml_key)
+    if misplaced:
+        raise ConfigError(
+            "Project config carries account-scope keys: "
+            f"{', '.join(misplaced)}. Move them to the active account's "
+            "config.toml (run `inspire init --discover` from inside the repo "
+            "to refresh project state, or `inspire account add` to (re)set "
+            "account-scope values). The project file should only contain "
+            "[paths] / [context] / [defaults] / [workspaces] / [projects] / "
+            "[compute_groups] / [remote_env] / [cli]."
+        )
+
     for toml_key, value in flat_project.items():
         field_name = _toml_key_to_field(toml_key)
         if field_name and field_name in config_dict:

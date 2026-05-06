@@ -134,8 +134,15 @@ def cli() -> None:
     try:
         main()
     except Exception as e:  # pragma: no cover - top-level safety net
+        # Final firewall: format the message via the same formatter every
+        # other command uses, so the user never sees a `Traceback (most
+        # recent call last):` from a path that forgot to wrap its own
+        # exceptions. The full traceback still lands in the debug log
+        # (configured by `--debug`), which is where it belongs.
         logging.getLogger(__name__).exception("Unhandled exception in inspire CLI")
-        click.echo(f"Error: {e}", err=True)
+        from inspire.cli.formatters import human_formatter
+
+        click.echo(human_formatter.format_error(str(e) or type(e).__name__), err=True)
         sys.exit(EXIT_GENERAL_ERROR)
 
 

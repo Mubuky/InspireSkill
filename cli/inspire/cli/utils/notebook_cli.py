@@ -14,6 +14,15 @@ from inspire.config import Config, ConfigError
 from inspire.cli.utils.errors import exit_with_error
 
 
+# Single source of truth for the "you need a logged-in account" hint.
+# Surface in every command that touches a web session, so users get a
+# consistent next-action regardless of where they hit the wall.
+WEB_AUTH_HINT = (
+    "Run `inspire account add <name>` first; that command captures the platform "
+    "credentials, sets the active account, and provisions Playwright for SSO login."
+)
+
+
 def get_base_url() -> str:
     try:
         config, _ = Config.from_files_and_env(require_credentials=False, require_target_dir=False)

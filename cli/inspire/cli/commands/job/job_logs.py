@@ -1142,6 +1142,15 @@ def logs(
         inspire job logs --status RUNNING --status SUCCEEDED
         inspire job logs --refresh --status RUNNING
     """
+    if notebook is not None:
+        from inspire.cli.utils.id_resolver import reject_id_at_boundary
+
+        notebook = reject_id_at_boundary(
+            ctx,
+            notebook,
+            resource_type="notebook",
+            list_command="inspire notebook connections",
+        )
     bridge = notebook
     if not job:
         if tail or head or path or follow or bridge:

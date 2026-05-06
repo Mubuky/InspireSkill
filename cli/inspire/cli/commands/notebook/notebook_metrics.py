@@ -42,15 +42,11 @@ def _resolve_notebook_lcg(task_id: str, session: WebSession) -> Optional[str]:
 
 def _notebook_name_to_id(ctx: Context, name: str) -> str:
     from inspire.cli.commands.notebook import notebook_lookup as _nb
-    from inspire.cli.utils.notebook_cli import get_base_url, load_config, require_web_session
+    from inspire.cli.utils.notebook_cli import WEB_AUTH_HINT, get_base_url, load_config, require_web_session
 
     session = require_web_session(
         ctx,
-        hint=(
-            "Resolving notebook name for metrics requires web authentication. "
-            "Set [auth].username/password in config.toml or "
-            "INSPIRE_USERNAME/INSPIRE_PASSWORD."
-        ),
+        hint=WEB_AUTH_HINT,
     )
     config = load_config(ctx)
     base_url = get_base_url()

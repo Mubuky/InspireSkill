@@ -146,8 +146,8 @@ def _init_template_mode(global_flag: bool, project_flag: bool, force: bool) -> N
     click.echo(click.style(f"Created {config_path}", fg="green"))
 
     click.echo("\nNext steps:")
-    click.echo(f"  1. Edit {config_path} with your settings")
-    click.echo("  2. Set INSPIRE_USERNAME and INSPIRE_PASSWORD environment variables")
+    click.echo(f"  1. Edit {config_path} with your project-level settings")
+    click.echo("  2. Run 'inspire account add <name>' if you have not configured credentials")
     click.echo("  3. Run 'inspire config show' to verify your configuration")
 
 

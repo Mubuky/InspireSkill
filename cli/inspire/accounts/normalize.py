@@ -81,14 +81,53 @@ def normalize_environment(
     home.mkdir(parents=True, exist_ok=True)
     sentinel = home / NORMALIZATION_SENTINEL
 
+    # Atomic claim of the "I'm the one running quarantine" right.
+    # Two concurrent `inspire account add` invocations would otherwise race
+    # on `path.exists()` / `path.rename()` — the second one would fall
+    # through to FileNotFoundError mid-quarantine. `O_CREAT | O_EXCL` lets
+    # exactly one process win; the loser sees the sentinel already there
+    # and skips the file pass entirely (its observations are already
+    # encoded in the .legacy copies the winner produced).
+    we_own_quarantine = False
     if not sentinel.exists():
+        try:
+            fd = os.open(
+                str(sentinel),
+                os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+                0o644,
+            )
+            os.close(fd)
+            we_own_quarantine = True
+        except FileExistsError:
+            we_own_quarantine = False
+
+    if we_own_quarantine:
         for filename, _label in _LEGACY_FILES_UNDER_INSPIRE_HOME:
             _quarantine_if_present(home / filename, report)
         cache = _cache_root()
         if cache.exists():
             for filename, _label in _LEGACY_FILES_UNDER_CACHE:
                 _quarantine_if_present(cache / filename, report)
-        sentinel.write_text("", encoding="utf-8")
+        # v2.x stored playwright sessions under `accounts/<n>/sessions/`;
+        # v3.x replaced the directory with a single `web_session.json`. If
+        # someone upgrades from v2.x, the old directory is just dead state
+        # taking up a slot in the account folder — quarantine it the same
+        # way to keep the directory listing clean. Quarantine target lands
+        # next to the directory, not inside the account, so a future
+        # `account remove` doesn't drag it along.
+        accounts_root = home / "accounts"
+        if accounts_root.is_dir():
+            for account_path in accounts_root.iterdir():
+                if not account_path.is_dir():
+                    continue
+                legacy_sessions = account_path / "sessions"
+                if not legacy_sessions.is_dir():
+                    continue
+                target = account_path / "sessions.legacy"
+                if target.exists():
+                    continue
+                legacy_sessions.rename(target)
+                report.quarantined.append((legacy_sessions, target))
 
     for env in _LEGACY_ENV_VARS:
         if os.environ.get(env, "").strip():

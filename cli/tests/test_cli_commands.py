@@ -2029,6 +2029,7 @@ def test_run_notebook_ssh_validates_dropbear_setup_script(
         browser_api_module,
         "wait_for_notebook_running",
         lambda notebook_id, session=None: {
+            "name": "test-nb",
             "resource_spec_price": {"gpu_info": {"gpu_product_simple": "H200"}}
         },
     )
@@ -2111,6 +2112,7 @@ def test_run_notebook_ssh_fails_fast_on_account_mismatch(
         browser_api_module,
         "wait_for_notebook_running",
         lambda notebook_id, session=None: {
+            "name": "test-nb",
             "user_id": "other-user",
             "resource_spec_price": {"gpu_info": {"gpu_product_simple": "H200"}},
         },
@@ -2183,6 +2185,7 @@ def test_run_notebook_ssh_passes_resolved_runtime_to_setup(
         browser_api_module,
         "wait_for_notebook_running",
         lambda notebook_id, session=None: {
+            "name": "test-nb",
             "resource_spec_price": {"gpu_info": {"gpu_product_simple": "CPU"}},
             "start_config": {"allow_ssh": False},
         },
@@ -2284,6 +2287,7 @@ def test_run_notebook_ssh_refreshes_saved_profile_on_notebook_mismatch(
         browser_api_module,
         "wait_for_notebook_running",
         lambda notebook_id, session=None: {
+            "name": "test-nb",
             "resource_spec_price": {"gpu_info": {"gpu_product_simple": "CPU"}},
             "start_config": {"allow_ssh": False},
         },
@@ -2343,7 +2347,7 @@ def test_run_notebook_ssh_refreshes_saved_profile_on_notebook_mismatch(
     # untouched; the new connection lands under its own canonical key.
     untouched = fake_tunnel_config.bridges["shared-profile"]
     assert getattr(untouched, "notebook_id", None) == "notebook-old"
-    canonical_key = "nb-notebook"  # display_name absent → fallback "nb-" + id[:8]
+    canonical_key = "test-nb"  # mock notebook_detail's display name
     saved_profile = fake_tunnel_config.bridges[canonical_key]
     assert getattr(saved_profile, "notebook_id", None) == "notebook-12345678"
 
@@ -2396,6 +2400,7 @@ def test_run_notebook_ssh_interactive_reconnects_after_drop(
         browser_api_module,
         "wait_for_notebook_running",
         lambda notebook_id, session=None: {
+            "name": "test-nb",
             "resource_spec_price": {"gpu_info": {"gpu_product_simple": "CPU"}},
             "start_config": {"allow_ssh": False},
         },
@@ -2502,6 +2507,7 @@ def test_run_notebook_ssh_reports_when_tunnel_not_ready(
         browser_api_module,
         "wait_for_notebook_running",
         lambda notebook_id, session=None: {
+            "name": "test-nb",
             "resource_spec_price": {"gpu_info": {"gpu_product_simple": "CPU"}},
             "start_config": {"allow_ssh": False},
         },

@@ -335,27 +335,25 @@ def _collect_workspace_ids_for_lookup(
     session: web_session_module.WebSession,
     config: Any,
 ) -> list[str]:
-    candidates: list[str] = []
+    """Enumerate workspaces in which to look up a notebook by name.
+
+    v3.1.0 dropped the implicit default workspace; v4.0.0 also drops the
+    quiet "include the active web session's workspace as a search hit".
+    The canonical search space is whatever ``[workspaces]`` aliases the
+    active account has discovered (populated by ``inspire init --discover``).
+    Empty alias map means the user has not run discover yet — caller emits
+    a clear error pointing at it instead of silently widening the scope
+    to whatever workspace the SSO session happened to land on.
+
+    ``session`` is kept in the signature because the caller passes it for
+    parity with other lookup helpers; we don't read its workspace_id.
+    """
+    del session  # see docstring
     workspaces_map = getattr(config, "workspaces", None)
+    candidates: list[str] = []
     if isinstance(workspaces_map, dict):
         candidates.extend(str(value) for value in workspaces_map.values() if value)
-    if getattr(session, "workspace_id", None):
-        candidates.append(str(session.workspace_id))
-
-    workspace_ids = _unique_workspace_ids(candidates)
-    if workspace_ids:
-        return workspace_ids
-
-    resolved_ws = None
-    try:
-        resolved_ws = select_workspace_id(config)
-    except Exception:
-        resolved_ws = None
-
-    resolved_ws = resolved_ws or getattr(session, "workspace_id", None)
-    if resolved_ws and resolved_ws != _ZERO_WORKSPACE_ID:
-        return [str(resolved_ws)]
-    return []
+    return _unique_workspace_ids(candidates)
 
 
 def _resolve_notebook_id(

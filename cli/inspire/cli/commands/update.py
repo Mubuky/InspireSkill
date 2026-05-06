@@ -363,5 +363,18 @@ def update(check_only: bool, silent: bool, cli_only: bool, skill_only: bool, for
 
     if not ok:
         sys.exit(1)
+
+    # Run environment normalization once after a successful upgrade so users
+    # coming from v3.1.x (no sentinel yet) get pre-v3 unscoped files
+    # quarantined and stale env vars flagged on the same `inspire update` they
+    # ran to install v4. Idempotent via the normalization sentinel.
+    try:
+        from inspire.accounts import normalize_environment
+
+        normalize_environment(interactive=not silent)
+    except Exception:
+        # Normalization is best-effort cleanup; never fail the upgrade itself.
+        pass
+
     if not silent:
         click.secho("✓ InspireSkill updated.", fg="green", bold=True)

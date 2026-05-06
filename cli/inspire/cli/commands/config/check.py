@@ -139,19 +139,11 @@ def _format_placeholder_issue_message(issues: list[dict[str, str]]) -> str:
 
 
 def _validate_required_credentials(cfg: Config) -> None:
-    if not cfg.username:
+    if not cfg.username or not cfg.password:
         raise ConfigError(
-            "Missing username configuration.\n"
-            "Set INSPIRE_USERNAME env var or add to config.toml:\n"
-            "  [auth]\n"
-            "  username = 'your_username'"
-        )
-    if not cfg.password:
-        raise ConfigError(
-            "Missing password configuration.\n"
-            "Set INSPIRE_PASSWORD env var or add an account password in config.toml:\n"
-            '  [accounts."your_username"]\n'
-            "  password = 'your_password'"
+            "Missing platform credentials. Run `inspire account add <name>` to "
+            "configure them; the active account's `[auth]` block is the only "
+            "supported source."
         )
 
 

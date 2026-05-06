@@ -23,7 +23,14 @@ def tunnel_remove(ctx: Context, notebook: str) -> None:
     Example:
         inspire notebook forget my-notebook
     """
-    name = notebook
+    from inspire.cli.utils.id_resolver import reject_id_at_boundary
+
+    name = reject_id_at_boundary(
+        ctx,
+        notebook,
+        resource_type="notebook",
+        list_command="inspire notebook connections",
+    )
     config = load_tunnel_config()
 
     if name not in config.bridges:
