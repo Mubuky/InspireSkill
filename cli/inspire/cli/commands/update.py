@@ -82,7 +82,7 @@ def _detect_installer() -> str | None:
     `uv tool install`". Same hazard applies to pipx — its venv python often
     resolves to the system Python and falls outside the pipx tree.
 
-    Returns "uv", "pipx", or None (editable / unknown).
+    Returns "uv", "pipx", or None (unknown / unsupported).
     """
     parts = Path(sys.prefix).parts
     if "uv" in parts and "tools" in parts:
@@ -109,13 +109,9 @@ def _upgrade_cli(silent: bool) -> bool:
             click.secho(f"  python = {sys.executable}", fg="red", err=True)
             click.secho(f"  prefix = {sys.prefix}", fg="red", err=True)
             click.echo(
-                "\n  Pick whichever fits your install:\n"
-                "    • Custom venv / `pip install -e .`:\n"
-                "        pip install -U inspire-skill\n"
-                "    • Reinstall fresh via the official installer:\n"
-                "        curl -fsSL https://raw.githubusercontent.com/realZillionX/InspireSkill/main/scripts/install.sh | bash\n"
-                "    • Working from a local clone:\n"
-                "        cd <repo> && git pull --ff-only && ./scripts/install-dev.sh",
+                "\n  Reinstall through the official installer so future updates "
+                "use the same path as first-time installs:\n"
+                "      curl -fsSL https://raw.githubusercontent.com/realZillionX/InspireSkill/main/scripts/install.sh | bash",
                 err=True,
             )
         return False
@@ -236,7 +232,7 @@ def _refresh_skill_files(silent: bool) -> bool:
 
         for harness in harnesses:
             target = HARNESS_SKILL_DIRS[harness]
-            # Wipe any previous install (symlinks from dev mode, or stale files).
+            # Wipe any previous install, including stale symlinks or files.
             if target.exists() or target.is_symlink():
                 try:
                     if target.is_symlink() or target.is_file():
@@ -292,34 +288,12 @@ def _print_status(check_result: dict, silent: bool) -> None:
         click.secho(f"✓ InspireSkill is up to date (v{current}).", fg="green")
 
 
-def _is_dev_install() -> bool:
-    """True when this process is running out of an editable / dev checkout.
-
-    We refuse destructive refreshes (CLI upgrade via `uv tool`, SKILL dir wipe)
-    in that case to avoid clobbering the maintainer's local edits.
-    """
-    if _detect_installer() is not None:
-        return False
-    # Any harness skill dir currently living as a symlink is a strong signal
-    # that scripts/install-dev.sh wired this machine up.
-    for target in HARNESS_SKILL_DIRS.values():
-        skill = target / "SKILL.md"
-        if skill.is_symlink():
-            return True
-    return False
-
-
 @click.command("update")
 @click.option("--check", "check_only", is_flag=True, help="Only check upstream; don't upgrade.")
 @click.option("--silent", is_flag=True, help="Suppress output (used by background checks).")
 @click.option("--cli-only", is_flag=True, help="Upgrade the Python package only.")
 @click.option("--skill-only", is_flag=True, help="Refresh SKILL.md + references/ only.")
-@click.option(
-    "--force",
-    is_flag=True,
-    help="Override the dev-install safety check (will clobber local symlinks).",
-)
-def update(check_only: bool, silent: bool, cli_only: bool, skill_only: bool, force: bool) -> None:
+def update(check_only: bool, silent: bool, cli_only: bool, skill_only: bool) -> None:
     """Check for and install newer InspireSkill versions."""
     if cli_only and skill_only:
         raise click.UsageError("--cli-only and --skill-only are mutually exclusive.")
@@ -331,19 +305,6 @@ def update(check_only: bool, silent: bool, cli_only: bool, skill_only: bool, for
         if not result.get("latest"):
             sys.exit(1)
         return
-
-    # --- dev-install guard -----------------------------------------------
-    if _is_dev_install() and not force:
-        click.secho(
-            "✗ This looks like a dev install (editable CLI or symlinked SKILL dirs).\n"
-            "  Running `inspire update` would clobber your local edits.\n"
-            "  Pull and re-sync instead:\n"
-            "      git -C <repo> pull --ff-only && <repo>/scripts/install-dev.sh\n"
-            "  Pass --force to override.",
-            fg="red",
-            err=True,
-        )
-        sys.exit(2)
 
     # --- upgrade path -----------------------------------------------------
     # Always refresh the version cache first so subsequent invocations show

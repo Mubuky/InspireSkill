@@ -39,9 +39,8 @@ from inspire.cli.commands.update import _detect_installer
         # pipx — symmetric layout.
         ("/Users/vagrant/.local/share/pipx/venvs/inspire-skill", "pipx"),
         ("/home/alice/.local/share/pipx/venvs/inspire-skill", "pipx"),
-        # Editable / dev install — local repo's .venv. Must return None
-        # so update.py prints the "edit-install" branch hint, not the
-        # "uv tool" branch.
+        # Unmanaged local venv. Must return None so update.py reports the
+        # official installer as the recovery path, not the `uv tool` branch.
         ("/Users/zillionx/InspireSkill/cli/.venv", None),
         # System Python — also None.
         ("/usr/local", None),

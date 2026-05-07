@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# InspireSkill user installer — no local clone, no symlinks.
+# InspireSkill installer — no local clone, no symlinks.
 #
 # Reads: none (self-contained tarball + uv/pipx download)
 # Writes:
@@ -19,8 +19,6 @@
 #   --no-schedule                     skip the macOS launchd update-check agent
 #   --ref <git-ref>                   pin install/refresh to a branch/tag/SHA (default: main)
 #
-# Developers working on this repo should use scripts/install-dev.sh instead.
-
 set -euo pipefail
 
 REPO_SLUG="realZillionX/InspireSkill"
@@ -110,9 +108,8 @@ if (( INSTALL_CLI )); then
     INSTALLER="uv"
     log "installing $SPEC_LABEL via $(bold 'uv tool')"
     uv tool install --force "$SPEC" || die "uv tool install failed — check the spec '$SPEC' and try again."
-    # If a previous run installed the same package via pipx, leave that alone
-    # would be confusing — we'd have two `inspire` shims competing for
-    # ~/.local/bin/inspire and the dev-install symlink resolution gets weird.
+    # If a previous run installed the same package via pipx, leaving it around
+    # would create two `inspire` shims competing for ~/.local/bin/inspire.
     if command -v pipx >/dev/null 2>&1 && pipx list --short 2>/dev/null | grep -q "^${PACKAGE} "; then
       log "removing earlier pipx install of $(bold "$PACKAGE") (uv tool now owns it)"
       pipx uninstall "$PACKAGE" >/dev/null 2>&1 || true
@@ -195,7 +192,7 @@ install_skill() {
     opencode) target="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}/skills/inspire"   ;;
   esac
 
-  # Wipe prior install (handles both real-dir and dev-mode symlink layouts).
+  # Wipe prior install (handles real dirs and stale symlink layouts).
   if [[ -L "$target" || -e "$target" ]]; then
     rm -rf "$target"
   fi
