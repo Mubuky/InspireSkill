@@ -78,6 +78,8 @@ def test_init_defaults_to_discover_mode_with_active_account(
         "snapshot_paths",
         lambda global_path, project_path: {"global": global_path, "project": project_path},
     )
+    monkeypatch.setattr(init_cmd_module, "current_account", lambda: "alice")
+    monkeypatch.setattr(init_cmd_module, "list_accounts", lambda: ["alice"])
 
     def fake_run_init_action(func, effective_json, force, **kwargs):  # noqa: ANN001
         calls["func"] = func
