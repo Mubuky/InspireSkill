@@ -1,9 +1,5 @@
 # Notebook 工作流
 
-## 什么时候加载
-
-当任务需要创建 notebook、SSH 连接、远程执行、传文件、保存镜像、安装 Slurm/Ray 依赖，或判断 `shell` 与 `exec` 的差异时，加载本文档。
-
 ## 1. CLI help 查询
 
 notebook 子命令、参数和功能说明以 CLI help 为准，不在 Agent 文档里维护速查表。

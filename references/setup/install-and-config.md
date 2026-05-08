@@ -1,9 +1,5 @@
 # 安装、更新与初始化
 
-## 什么时候加载
-
-当用户需要安装 InspireSkill、更新 CLI / Skill 文件、配置账号、初始化项目，或排查安装后的 PATH / installer 问题时，加载本文档。
-
 ## 1. 平台支持
 
 macOS + Linux 是一等公民。Windows 用户请用 WSL2；CLI 依赖 SSH、rsync、GPFS 目录约定和 POSIX 文件权限，Windows 原生不在 roadmap。

@@ -1,9 +1,5 @@
 # Job、HPC 与 Ray
 
-## 什么时候加载
-
-当任务需要提交 GPU 多节点 job、CPU Slurm/HPC、Ray 弹性集群，或需要解释优先级、HPC 两层资源、Ray 适用边界、调度事件时，加载本文档。
-
 ## 1. GPU 多节点任务：`job`
 
 `inspire job` 覆盖 GPU 多节点工作负载，包括分布式训练、批量推理和并发单节点 worker pool。`job` 是 GPU 路径；`hpc` 是 CPU Slurm 路径。
