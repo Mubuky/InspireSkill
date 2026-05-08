@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
@@ -31,11 +32,13 @@ from inspire.bridge.tunnel import (
 )
 from inspire.cli.context import (
     Context,
+    EXIT_AUTH_ERROR,
     EXIT_CONFIG_ERROR,
     EXIT_GENERAL_ERROR,
     EXIT_JOB_NOT_FOUND,
     EXIT_LOG_NOT_FOUND,
     EXIT_SUCCESS,
+    EXIT_VALIDATION_ERROR,
     pass_context,
 )
 from inspire.cli.formatters import json_formatter
@@ -44,6 +47,10 @@ from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.job_cli import resolve_job_id
 from inspire.cli.utils.job_submit import derive_remote_log_glob
 from inspire.config import Config, ConfigError
+from inspire.platform.web import browser_api as browser_api_module
+from inspire.platform.web.session import SessionExpiredError, get_web_session
+
+from .job_commands import WebJobResolutionError, _close_web_client, _resolve_web_job_id
 
 
 def _resolve_latest_log_via_ssh(
@@ -70,6 +77,52 @@ def _resolve_latest_log_via_ssh(
         return None
     out = (result.stdout or "").strip()
     return out or None
+
+
+def _coerce_epoch_ms(value: object) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        return int(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _web_log_time_range(job_data: dict, since_minutes: int | None) -> tuple[int, int]:
+    now_ms = int(time.time() * 1000)
+    if since_minutes is not None:
+        return now_ms - since_minutes * 60 * 1000, now_ms
+
+    created_ms = _coerce_epoch_ms(job_data.get("created_at"))
+    finished_ms = _coerce_epoch_ms(job_data.get("finished_at"))
+    if created_ms is None:
+        return now_ms - 24 * 60 * 60 * 1000, now_ms
+
+    start_ms = max(0, created_ms - 10 * 60 * 1000)
+    end_ms = (finished_ms or now_ms) + 10 * 60 * 1000
+    return start_ms, max(end_ms, start_ms + 1)
+
+
+def _web_log_sort_key(item: dict) -> tuple[int, str]:
+    timestamp_ms = _coerce_epoch_ms(item.get("timestamp_ms")) or 0
+    log_id = str(item.get("log_id") or "")
+    return timestamp_ms, log_id
+
+
+def _format_web_logs(logs: list[dict]) -> str:
+    if not logs:
+        return "No web logs found."
+
+    lines = ["Web Job Logs"]
+    for item in logs:
+        timestamp = str(
+            item.get("timestamp_str") or item.get("time") or item.get("timestamp_ms") or ""
+        ).strip()
+        pod_name = str(item.get("pod_name") or "").strip()
+        message = str(item.get("message") or item.get("log") or item.get("content") or "")
+        prefix = " ".join(part for part in (timestamp, pod_name) if part)
+        lines.append(f"{prefix} {message}".rstrip() if prefix else message)
+    return "\n".join(lines)
 
 
 def _fetch_log_via_ssh(
@@ -440,6 +493,153 @@ def _run_job_logs_single_job(
         _handle_error(ctx, "Error", str(e), EXIT_GENERAL_ERROR)
 
 
+def _run_job_logs_web_single_job(
+    ctx: Context,
+    *,
+    job: str,
+    tail: int | None,
+    head: int | None,
+    path: bool,
+    follow: bool,
+    workspace: Optional[str],
+    all_workspaces: bool,
+    all_users: bool,
+    created_by: Optional[str],
+    max_pages: int,
+    instance_ids: tuple[str, ...],
+    since_minutes: int | None,
+    web_page_size: int,
+) -> None:
+    if path:
+        _handle_error(
+            ctx,
+            "InvalidUsage",
+            "--path is not supported for web aggregated logs",
+            EXIT_VALIDATION_ERROR,
+        )
+        return
+    if follow:
+        _handle_error(
+            ctx,
+            "InvalidUsage",
+            "--follow is not supported for web aggregated logs yet",
+            EXIT_VALIDATION_ERROR,
+        )
+        return
+    if since_minutes is not None and since_minutes <= 0:
+        _handle_error(
+            ctx,
+            "InvalidUsage",
+            "--since-minutes must be positive",
+            EXIT_VALIDATION_ERROR,
+        )
+        return
+    if web_page_size <= 0:
+        _handle_error(
+            ctx,
+            "InvalidUsage",
+            "--web-page-size must be positive",
+            EXIT_VALIDATION_ERROR,
+        )
+        return
+
+    try:
+        config, _ = Config.from_files_and_env(require_credentials=False)
+        job_id = _resolve_web_job_id(
+            config=config,
+            job=job,
+            workspace=workspace,
+            all_workspaces=all_workspaces,
+            all_users=all_users,
+            created_by=created_by,
+            max_pages=max_pages,
+        )
+
+        try:
+            session = get_web_session()
+            job_data = browser_api_module.get_job_detail(job_id, session=session)
+            if instance_ids:
+                pod_names = [
+                    str(instance_id or "").strip()
+                    for instance_id in instance_ids
+                    if str(instance_id or "").strip()
+                ]
+            else:
+                instances, _ = browser_api_module.list_job_instances(
+                    job_id,
+                    page_num=1,
+                    page_size=200,
+                    session=session,
+                )
+                pod_names = [
+                    str(item.get("name") or "").strip()
+                    for item in instances
+                    if str(item.get("name") or "").strip()
+                ]
+
+            if not pod_names:
+                _handle_error(
+                    ctx,
+                    "LogNotFound",
+                    f"No instances found for web job {job}",
+                    EXIT_LOG_NOT_FOUND,
+                )
+                return
+
+            start_ms, end_ms = _web_log_time_range(job_data, since_minutes)
+            fetch_size = max(web_page_size, tail or 0, head or 0)
+            logs, total = browser_api_module.list_train_job_logs(
+                job_id=job_id,
+                pod_names=pod_names,
+                start_timestamp_ms=start_ms,
+                end_timestamp_ms=end_ms,
+                page_size=fetch_size,
+                session=session,
+            )
+        finally:
+            _close_web_client()
+
+        logs = sorted(logs, key=_web_log_sort_key)
+        shown = logs
+        if head:
+            shown = shown[:head]
+        if tail:
+            shown = shown[-tail:]
+
+        if ctx.json_output:
+            click.echo(
+                json_formatter.format_json(
+                    {
+                        "source": "web",
+                        "job_id": job_id,
+                        "instances": pod_names,
+                        "logs": shown,
+                        "total": total,
+                        "returned": len(logs),
+                        "shown": len(shown),
+                        "time_range": {
+                            "start_timestamp_ms": str(start_ms),
+                            "end_timestamp_ms": str(end_ms),
+                        },
+                    }
+                )
+            )
+            return
+
+        click.echo(_format_web_logs(shown))
+
+    except ConfigError as e:
+        _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
+    except WebJobResolutionError as e:
+        _handle_error(ctx, "JobNotFound", str(e), EXIT_JOB_NOT_FOUND)
+    except SessionExpiredError as e:
+        _handle_error(ctx, "AuthenticationError", str(e), EXIT_AUTH_ERROR)
+    except ValueError as e:
+        _handle_error(ctx, "APIError", str(e), EXIT_GENERAL_ERROR)
+    except Exception as e:
+        _handle_error(ctx, "Error", str(e), EXIT_GENERAL_ERROR)
+
+
 @click.command("logs")
 @click.argument("job")
 @click.option("--tail", "-n", type=int, help="Show last N lines only")
@@ -464,11 +664,41 @@ def _run_job_logs_single_job(
         "No short alias — `-n` is reserved for --tail."
     ),
 )
+@click.option("--web", is_flag=True, help="Read web UI aggregated logs instead of SSH logs")
+@click.option("--workspace", default=None, help="Workspace alias or name")
 @click.option(
     "--all-workspaces",
     "-A",
     is_flag=True,
     help="Resolve the job name across every visible workspace, not just the current one",
+)
+@click.option("--all-users", is_flag=True, help="Include jobs from all users in web mode")
+@click.option("--created-by", default=None, help="Filter web job name resolution by creator ID")
+@click.option(
+    "--max-pages",
+    type=int,
+    default=50,
+    show_default=True,
+    help="Max web pages to scan per workspace when resolving a job name",
+)
+@click.option(
+    "--instance",
+    "instance_ids",
+    multiple=True,
+    help="Web mode: pod instance name to query. Repeat to query multiple pods.",
+)
+@click.option(
+    "--since-minutes",
+    type=int,
+    default=None,
+    help="Web mode: query logs from the last N minutes instead of the job lifetime window",
+)
+@click.option(
+    "--web-page-size",
+    type=int,
+    default=500,
+    show_default=True,
+    help="Web mode: max log records fetched from the aggregated log API",
 )
 @pass_context
 def logs(
@@ -480,7 +710,15 @@ def logs(
     follow: bool,
     remote_log_path: Optional[str],
     notebook: Optional[str],
+    web: bool,
+    workspace: Optional[str],
     all_workspaces: bool,
+    all_users: bool,
+    created_by: Optional[str],
+    max_pages: int,
+    instance_ids: tuple[str, ...],
+    since_minutes: int | None,
+    web_page_size: int,
 ) -> None:
     """Tail / cat the remote log file for a training job over SSH.
 
@@ -498,6 +736,7 @@ def logs(
         inspire job logs my-training-run --path
         inspire job logs my-training-run --notebook my-cpu-box
         inspire job logs my-training-run --remote-log-path /inspire/.../custom.log
+        inspire job logs --web my-training-run --tail 100
     """
     if notebook is not None:
         from inspire.cli.utils.id_resolver import reject_id_at_boundary
@@ -509,6 +748,49 @@ def logs(
             list_command="inspire notebook connections",
         )
     bridge = notebook
+
+    web_mode = (
+        web
+        or workspace
+        or all_users
+        or created_by
+        or bool(instance_ids)
+        or since_minutes is not None
+    )
+    if web_mode:
+        if bridge:
+            _handle_error(
+                ctx,
+                "InvalidUsage",
+                "--notebook cannot be combined with --web",
+                EXIT_VALIDATION_ERROR,
+            )
+            return
+        if remote_log_path:
+            _handle_error(
+                ctx,
+                "InvalidUsage",
+                "--remote-log-path cannot be combined with --web",
+                EXIT_VALIDATION_ERROR,
+            )
+            return
+        _run_job_logs_web_single_job(
+            ctx,
+            job=job,
+            tail=tail,
+            head=head,
+            path=path,
+            follow=follow,
+            workspace=workspace,
+            all_workspaces=all_workspaces,
+            all_users=all_users,
+            created_by=created_by,
+            max_pages=max_pages,
+            instance_ids=instance_ids,
+            since_minutes=since_minutes,
+            web_page_size=web_page_size,
+        )
+        return
 
     job_id = resolve_job_id(ctx, job, all_workspaces=all_workspaces)
 

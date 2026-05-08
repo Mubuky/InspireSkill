@@ -597,6 +597,7 @@ def test_job_list_web_name_search_scans_all_workspaces(
         workspace_id=None,
         created_by=None,
         status=None,
+        keyword=None,
         page_num=1,
         page_size=100,
         session=None,
@@ -604,11 +605,12 @@ def test_job_list_web_name_search_scans_all_workspaces(
         calls.append(
             {
                 "workspace_id": workspace_id,
-                "created_by": created_by,
-                "status": status,
-                "page_num": page_num,
-                "page_size": page_size,
-            }
+                    "created_by": created_by,
+                    "status": status,
+                    "keyword": keyword,
+                    "page_num": page_num,
+                    "page_size": page_size,
+                }
         )
         if workspace_id == "ws-train" and page_num == 1:
             return (
@@ -689,6 +691,7 @@ def test_job_list_human_output_hides_raw_ids_and_name_search_ignores_job_id(
         workspace_id=None,
         created_by=None,
         status=None,
+        keyword=None,
         page_num=1,
         page_size=100,
         session=None,
