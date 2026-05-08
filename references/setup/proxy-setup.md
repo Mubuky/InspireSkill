@@ -19,6 +19,13 @@
 
 脚本本身不强行设置 Clash Verge 监听端口。把 Clash Verge 的 mixed port 配成 `7897` 后，CLI 账号配置中填写 `http://127.0.0.1:7897` 或 `socks5://127.0.0.1:7897` 即可。
 
+最小可用配置只需要两件事：
+
+1. `*.sii.edu.cn` 在非创智直连场景走 `🧮 启智计算`代理组。
+2. 其它公网流量继续走原订阅里的代理组或节点。
+
+`LA` 链式出口只是本机 Script.js 里的可选特殊配置，用于把公网默认出口固定到一个额外 SOCKS5 节点。没有这类出口时保持 `USE_LA_EXIT = false`，并且不需要填写 `<la-proxy-...>` 占位符。
+
 ## 扩展脚本
 
 ```javascript
@@ -26,7 +33,9 @@
 // 场景："sii"=创智直连，"fudan"=复旦直连，"roaming"=其它网络。
 var SITE_MODE = "fudan";
 
-// LA：住宅出口。真实 host / user / password 不要提交到仓库。
+// 可选：LA 链式出口。这是本机示例里的特殊配置，不是 InspireSkill 必需项。
+// 没有该出口时保持 false，公网流量会走原订阅里的 upstream proxies。
+var USE_LA_EXIT = false;
 var LA_NAME = "LA";
 var LA_PROXY = {
   name: LA_NAME,
@@ -147,8 +156,9 @@ function resetManagedProxies(config) {
   config.proxies = removeProxyNames(ensureArray(config.proxies), MANAGED_PROXY_NAMES);
 }
 
-// 注入 LA（链式出口）。
+// 注入可选 LA 链式出口。
 function injectLA(config) {
+  if (!USE_LA_EXIT) return;
   config.proxies = upsertProxy(ensureArray(config.proxies), LA_PROXY);
 }
 
@@ -191,7 +201,7 @@ function patchFudanCampus(config) {
   config.rules = rules;
 }
 
-// 重建组：Proxies 默认 LA，备用 upstream-proxies。
+// 重建组：默认复用订阅里的 upstream proxies；可选启用 LA 作为公网优先出口。
 function rebuildProxyGroups(config) {
   var allProxies = ensureArray(config.proxies);
   var upstreamMembers = [];
@@ -205,8 +215,10 @@ function rebuildProxyGroups(config) {
 
   var groups = [];
   if (SITE_MODE !== "sii") groups.push(QIZHI_GROUP);
+  if (upstreamMembers.length === 0) upstreamMembers = ["DIRECT"];
+  var publicMembers = USE_LA_EXIT ? [LA_NAME, "upstream-proxies"] : ["upstream-proxies"];
   groups.push(
-    { name: "Proxies", type: "select", proxies: [LA_NAME, "upstream-proxies"] },
+    { name: "Proxies", type: "select", proxies: publicMembers },
     { name: "upstream-proxies", type: "select", proxies: upstreamMembers }
   );
   config["proxy-groups"] = groups;
@@ -278,7 +290,7 @@ lsof -iTCP:7897 -sTCP:LISTEN
 再验证公网和启智：
 
 ```bash
-# 公网：经 Proxies 组，默认 LA，必要时回落 upstream-proxies
+# 公网：经 Proxies 组；默认复用原订阅，USE_LA_EXIT=true 时优先走 LA
 curl -sS -o /dev/null -w "public: %{http_code}\n" \
   -x socks5h://127.0.0.1:7897 https://www.google.com
 
@@ -293,6 +305,7 @@ curl -sS -o /dev/null -w "sii:    %{http_code}\n" \
 2. 确认规则面板里有 `DOMAIN-SUFFIX,sii.edu.cn,DIRECT` 或 `DOMAIN-SUFFIX,sii.edu.cn,🧮 启智计算`。
 3. 确认 `🧮 启智计算`组中的代理凭据仍有效。
 4. 确认 Clash Verge mixed port 是 `7897`。
+5. 如果没有本机特殊链式出口，确认 `USE_LA_EXIT = false`。
 
 ## 与 InspireSkill 的衔接
 
