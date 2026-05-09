@@ -19,6 +19,7 @@ description: "Execution-first Inspire platform playbook for agents driving the i
 | 默认 workspace | 默认只主动使用 `CPU 资源空间` 和 `分布式训练空间`。其它 workspace 需要仓库级 `INSPIRE.md` 或用户明确指定。 |
 | 优先级 | `--priority` 接受 1 到 10。1 到 3 是低优先级，4 是普通优先级，5 到 10 是高优先级。需要稳定运行时传 5 或更高，并用 `inspire job status <name>` 核对人类输出中的优先级。 |
 | 排错入口 | 任务 PENDING、CREATING 过久或 FAILED 原因不明时，第一步查 `inspire <res> events <name>`。不要凭猜测重试或重提。 |
+| 健康度观察 | 任务已启动但吞吐、显存、CPU、内存或网络状态不明时，查 `inspire notebook|job|hpc|serving metrics <name>`。`events` 看调度和生命周期原因；`metrics` 看资源利用率和多 pod 是否均衡。 |
 | 清理 | 终态且不再需要的资源用 `<res> delete <name> --yes` 清理；running 先 stop。不确定是否仍有人使用时跳过。 |
 | 大操作 | 共享盘大规模 `mv`、`cp`、`rm` 前先看文件量和大小分布。超过 20 分钟的远程操作使用后台任务 + sentinel 文件，不要让 `notebook exec` 长时间同步挂住。 |
 
@@ -46,7 +47,7 @@ uv run inspire hpc create --help
 常见任务的语义背景仍按需加载 reference：
 
 - Notebook 细节、镜像固化、远程命令语义和大文件操作：加载 [references/notebook.md](references/notebook.md)。
-- GPU job、HPC 两层资源模型、Ray 适用边界和示例：加载 [references/compute-workloads.md](references/compute-workloads.md)。
+- GPU job、HPC 两层资源模型、Ray 适用边界、事件和指标观察：加载 [references/compute-workloads.md](references/compute-workloads.md)。
 - Workspace、compute group、规格三元组、存储池和路径隔离：加载 [references/resources-and-paths.md](references/resources-and-paths.md)。
 
 ## 3. 按需加载索引
@@ -54,8 +55,8 @@ uv run inspire hpc create --help
 | 什么时候加载 | 引用 |
 | --- | --- |
 | 需要选择 workspace、compute group、规格三元组、存储池或远端路径 | [references/resources-and-paths.md](references/resources-and-paths.md) |
-| 要创建、连接、执行、传文件、保存镜像或维护 notebook | [references/notebook.md](references/notebook.md) |
-| 要提交 GPU job、CPU HPC、Ray，或解释优先级和调度事件 | [references/compute-workloads.md](references/compute-workloads.md) |
+| 要创建、连接、执行、传文件、保存镜像、查看事件或指标，或维护 notebook | [references/notebook.md](references/notebook.md) |
+| 要提交 GPU job、CPU HPC、Ray，或解释优先级、调度事件和资源指标 | [references/compute-workloads.md](references/compute-workloads.md) |
 | 要按 CPU 准备、数据处理、训练三阶段推进项目 | [references/workflows.md](references/workflows.md) |
 | SSH bootstrap、大规模文件操作或 notebook 远程命令排障 | [references/notebook.md](references/notebook.md) |
 | 安装、更新、账号初始化或代理 setup | [references/setup/install-and-config.md](references/setup/install-and-config.md)、[references/setup/proxy-setup.md](references/setup/proxy-setup.md) |

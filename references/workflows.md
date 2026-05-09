@@ -83,3 +83,12 @@ inspire job events <name>-train --tail 50
 inspire job logs <name>-train --tail 100
 inspire job status <name>-train
 ```
+
+训练已进入 `RUNNING` 后，把 `metrics` 当成和日志同级的健康度观察面。日志回答程序说了什么；指标回答资源是否还在工作、worker 是否均衡、I/O 是否断流：
+
+```bash
+inspire job metrics <name>-train --window 30m
+inspire job metrics <name>-train --metric gpu,gpu_mem,cpu,mem,net_read,net_write --sparkline --no-plot
+```
+
+多节点训练里，某个 pod 长期低 GPU / 低网络通常意味着数据加载、通信或进程状态异常；所有 pod GPU 接近零且 CPU / I/O 也安静时，不要只盯 `RUNNING`，回到日志和产出文件确认训练是否真的推进。

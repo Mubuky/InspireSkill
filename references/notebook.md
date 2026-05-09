@@ -80,7 +80,31 @@ nohup "$RT_BIN" 22222 31337 >/tmp/rtunnel-server.log 2>&1 &
 
 之后回本机重跑 `inspire notebook ssh <notebook-name>`。
 
-## 4. 代码与文件流转
+## 4. 事件与指标观察
+
+`inspire notebook events <name>` 看调度、镜像拉取、容器启动、停止、保存镜像等生命周期原因。notebook 卡在 `PENDING`、`CREATING` 或失败时先看 events。
+
+`inspire notebook metrics <name>` 看 Web UI `资源视图` 同源的历史资源曲线，不需要进入容器。适合判断实例是否真的吃到 GPU、CPU / 内存是否贴边、磁盘或网络是否在持续传输。
+
+常用入口：
+
+```bash
+inspire notebook events <name> --tail 50
+inspire notebook metrics <name> --window 30m
+inspire notebook metrics <name> --metric gpu,gpu_mem,cpu,mem --sparkline --no-plot
+```
+
+默认 `metrics` 查询 `core` 指标，即 GPU 使用率、GPU 显存、CPU 和内存；`--metric all` 会加上磁盘读写和网络读写。需要给人看趋势时保留默认 PNG 图；只想在终端快速判断时用 `--no-plot --sparkline`。
+
+分工原则：
+
+| 工具 | 主要回答 |
+| --- | --- |
+| `events` | 平台为什么还没调度、为什么启动失败、生命周期走到哪一步 |
+| `metrics` | 资源是否在工作、GPU / CPU / 内存是否打满、I/O 是否还有流量 |
+| `exec` / `ssh` | 进容器查进程、日志、文件、应用自身状态 |
+
+## 5. 代码与文件流转
 
 | 文件流转类型 | 做法 |
 | --- | --- |
@@ -124,7 +148,7 @@ du -sh --max-depth=1 <dir>
 
 超过 20 分钟的操作一律 `nohup ... &` + sentinel 文件，本地轮询远端 sentinel；不要让 `notebook exec` 同步挂住。并行度不要无脑拉到 64 以上，GPFS metadata server 是共享资源，`-P 16` 通常已经够。
 
-## 5. 基底 notebook 与镜像
+## 6. 基底 notebook 与镜像
 
 项目刚开始时，建议在可上网 CPU 空间用 `docker.sii.shaipower.online/inspire-studio/unified-base:v2` 起一个基底 notebook，把 Slurm、Ray、分布式训练依赖和项目依赖一次性装好，再保存成项目通用镜像。
 

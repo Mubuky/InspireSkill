@@ -111,9 +111,9 @@ Ray 特有坑：
 - `min` 和 `max` 都必须大于等于 1。
 - driver 不退出，集群就一直占配额；长守护任务要接受手动 stop 的运维模型。
 
-## 5. 事件优先
+## 5. 事件与指标观察
 
-任务卡住或失败时优先查事件：
+任务卡住或失败时优先查事件，确认调度器、控制器或 kubelet 给出的原因：
 
 ```bash
 inspire job events <name> --tail 50
@@ -122,6 +122,25 @@ inspire ray events <name> --tail 50
 ```
 
 `job` 和 `ray` 可以进一步看 pod/instance 级原因；HPC 只暴露 job-level 事件。
+
+任务已启动但健康度不明时查指标。`metrics` 对应 Web UI 的 `资源视图`，适合看 GPU、显存、CPU、内存、磁盘和网络是否持续工作，以及多 pod / 多 task 是否负载均衡：
+
+```bash
+inspire job metrics <name> --window 30m
+inspire job metrics <name> --metric gpu,gpu_mem,cpu,mem --sparkline --no-plot
+inspire hpc metrics <name> --metric cpu,mem,disk_read,disk_write --window 2h
+```
+
+默认 `--metric core` 查询 GPU 使用率、GPU 显存、CPU 和内存；`--metric all` 会加磁盘读写和网络读写。多节点训练重点看每个 pod 的 GPU 和网络曲线是否同步：某个 worker 长期低 GPU、低网络，通常比单条日志更早暴露数据加载、通信或进程卡死问题。CPU HPC 重点看 CPU、内存和磁盘读写；Slurm 显示 `RUNNING` 但指标长期为零时，应回到日志和产出文件确认 payload 是否真的启动。
+
+Ray 目前有底层 Browser API 指标 helper，但 CLI 尚未暴露 `ray metrics`。Ray 任务先用 `ray events`、`ray status` 和日志确认状态。
+
+| 工具 | 主要回答 |
+| --- | --- |
+| `events` | 为什么排队、为什么启动失败、调度器拒绝了什么 |
+| `metrics` | 已启动任务是否仍在有效工作、各 pod / task 是否均衡 |
+| `logs` | 程序自身报错、训练进度、业务输出 |
+| `status` | 平台状态、优先级、实例列表和基础摘要 |
 
 ## 6. HPC 异常状态对照
 
@@ -142,3 +161,10 @@ inspire ray events <name> --tail 50
 命令列表、参数和单命令功能以 CLI help 为准。先用 `inspire serving --help` 看可用子命令；需要列部署、看状态、停止服务、查看可用配置或读取指标时，再分别查 `inspire serving <subcommand> --help`。
 
 `list` / `configs` 只在 Browser API；`status` / `stop` OpenAPI 和 Browser API 都有，CLI 优先选 OpenAPI。创建部署的参数过多且强绑定 Web 表单，CLI 暂不覆盖，直接用 Web UI `/jobs/modelDeployment`。
+
+服务已启动但吞吐、显存或副本负载不明时，用 `inspire serving metrics <name>` 看每个 replica 的资源曲线：
+
+```bash
+inspire serving metrics <name> --window 30m
+inspire serving metrics <name> --metric gpu,gpu_mem,cpu,mem,net_read,net_write --sparkline --no-plot
+```
