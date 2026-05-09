@@ -6,6 +6,13 @@
 
 当前无未发布变更。
 
+## 4.1.3（2026-05-09）
+
+### Fixed
+
+- `uv tool` 更新路径增加 package index refresh，避免 PyPI 已发布新版本但本地 `uv` 缓存仍返回旧版本。
+- 安装脚本的 `uv tool install` 同样强制刷新索引，保证重装路径和 `inspire update` 行为一致。
+
 ## 4.1.2（2026-05-09）
 
 ### Fixed

@@ -95,7 +95,7 @@ if (( INSTALL_CLI )); then
   if command -v uv >/dev/null 2>&1; then
     INSTALLER="uv"
     log "installing $SPEC_LABEL via $(bold 'uv tool')"
-    uv tool install --force "$SPEC" || die "uv tool install failed — check the spec '$SPEC' and try again."
+    uv tool install --force --refresh "$SPEC" || die "uv tool install failed — check the spec '$SPEC' and try again."
     # If a previous run installed the same package via pipx, leaving it around
     # would create two `inspire` shims competing for ~/.local/bin/inspire.
     if command -v pipx >/dev/null 2>&1 && pipx list --short 2>/dev/null | grep -q "^${PACKAGE} "; then

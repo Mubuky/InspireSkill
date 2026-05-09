@@ -98,9 +98,9 @@ def test_upgrade_cli_retries_pypi_network_errors_with_mirrors(
 
     assert _upgrade_cli(silent=True) is True
     assert calls == [
-        (["uv", "tool", "install", "--force", "inspire-skill"], None),
+        (["uv", "tool", "install", "--force", "--refresh", "inspire-skill"], None),
         (
-            ["uv", "tool", "install", "--force", "inspire-skill"],
+            ["uv", "tool", "install", "--force", "--refresh", "inspire-skill"],
             "https://pypi.tuna.tsinghua.edu.cn/simple",
         ),
     ]
@@ -150,7 +150,7 @@ def test_upgrade_cli_from_repo_venv_updates_global_uv_tool(
     monkeypatch.setattr(update_module.subprocess, "run", fake_run)
 
     assert _upgrade_cli(silent=True) is True
-    assert calls == [["uv", "tool", "install", "--force", "inspire-skill"]]
+    assert calls == [["uv", "tool", "install", "--force", "--refresh", "inspire-skill"]]
 
 
 def test_parse_uv_tool_list_captures_local_source_and_executable() -> None:

@@ -232,7 +232,7 @@ def _official_uv_install_cmd() -> list[str]:
     # tool was installed from a local path, that keeps updating from the local
     # checkout. For a global end-user update, force the canonical PyPI package
     # requirement so `inspire update` can repair local-path installs in one run.
-    return ["uv", "tool", "install", "--force", PACKAGE_NAME]
+    return ["uv", "tool", "install", "--force", "--refresh", PACKAGE_NAME]
 
 
 def _is_likely_network_or_index_error(output: str) -> bool:
