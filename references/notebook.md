@@ -92,7 +92,54 @@ nohup "$RT_BIN" 22222 31337 >/tmp/rtunnel-server.log 2>&1 &
 
 之后回本机重跑 `inspire notebook ssh <notebook-name>`。
 
-## 4. 事件与指标观察
+## 4. Notebook HTTPS proxy 与容器端口
+
+`inspire notebook connections --no-check` 会列出本机已经缓存过的 notebook 连接。人类格式主要用于快速确认缓存名、SSH 用户 / 端口和联网状态；不同安装版本是否展示完整 URL 可能不同。需要稳定读取平台 notebook proxy URL 时，用 JSON：
+
+```bash
+inspire --json notebook connections --no-check \
+  | jq -r '.data.bridges[] | select(.name == "<notebook-name>").proxy_url'
+```
+
+`proxy_url` 通常长这样：
+
+```text
+https://<notebook-domain>/ws-<workspace-id>/project-<project-id>/user-<user-id>/<jupyter|vscode>/<notebook-id>/<token>/proxy/<port>/?token=<token>
+```
+
+`/proxy/31337/` 是 InspireSkill SSH bootstrap 默认使用的容器内 rtunnel 端口；对应上文手工命令里的 `nohup "$RT_BIN" 22222 31337 ...`。这个 URL 可被本机 `rtunnel` 客户端当作 WebSocket 入口，用来把本机 SSH ProxyCommand 接到容器内 `22222`。
+
+同一个 notebook proxy 也可用于访问容器里已经监听的其它 HTTP 服务：把 URL 里的 `/proxy/31337/` 改成 `/proxy/<container-port>/`，再追加服务路径即可。例如容器里有 OpenAI-compatible 服务监听 `30000` 时，base URL 可写成：
+
+```text
+https://<notebook-domain>/ws-.../<jupyter|vscode>/<notebook-id>/<token>/proxy/30000/v1
+```
+
+这条路径和 SSH / rtunnel 是两种不同用途：
+
+| 路径 | 适用场景 | 访问方式 |
+| --- | --- | --- |
+| Notebook HTTPS proxy `/proxy/<port>/` | 给浏览器、OpenAI SDK、Gradio、FastAPI、SGLang、vLLM 等 HTTP 服务提供平台 URL | 走启智 Web 域名、登录态 / 项目权限 / notebook token，并由服务自身决定是否还要 API key |
+| SSH rtunnel / ProxyCommand | 让本机 CLI 执行 `ssh`、`scp`、`exec`、`shell` 等运维动作 | 本机 `rtunnel` 客户端经 notebook proxy 接容器内 SSHD |
+
+安全边界要分清：
+
+- 启智登录态、项目权限和 notebook URL token 控制谁能到达 notebook proxy；不要把带 token 的 URL 发到公开渠道。
+- notebook proxy 只是网络通路，不等于业务鉴权。对 LLM API、Gradio、FastAPI 等可消费算力或数据的服务，应在服务本身开启 API key、登录或其它应用层鉴权。
+- 本机临时 gateway 不应直接绑定 `0.0.0.0` 给小组使用；这会绕开启智访问控制，把安全边界变成本机防火墙和局域网状态。小组共享优先使用 notebook HTTPS proxy，或使用 Tailscale / SSH tunnel 等私有通路。
+- 如果服务开启了 API key，验证顺序应包括：无 key 请求返回 `401` 或等价拒绝；带 key 的 `/health`、`/v1/models` 或业务 smoke test 返回成功。
+
+常用排查命令：
+
+```bash
+inspire notebook connections --no-check
+inspire notebook exec <name> "ss -ltnp | grep ':<container-port>' || true"
+inspire notebook exec <name> "curl -sS -o /tmp/probe.out -w '%{http_code}\n' http://127.0.0.1:<container-port>/health"
+```
+
+如果本机 `curl https://.../proxy/<port>/...` 因代理、证书或内网网络限制失败，可先用浏览器或 Playwright 在已登录启智的会话中验证同一个 URL；最终共享给他人前，仍要用服务自身 API key 做一次无 key / 有 key 对照测试。
+
+## 5. 事件与指标观察
 
 `inspire notebook events <name>` 看调度、镜像拉取、容器启动、停止、保存镜像等生命周期原因。notebook 卡在 `PENDING`、`CREATING` 或失败时先看 events。
 
@@ -116,7 +163,7 @@ inspire notebook metrics <name> --metric gpu,gpu_mem,cpu,mem --sparkline --no-pl
 | `metrics` | 资源是否在工作、GPU / CPU / 内存是否打满、I/O 是否还有流量 |
 | `exec` / `ssh` | 进容器查进程、日志、文件、应用自身状态 |
 
-## 5. 代码与文件流转
+## 6. 代码与文件流转
 
 | 文件流转类型 | 做法 |
 | --- | --- |
@@ -160,7 +207,7 @@ du -sh --max-depth=1 <dir>
 
 超过 20 分钟的操作一律 `nohup ... &` + sentinel 文件，本地轮询远端 sentinel；不要让 `notebook exec` 同步挂住。并行度不要无脑拉到 64 以上，GPFS metadata server 是共享资源，`-P 16` 通常已经够。
 
-## 6. 基底 notebook 与镜像
+## 7. 基底 notebook 与镜像
 
 项目刚开始时，建议在可上网 CPU 空间用统一基底镜像起一个基底 notebook，把 Slurm、Ray、分布式训练依赖和项目依赖一次性装好，再保存成项目通用镜像。
 

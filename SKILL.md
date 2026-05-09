@@ -46,7 +46,7 @@ uv run inspire hpc create --help
 
 常见任务的语义背景仍按需加载 reference：
 
-- Notebook 细节、镜像固化、远程命令语义和大文件操作：加载 [references/notebook.md](references/notebook.md)。
+- Notebook 细节、镜像固化、远程命令语义、HTTPS proxy / 端口暴露和大文件操作：加载 [references/notebook.md](references/notebook.md)。
 - GPU job、HPC 两层资源模型、Ray 适用边界、事件和指标观察：加载 [references/compute-workloads.md](references/compute-workloads.md)。
 - Workspace、compute group、规格三元组、存储池和路径隔离：加载 [references/resources-and-paths.md](references/resources-and-paths.md)。
 - 镜像浏览、注册、保存、可见性与默认设置：加载 [references/image-management.md](references/image-management.md)。
@@ -59,7 +59,7 @@ uv run inspire hpc create --help
 | 什么时候加载 | 引用 |
 | --- | --- |
 | 需要选择 workspace、compute group、规格三元组、存储池或远端路径 | [references/resources-and-paths.md](references/resources-and-paths.md) |
-| 要创建、连接、执行、传文件、保存镜像、查看事件或指标，或维护 notebook | [references/notebook.md](references/notebook.md) |
+| 要创建、连接、执行、传文件、保存镜像、查看事件或指标、使用 notebook HTTPS proxy 暴露容器端口，或维护 notebook | [references/notebook.md](references/notebook.md) |
 | 要提交 GPU job、CPU HPC、Ray，或解释优先级、调度事件和资源指标 | [references/compute-workloads.md](references/compute-workloads.md) |
 | 要按 CPU 准备、数据处理、训练三阶段推进项目 | [references/workflows.md](references/workflows.md) |
 | SSH bootstrap、大规模文件操作或 notebook 远程命令排障 | [references/notebook.md](references/notebook.md) |
@@ -72,7 +72,7 @@ uv run inspire hpc create --help
 
 | CLI 命令组 | 主要子命令 | 应加载的 reference |
 | --- | --- | --- |
-| `notebook` | create, ssh, shell, exec, scp, events, metrics, top, install-deps, lifecycle, set-path ... | [references/notebook.md](references/notebook.md) |
+| `notebook` | create, ssh, shell, exec, scp, connections, events, metrics, top, install-deps, lifecycle, set-path ... | [references/notebook.md](references/notebook.md) |
 | `job` | create, status, stop, logs, events, metrics, instances, wait, command ... | [references/compute-workloads.md](references/compute-workloads.md) §1, §6 |
 | `run` | 快捷提交 + watch（GPU job only） | [references/compute-workloads.md](references/compute-workloads.md) §1a |
 | `hpc` | create, status, stop, events, metrics, delete ... | [references/compute-workloads.md](references/compute-workloads.md) §3, §7 |
