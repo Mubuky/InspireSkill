@@ -18,6 +18,7 @@ from inspire.bridge.tunnel import (
 from inspire.cli.context import Context, EXIT_CONFIG_ERROR, EXIT_GENERAL_ERROR, pass_context
 from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.notebook_cli import WEB_AUTH_HINT, require_web_session
+from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.cli.utils.tunnel_reconnect import (
     load_ssh_public_key_material,
     rebuild_notebook_bridge_profile,
@@ -32,18 +33,12 @@ _RUNNING_NOTEBOOK_STATUS = "RUNNING"
 
 
 def _resolve_shell_remote_cwd(*, cwd: Optional[str], config: Config) -> Optional[str]:
-    if cwd or config.target_dir:
-        return resolve_remote_cwd(
-            cwd=cwd,
-            target_dir=config.target_dir,
-            aliases=config.path_aliases,
-        )
-    return None
+    return resolve_remote_cwd(cwd=cwd, aliases=config.path_aliases)
 
 
-def _build_remote_shell_command(*, target_dir: Optional[str], env_exports: str) -> Optional[str]:
-    if target_dir:
-        return f'{env_exports}cd "{target_dir}" && exec $SHELL -l'
+def _build_remote_shell_command(*, remote_cwd: Optional[str], env_exports: str) -> Optional[str]:
+    if remote_cwd:
+        return f'{env_exports}cd "{remote_cwd}" && exec $SHELL -l'
     if env_exports:
         return f"{env_exports}exec $SHELL -l"
     return None
@@ -54,7 +49,7 @@ def _build_remote_shell_command(*, target_dir: Optional[str], env_exports: str) 
 @click.option(
     "--cwd",
     default=None,
-    help="Remote working directory or path alias (default: [paths].target_dir, else $HOME)",
+    help="Remote working directory or path alias (default: 'me' alias, else $HOME)",
 )
 @pass_context
 def bridge_ssh(ctx: Context, notebook: Optional[str], cwd: Optional[str]) -> None:
@@ -80,8 +75,8 @@ def bridge_ssh(ctx: Context, notebook: Optional[str], cwd: Optional[str]) -> Non
         )
     bridge = notebook
     try:
-        config, _ = Config.from_files_and_env(require_target_dir=False, require_credentials=False)
-        config.target_dir = _resolve_shell_remote_cwd(cwd=cwd, config=config)
+        config, _ = Config.from_files_and_env(require_credentials=False)
+        remote_cwd = _resolve_shell_remote_cwd(cwd=cwd, config=config)
     except ConfigError as e:
         _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
 
@@ -113,7 +108,7 @@ def bridge_ssh(ctx: Context, notebook: Optional[str], cwd: Optional[str]) -> Non
     logger.debug("bridge_ssh start bridge=%s", bridge_name)
 
     remote_command = _build_remote_shell_command(
-        target_dir=config.target_dir,
+        remote_cwd=remote_cwd,
         env_exports=env_exports,
     )
     reconnect_limit = max(0, int(getattr(config, "tunnel_retries", 0)))
@@ -162,7 +157,7 @@ def bridge_ssh(ctx: Context, notebook: Optional[str], cwd: Optional[str]) -> Non
                     "TunnelError",
                     "SSH tunnel not available",
                     hint=(
-                        "This cached connection has no notebook_id metadata, so it cannot be "
+                        "This cached connection has no notebook handle, so it cannot be "
                         "rebuilt automatically. Re-create it via "
                         "'inspire notebook ssh <notebook>'."
                     ),
@@ -254,8 +249,8 @@ def bridge_ssh(ctx: Context, notebook: Optional[str], cwd: Optional[str]) -> Non
         )
         if not opened_once and not ctx.json_output:
             click.echo("Opening SSH connection...")
-            click.echo(f"Notebook: {bridge_name}")
-            click.echo(f"Working directory: {config.target_dir or '$HOME'}")
+            click.echo(f"Notebook: {scrub_raw_ids(bridge_name)}")
+            click.echo(f"Working directory: {scrub_raw_ids(remote_cwd or '$HOME')}")
             click.echo("Press Ctrl+D or type 'exit' to disconnect")
             click.echo("")
             opened_once = True

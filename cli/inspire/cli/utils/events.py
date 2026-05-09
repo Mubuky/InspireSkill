@@ -23,6 +23,7 @@ from typing import Any, Callable, Optional
 import click
 
 from inspire.cli.formatters import json_formatter
+from inspire.cli.utils.raw_ids import scrub_raw_ids
 
 
 _EVENTS_CACHE_DIR = Path.home() / ".inspire" / "events"
@@ -122,9 +123,9 @@ def render_events_table(events: list[dict]) -> None:
         return (
             _fmt_timestamp(e.get("last_timestamp")),
             str(e.get("type", "") or "-"),
-            str(e.get("reason", "") or "-"),
-            str(e.get("from", "") or "-"),
-            str(e.get("message", "") or "").replace("\n", " "),
+            scrub_raw_ids(e.get("reason", "") or "-"),
+            scrub_raw_ids(e.get("from", "") or "-"),
+            scrub_raw_ids(str(e.get("message", "") or "").replace("\n", " ")),
         )
 
     rows = [row(e) for e in events]
@@ -182,10 +183,7 @@ def emit_events(
     else:
         render_events_table(events)
         click.echo()
-        click.echo(
-            click.style(f"cached → {cache_path}", fg="white", dim=True),
-            err=True,
-        )
+        click.echo(click.style("cached events locally", fg="white", dim=True), err=True)
 
 
 def run_events_command(
@@ -207,7 +205,7 @@ def run_events_command(
         cached = read_events_cache(job_id)
         if cached is None:
             click.secho(
-                f"No cached events for {job_id}; run without --from-cache to fetch.",
+                f"No cached events for {scrub_raw_ids(job_id)}; run without --from-cache to fetch.",
                 fg="yellow",
                 err=True,
             )
@@ -217,7 +215,7 @@ def run_events_command(
         try:
             events = fetch()
         except Exception as e:  # defensive: helpers already swallow, but belt-and-suspenders
-            click.secho(f"events fetch failed: {e}", fg="red", err=True)
+            click.secho(f"events fetch failed: {scrub_raw_ids(e)}", fg="red", err=True)
             events = []
         write_events_cache(job_id, events)
 

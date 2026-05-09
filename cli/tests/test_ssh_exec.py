@@ -271,7 +271,6 @@ def test_run_ssh_command_streaming_pass_stdin_does_not_write_script(
 def test_remote_cwd_resolves_path_alias() -> None:
     cwd = resolve_remote_cwd(
         cwd="me:repo",
-        target_dir="/inspire/hdd/project/topic/alice/default",
         aliases={"me": "/inspire/ssd/project/topic/alice/"},
     )
 
@@ -282,7 +281,6 @@ def test_remote_cwd_rejects_unknown_relative_alias() -> None:
     with pytest.raises(ConfigError, match="Unknown path alias"):
         resolve_remote_cwd(
             cwd="missing:repo",
-            target_dir="/inspire/hdd/project/topic/alice/default",
             aliases={"me": "/inspire/ssd/project/topic/alice/"},
         )
 

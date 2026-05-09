@@ -39,6 +39,7 @@ from inspire.cli.utils.notebook_cli import (
     require_web_session,
     resolve_json_output,
 )
+from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.cli.utils.notebook_post_start import (
     NO_WAIT_POST_START_WARNING,
     resolve_notebook_post_start_spec,
@@ -109,6 +110,15 @@ def run_notebook_ssh(*args, **kwargs):  # noqa: ANN002, ANN003
     )
 
 
+def _workspace_display(config, workspace_id: str) -> str:  # noqa: ANN001
+    workspaces = getattr(config, "workspaces", None)
+    if isinstance(workspaces, dict):
+        for name, candidate in workspaces.items():
+            if str(candidate) == workspace_id:
+                return str(name)
+    return "(workspace name unavailable)"
+
+
 @click.command("create")
 @click.option(
     "--name",
@@ -127,7 +137,7 @@ def run_notebook_ssh(*args, **kwargs):  # noqa: ANN002, ANN003
         "Resource quota as 'gpu,cpu,mem' (mem in GiB). "
         "Example: '1,20,200' for 1 GPU + 20 CPU + 200 GiB. "
         "Use '0,4,32' for CPU-only. "
-        "The triple must match a quota_id in the workspace (see 'inspire resources specs'); "
+        "The triple must match a resource spec in the workspace (see 'inspire resources specs'); "
         "pass --group to disambiguate when multiple compute groups offer the same triple. "
         "Default from config [notebook].quota."
     ),
@@ -299,7 +309,7 @@ def stop_notebook_cmd(
     try:
         result = browser_api_module.stop_notebook(notebook_id=notebook_id, session=session)
     except Exception as e:
-        _handle_error(ctx, "APIError", f"Failed to stop notebook: {e}", EXIT_API_ERROR)
+        _handle_error(ctx, "APIError", f"Failed to stop notebook: {scrub_raw_ids(e)}", EXIT_API_ERROR)
         return
 
     if json_output:
@@ -314,8 +324,8 @@ def stop_notebook_cmd(
         )
         return
 
-    click.echo(f"Notebook '{notebook}' is being stopped.")
-    click.echo(f"Use `inspire notebook status {notebook}` to check status.")
+    click.echo(f"Notebook '{scrub_raw_ids(notebook)}' is being stopped.")
+    click.echo(f"Use `inspire notebook status {scrub_raw_ids(notebook)}` to check status.")
 
 
 @click.command("delete")
@@ -372,14 +382,16 @@ def delete_notebook_cmd(
 
     if not yes and not json_output:
         click.confirm(
-            f"Permanently delete notebook '{notebook}'? This cannot be undone.",
+            f"Permanently delete notebook '{scrub_raw_ids(notebook)}'? This cannot be undone.",
             abort=True,
         )
 
     try:
         result = browser_api_module.delete_notebook(notebook_id=notebook_id, session=session)
     except Exception as e:
-        _handle_error(ctx, "APIError", f"Failed to delete notebook: {e}", EXIT_API_ERROR)
+        _handle_error(
+            ctx, "APIError", f"Failed to delete notebook: {scrub_raw_ids(e)}", EXIT_API_ERROR
+        )
         return
 
     if json_output:
@@ -394,7 +406,7 @@ def delete_notebook_cmd(
         )
         return
 
-    click.echo(f"Notebook '{notebook}' deleted.")
+    click.echo(f"Notebook '{scrub_raw_ids(notebook)}' deleted.")
 
 
 @click.command("start")
@@ -475,11 +487,13 @@ def start_notebook_cmd(
     try:
         result = browser_api_module.start_notebook(notebook_id=notebook_id, session=session)
     except Exception as e:
-        _handle_error(ctx, "APIError", f"Failed to start notebook: {e}", EXIT_API_ERROR)
+        _handle_error(
+            ctx, "APIError", f"Failed to start notebook: {scrub_raw_ids(e)}", EXIT_API_ERROR
+        )
         return
 
     if not json_output:
-        click.echo(f"Notebook '{notebook}' is being started.")
+        click.echo(f"Notebook '{scrub_raw_ids(notebook)}' is being started.")
 
     notebook_detail = None
     if wait or post_start_spec is not None:
@@ -497,16 +511,16 @@ def start_notebook_cmd(
             _handle_error(
                 ctx,
                 "NotebookFailed",
-                f"Notebook failed to start: {e}",
+                f"Notebook failed to start: {scrub_raw_ids(e)}",
                 EXIT_API_ERROR,
-                hint=e.events or "Check Events tab in web UI for details.",
+                hint=scrub_raw_ids(e.events) or "Check Events tab in web UI for details.",
             )
             return
         except TimeoutError as e:
             _handle_error(
                 ctx,
                 "Timeout",
-                f"Timed out waiting for notebook to reach RUNNING: {e}",
+                f"Timed out waiting for notebook to reach RUNNING: {scrub_raw_ids(e)}",
                 EXIT_API_ERROR,
             )
             return
@@ -535,7 +549,7 @@ def start_notebook_cmd(
         )
         return
 
-    click.echo(f"Use `inspire notebook status {notebook}` to check status.")
+    click.echo(f"Use `inspire notebook status {scrub_raw_ids(notebook)}` to check status.")
 
 
 @click.command("status")
@@ -769,14 +783,20 @@ def list_notebooks(
                 )
                 return
             if not ctx.json_output:
-                click.echo(f"Warning: workspace {ws_id} failed: {e}", err=True)
+                click.echo(
+                    f"Warning: workspace {_workspace_display(config, ws_id)} failed: {scrub_raw_ids(e)}",
+                    err=True,
+                )
             continue
         except Exception as e:
             if len(workspace_ids) == 1:
                 _handle_error(ctx, "APIError", str(e), EXIT_API_ERROR)
                 return
             if not ctx.json_output:
-                click.echo(f"Warning: workspace {ws_id} failed: {e}", err=True)
+                click.echo(
+                    f"Warning: workspace {_workspace_display(config, ws_id)} failed: {scrub_raw_ids(e)}",
+                    err=True,
+                )
             continue
 
     if not all_items and len(workspace_ids) > 1:

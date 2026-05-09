@@ -17,6 +17,7 @@ from inspire.cli.context import (
 )
 from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.id_resolver import is_partial_id
+from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.platform.web import session as web_session_module
 
 logger = logging.getLogger(__name__)
@@ -73,7 +74,7 @@ def _format_notebook_resource(item: dict) -> str:
     if gpu_count and gpu_count > 0:
         gpu_info = (item.get("resource_spec_price") or {}).get("gpu_info") or {}
         gpu_type = gpu_info.get("gpu_product_simple") or quota.get("gpu_type") or "GPU"
-        return f"{gpu_count}x{gpu_type}"
+        return scrub_raw_ids(f"{gpu_count}x{gpu_type}")
 
     cpu_count = quota.get("cpu_count", 0)
     if cpu_count:
@@ -355,6 +356,15 @@ def _collect_workspace_ids_for_lookup(
     return _unique_workspace_ids(candidates)
 
 
+def _workspace_label(config: Any, workspace_id: str) -> str:
+    workspaces = getattr(config, "workspaces", None)
+    if isinstance(workspaces, dict):
+        for name, candidate in workspaces.items():
+            if str(candidate) == workspace_id:
+                return str(name)
+    return "(workspace name unavailable)"
+
+
 def _resolve_notebook_id(
     ctx: Context,
     *,
@@ -380,7 +390,7 @@ def _resolve_notebook_id(
         _handle_error(
             ctx,
             "ValidationError",
-            f"v2 CLI takes a notebook name, not an id / partial-id ({identifier!r}).",
+            "v2 CLI takes a notebook name, not an id / partial-id.",
             EXIT_VALIDATION_ERROR,
             hint="Use `inspire notebook list` to find the name and pass that instead.",
         )
@@ -391,7 +401,7 @@ def _resolve_notebook_id(
         _handle_error(
             ctx,
             "ConfigError",
-            "No workspace_id configured or available for notebook lookup.",
+            "No workspace name configured or available for notebook lookup.",
             EXIT_CONFIG_ERROR,
             hint=(
                 "Run `inspire init --discover` to populate [workspaces] in your "
@@ -455,7 +465,7 @@ def _resolve_notebook_id(
             _handle_error(
                 ctx,
                 "APIError",
-                f"Notebook '{identifier}' is missing an ID in API response.",
+                f"Notebook '{identifier}' is missing an internal handle in API response.",
                 EXIT_API_ERROR,
             )
             raise RuntimeError("unreachable")
@@ -465,14 +475,17 @@ def _resolve_notebook_id(
         status = str(item.get("status") or "Unknown")
         resource = _format_notebook_resource(item)
         created_at = str(item.get("created_at") or "")
-        return f"{status:<12} {resource:<12} created_at={created_at}  ws={ws_id}"
+        workspace = _workspace_label(config, ws_id)
+        return scrub_raw_ids(
+            f"{status:<12} {resource:<12} created_at={created_at}  workspace={workspace}"
+        )
 
     if json_output:
         labels = [_label_for(item, ws_id) for ws_id, item in matches]
         _handle_error(
             ctx,
             "AmbiguousName",
-            f"Multiple notebooks match name '{identifier}':\n"
+            f"Multiple notebooks match name '{scrub_raw_ids(identifier)}':\n"
             + "\n".join(f"  [{i}] {lbl}" for i, lbl in enumerate(labels, start=1)),
             EXIT_VALIDATION_ERROR,
             hint=(
@@ -481,7 +494,7 @@ def _resolve_notebook_id(
             ),
         )
 
-    click.echo(f"Multiple notebooks named '{identifier}' found:")
+    click.echo(f"Multiple notebooks named '{scrub_raw_ids(identifier)}' found:")
     for idx, (ws_id, item) in enumerate(matches, start=1):
         click.echo(f"  [{idx}] {_label_for(item, ws_id)}")
 
@@ -497,7 +510,7 @@ def _resolve_notebook_id(
         _handle_error(
             ctx,
             "APIError",
-            f"Notebook '{identifier}' is missing an ID in API response.",
+            f"Notebook '{identifier}' is missing an internal handle in API response.",
             EXIT_API_ERROR,
         )
         raise RuntimeError("unreachable")

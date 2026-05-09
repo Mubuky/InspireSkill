@@ -101,7 +101,7 @@ def test_bridge_scp_reads_active_account_notebook_cache(
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     def fake_load_tunnel_config(account=None):  # type: ignore[no-untyped-def]
@@ -151,7 +151,7 @@ def test_bridge_scp_warns_when_remote_path_is_relative(
     )
 
     assert result.exit_code == EXIT_SUCCESS
-    assert "does not use INSPIRE_TARGET_DIR" in result.output
+    assert "does not use path aliases" in result.output
     assert "Warning: remote destination 'artifacts/test.txt'" in result.output
 
 
@@ -169,7 +169,7 @@ def test_bridge_scp_resolves_remote_path_alias(
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
     monkeypatch.setattr(scp_cmd_module, "load_tunnel_config", lambda: tunnel_config)
     monkeypatch.setattr(scp_cmd_module, "is_tunnel_available", lambda **kw: True)
@@ -190,7 +190,7 @@ def test_bridge_scp_resolves_remote_path_alias(
     )
 
     assert result.exit_code == EXIT_SUCCESS
-    assert "does not use INSPIRE_TARGET_DIR" not in result.output
+    assert "does not use path aliases" not in result.output
     assert captured["remote_path"] == "/inspire/ssd/project/p1/alice/artifacts/test.txt"
 
 
@@ -219,7 +219,7 @@ def test_bridge_scp_warns_when_remote_source_is_relative_on_download(
     )
 
     assert result.exit_code == EXIT_SUCCESS
-    assert "does not use INSPIRE_TARGET_DIR" in result.output
+    assert "does not use path aliases" in result.output
     assert "Warning: remote source 'artifacts/test.txt'" in result.output
 
 

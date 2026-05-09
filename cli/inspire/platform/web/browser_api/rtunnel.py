@@ -323,9 +323,25 @@ def redact_proxy_url(proxy_url: str) -> str:
                 if seg != marker:
                     continue
                 # /<marker>/<notebook>/<token>/proxy/<port>/ -> token is idx+2
+                if idx + 1 < len(path_segments) and path_segments[idx + 1]:
+                    path_segments[idx + 1] = "<notebook>"
                 if idx + 3 < len(path_segments) and path_segments[idx + 3] == "proxy":
                     if idx + 2 < len(path_segments) and path_segments[idx + 2]:
                         path_segments[idx + 2] = "<redacted>"
+
+        raw_prefix_labels = {
+            "ws-": "<workspace>",
+            "project-": "<project>",
+            "user-": "<user>",
+            "notebook-": "<notebook>",
+            "nb-": "<notebook>",
+        }
+        for idx, seg in enumerate(path_segments):
+            lower = seg.lower()
+            for prefix, label in raw_prefix_labels.items():
+                if lower.startswith(prefix):
+                    path_segments[idx] = label
+                    break
 
         redacted_path = "/".join(path_segments)
 

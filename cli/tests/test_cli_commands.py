@@ -60,7 +60,7 @@ def make_test_config(tmp_path: Path, include_compute_groups: bool = False) -> co
         username="user",
         password="pass",
         base_url="https://example.invalid",
-        target_dir=str(tmp_path / "logs"),
+        path_aliases={"me": str(tmp_path / "logs")},
         log_cache_dir=str(tmp_path / "log_cache"),
         timeout=5,
         max_retries=0,
@@ -147,16 +147,12 @@ def patch_config_and_auth(
         include_compute_groups: If True, include test compute groups in config
     """
     config = make_test_config(tmp_path, include_compute_groups=include_compute_groups)
-    config.target_dir and Path(config.target_dir).mkdir(parents=True, exist_ok=True)
+    Path(config.path_aliases["me"]).mkdir(parents=True, exist_ok=True)
 
-    def fake_from_env(cls, require_target_dir: bool = False) -> config_module.Config:  # type: ignore[override]
-        if require_target_dir and not config.target_dir:
-            raise ConfigError("Missing INSPIRE_TARGET_DIR")
+    def fake_from_env(cls) -> config_module.Config:  # type: ignore[override]
         return config
 
-    def fake_from_files_and_env(cls, require_target_dir: bool = False, require_credentials: bool = True) -> tuple:  # type: ignore[override]
-        if require_target_dir and not config.target_dir:
-            raise ConfigError("Missing INSPIRE_TARGET_DIR")
+    def fake_from_files_and_env(cls, require_credentials: bool = True) -> tuple:  # type: ignore[override]
         return config, {}
 
     monkeypatch.setattr(config_module.Config, "from_env", classmethod(fake_from_env))
@@ -359,36 +355,6 @@ def test_job_create_json_output(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
     assert data["data"]["job_id"] == TEST_JOB_ID
 
 
-def test_job_create_requires_target_dir(monkeypatch: pytest.MonkeyPatch):
-    def fake_from_files_and_env(
-        cls, require_target_dir: bool = False, require_credentials: bool = True
-    ):
-        assert require_target_dir is True
-        raise ConfigError("Missing INSPIRE_TARGET_DIR")
-
-    monkeypatch.setattr(
-        config_module.Config, "from_files_and_env", classmethod(fake_from_files_and_env)
-    )
-
-    runner = CliRunner()
-    result = runner.invoke(
-        cli_main,
-        [
-            "job",
-            "create",
-            "--name",
-            "test-job",
-            "--quota",
-            "1,20,200",
-            "--command",
-            "echo hi",
-        ],
-    )
-
-    assert result.exit_code == EXIT_CONFIG_ERROR
-    assert "Missing INSPIRE_TARGET_DIR" in result.output
-
-
 def test_wrap_in_bash():
     """Test the bash wrapper helper function."""
     from inspire.cli.utils.job_submit import wrap_in_bash
@@ -423,7 +389,7 @@ def test_build_remote_logged_command_tees_output_and_sets_pipefail(
     config = config_module.Config(
         username="user",
         password="pass",
-        target_dir="/train/user space",
+        path_aliases={"me": "/train/user space"},
         remote_env={"WANDB_MODE": "offline"},
     )
 
@@ -453,7 +419,7 @@ def test_build_remote_logged_command_preserves_user_pythonunbuffered() -> None:
     config = config_module.Config(
         username="user",
         password="pass",
-        target_dir="/train/user",
+        path_aliases={"me": "/train/user"},
         remote_env={"PYTHONUNBUFFERED": "0"},
     )
 
@@ -468,13 +434,12 @@ def test_build_remote_logged_command_preserves_user_pythonunbuffered() -> None:
     assert "export PYTHONUNBUFFERED=1 && " not in script
 
 
-def test_build_remote_logged_command_without_target_dir_keeps_existing_behavior() -> None:
+def test_build_remote_logged_command_without_default_path_alias_keeps_existing_behavior() -> None:
     from inspire.cli.utils import job_submit as job_submit_module
 
     config = config_module.Config(
         username="user",
         password="pass",
-        target_dir=None,
         remote_env={"FOO": "bar"},
     )
 
@@ -932,10 +897,10 @@ def test_config_check_auth_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     config = make_test_config(tmp_path)
     config.docker_registry = TEST_DOCKER_REGISTRY
 
-    def fake_from_env(cls, require_target_dir: bool = False) -> config_module.Config:  # type: ignore[override]
+    def fake_from_env(cls) -> config_module.Config:  # type: ignore[override]
         return config
 
-    def fake_from_files_and_env(cls, require_target_dir: bool = False, require_credentials: bool = True) -> tuple:  # type: ignore[override]
+    def fake_from_files_and_env(cls, require_credentials: bool = True) -> tuple:  # type: ignore[override]
         return config, {}
 
     monkeypatch.setattr(config_module.Config, "from_env", classmethod(fake_from_env))
@@ -959,7 +924,7 @@ def test_config_check_auth_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
 
 def test_config_check_config_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     def fake_from_files_and_env(
-        cls, require_target_dir: bool = False, require_credentials: bool = True
+        cls, require_credentials: bool = True
     ):  # type: ignore[override]
         raise ConfigError("missing env")
 
@@ -994,7 +959,7 @@ base_url = "https://my-inspire.internal"
     global_config = tmp_path / "global-config.toml"
 
     def fake_from_files_and_env(
-        cls, require_target_dir: bool = False, require_credentials: bool = True
+        cls, require_credentials: bool = True
     ):  # type: ignore[override]
         return config, {"base_url": config_module.SOURCE_PROJECT}
 
@@ -1032,7 +997,7 @@ def test_config_check_accepts_local_json_alias(
     config.docker_registry = TEST_DOCKER_REGISTRY
 
     def fake_from_files_and_env(
-        cls, require_target_dir: bool = False, require_credentials: bool = True
+        cls, require_credentials: bool = True
     ):  # type: ignore[override]
         return config, {"base_url": config_module.SOURCE_ENV}
 
@@ -1064,7 +1029,7 @@ def test_config_check_rejects_placeholder_base_url(
     config.base_url = "https://api.example.com"
 
     def fake_from_files_and_env(
-        cls, require_target_dir: bool = False, require_credentials: bool = True
+        cls, require_credentials: bool = True
     ):  # type: ignore[override]
         return config, {"base_url": config_module.SOURCE_DEFAULT}
 
@@ -1100,7 +1065,7 @@ def test_config_check_requires_docker_registry(
     config.docker_registry = None
 
     def fake_from_files_and_env(
-        cls, require_target_dir: bool = False, require_credentials: bool = True
+        cls, require_credentials: bool = True
     ):  # type: ignore[override]
         return config, {
             "base_url": config_module.SOURCE_ENV,
@@ -1143,7 +1108,7 @@ def test_config_check_rejects_top_level_project_base_url_key(
     project_config.write_text('base_url = "https://wrong.example.com"\n')
 
     def fake_from_files_and_env(
-        cls, require_target_dir: bool = False, require_credentials: bool = True
+        cls, require_credentials: bool = True
     ):  # type: ignore[override]
         return config, {"base_url": config_module.SOURCE_PROJECT}
 
@@ -1181,7 +1146,7 @@ def test_config_check_allows_path_defaults_for_endpoint_fields(
     config.browser_api_prefix = "/api/v1"
 
     def fake_from_files_and_env(
-        cls, require_target_dir: bool = False, require_credentials: bool = True
+        cls, require_credentials: bool = True
     ):  # type: ignore[override]
         return config, {"base_url": config_module.SOURCE_ENV}
 
@@ -1233,7 +1198,7 @@ def test_config_show_respects_global_json_flag(
     config = make_test_config(tmp_path)
 
     def fake_from_files_and_env(
-        cls, require_target_dir: bool = False, require_credentials: bool = True
+        cls, require_credentials: bool = True
     ):  # type: ignore[override]
         return config, {"username": config_module.SOURCE_ENV}
 
@@ -1267,7 +1232,7 @@ def test_notebook_list_all_workspaces_combines_results(
         username="user",
         password="pass",
         base_url="https://example.invalid",
-        target_dir=str(tmp_path / "logs"),
+        path_aliases={"me": str(tmp_path / "logs")},
         log_cache_dir=str(tmp_path / "log_cache"),
         workspaces={"a": ws_cpu, "b": ws_gpu},
         timeout=5,
@@ -1276,7 +1241,7 @@ def test_notebook_list_all_workspaces_combines_results(
     )
 
     def fake_from_files_and_env(
-        cls, require_target_dir: bool = False, require_credentials: bool = True
+        cls, require_credentials: bool = True
     ):  # type: ignore[override]
         return config, {}
 
@@ -1355,7 +1320,7 @@ def test_notebook_start_accepts_name(monkeypatch: pytest.MonkeyPatch, tmp_path: 
         username="user",
         password="pass",
         base_url="https://example.invalid",
-        target_dir=str(tmp_path / "logs"),
+        path_aliases={"me": str(tmp_path / "logs")},
         log_cache_dir=str(tmp_path / "log_cache"),
         workspaces={"a": ws_cpu, "b": ws_gpu},
         timeout=5,
@@ -1364,7 +1329,7 @@ def test_notebook_start_accepts_name(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     )
 
     def fake_from_files_and_env(
-        cls, require_target_dir: bool = False, require_credentials: bool = True
+        cls, require_credentials: bool = True
     ):  # type: ignore[override]
         return config, {}
 
@@ -1450,7 +1415,7 @@ def test_notebook_start_name_conflict_prompts_selection(
         username="user",
         password="pass",
         base_url="https://example.invalid",
-        target_dir=str(tmp_path / "logs"),
+        path_aliases={"me": str(tmp_path / "logs")},
         log_cache_dir=str(tmp_path / "log_cache"),
         workspaces={"a": ws_cpu, "b": ws_gpu},
         timeout=5,
@@ -1459,7 +1424,7 @@ def test_notebook_start_name_conflict_prompts_selection(
     )
 
     def fake_from_files_and_env(
-        cls, require_target_dir: bool = False, require_credentials: bool = True
+        cls, require_credentials: bool = True
     ):  # type: ignore[override]
         return config, {}
 

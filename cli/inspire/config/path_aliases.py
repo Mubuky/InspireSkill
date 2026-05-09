@@ -11,6 +11,14 @@ from inspire.config.toml import _find_project_config, _load_toml
 
 _ALIAS_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 PATH_ALIASES_SECTION = "path_aliases"
+DEFAULT_REMOTE_CWD_ALIAS = "me"
+_PREFERRED_REMOTE_CWD_ALIASES = (
+    DEFAULT_REMOTE_CWD_ALIAS,
+    "ssd.me",
+    "hdd.me",
+    "qb-ilm.me",
+    "qb-ilm2.me",
+)
 
 
 def normalize_path_alias_map(raw_value: Any) -> dict[str, str]:
@@ -115,10 +123,20 @@ def resolve_remote_path_alias(
     return text, False
 
 
-def resolve_remote_cwd(*, cwd: str | None, target_dir: str | None, aliases: dict[str, str]) -> str:
-    raw = str(cwd or target_dir or "").strip()
+def default_remote_cwd(aliases: dict[str, str] | None) -> str | None:
+    """Return the default remote working directory from path aliases."""
+    alias_map = aliases or {}
+    for alias in _PREFERRED_REMOTE_CWD_ALIASES:
+        value = str(alias_map.get(alias) or "").strip()
+        if value:
+            return value
+    return None
+
+
+def resolve_remote_cwd(*, cwd: str | None, aliases: dict[str, str]) -> str | None:
+    raw = str(cwd or "").strip()
     if not raw:
-        raise ConfigError("Missing remote working directory.")
+        return default_remote_cwd(aliases)
     resolved, _ = resolve_remote_path_alias(
         raw,
         aliases,
@@ -156,7 +174,9 @@ def write_project_path_alias(*, alias: str, remote_path: str) -> Path:
 
 
 __all__ = [
+    "DEFAULT_REMOTE_CWD_ALIAS",
     "PATH_ALIASES_SECTION",
+    "default_remote_cwd",
     "normalize_path_alias_map",
     "project_path_alias_config_path",
     "resolve_remote_cwd",

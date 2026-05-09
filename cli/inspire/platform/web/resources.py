@@ -96,7 +96,6 @@ def fetch_resource_availability(
         try:
             resolved_config, _ = Config.from_files_and_env(
                 require_credentials=False,
-                require_target_dir=False,
             )
         except Exception:
             resolved_config = None

@@ -32,7 +32,6 @@ class Config:
 
     # Optional with defaults
     base_url: str = "https://api.example.com"
-    target_dir: Optional[str] = None  # INSPIRE_TARGET_DIR - unified for all Bridge operations
     log_pattern: str = "training_master_*.log"
 
     # API settings
@@ -172,26 +171,18 @@ class Config:
         return _toml_key_to_field(toml_key)
 
     @classmethod
-    def from_env(cls, require_target_dir: bool = False) -> "Config":
+    def from_env(cls) -> "Config":
         from inspire.config.load_env import config_from_env
 
-        return config_from_env(require_target_dir=require_target_dir)
-
-    @classmethod
-    def from_env_for_sync(cls) -> "Config":
-        from inspire.config.load_env import config_from_env_for_sync
-
-        return config_from_env_for_sync()
+        return config_from_env()
 
     @classmethod
     def from_files_and_env(
-        cls, require_target_dir: bool = False, require_credentials: bool = True
+        cls, require_credentials: bool = True
     ) -> tuple["Config", dict[str, str]]:
         from inspire.config.load import config_from_files_and_env
 
-        return config_from_files_and_env(
-            require_target_dir=require_target_dir, require_credentials=require_credentials
-        )
+        return config_from_files_and_env(require_credentials=require_credentials)
 
     @classmethod
     def get_config_paths(cls) -> tuple[Path | None, Path | None]:

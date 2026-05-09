@@ -15,6 +15,7 @@ from typing import Any, NamedTuple
 
 import click
 
+from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.config import (
     CONFIG_FILENAME,
     PROJECT_CONFIG_DIR,
@@ -69,7 +70,6 @@ class _DiscoveryPersistRequest:
     probe_pubkey: str | None
     probe_timeout: int
     prompted_credentials: tuple[str, str, str] | None
-    cli_target_dir: str | None
 
 
 def _slugify_alias(value: str) -> str:
@@ -79,6 +79,35 @@ def _slugify_alias(value: str) -> str:
     text = re.sub(r"[^a-z0-9]+", "-", text)
     text = text.strip("-")
     return text
+
+
+def _workspace_label_for_output(config: Config, session: Any, workspace_id: str) -> str:
+    value = str(workspace_id or "").strip()
+    if not value:
+        return "(workspace name unavailable)"
+    names = getattr(session, "all_workspace_names", None)
+    if isinstance(names, dict):
+        name = str(names.get(value) or "").strip()
+        if name:
+            return name
+    for alias, candidate in (config.workspaces or {}).items():
+        if str(candidate or "").strip() == value:
+            return str(alias)
+    return "(workspace name unavailable)"
+
+
+def _workspace_error_sample(
+    config: Config,
+    session: Any,
+    workspace_errors: list[tuple[str, str]],
+) -> str:
+    sample = ", ".join(
+        f"{_workspace_label_for_output(config, session, ws)}: {scrub_raw_ids(msg)}"
+        for ws, msg in workspace_errors[:3]
+    )
+    if len(workspace_errors) > 3:
+        sample += ", ..."
+    return sample
 
 
 def _make_unique_alias(alias: str, used: set[str]) -> str:
@@ -446,7 +475,7 @@ def _probe_project_shared_path_group(
         notebook_id = str((created or {}).get("notebook_id") or "").strip() or None
         result["notebook_id"] = notebook_id
         if not notebook_id:
-            result["probe_error"] = "Notebook create succeeded but did not return notebook_id"
+            result["probe_error"] = "Notebook create succeeded but did not return a notebook handle"
             return result
 
         browser_api_module.wait_for_notebook_running(
@@ -507,7 +536,7 @@ def _probe_project_shared_path_group(
 
         if completed is None or completed.returncode != 0:
             summary = (last_error or "SSH probe failed").strip()
-            result["probe_error"] = _redact_token_like_text(summary)[:2000]
+            result["probe_error"] = scrub_raw_ids(_redact_token_like_text(summary))[:2000]
             return result
 
         stdout = completed.stdout or ""
@@ -528,12 +557,12 @@ def _probe_project_shared_path_group(
                 result["shared_path_group"] = global_user_dir
         return result
     except NotebookFailedError as e:
-        result["probe_error"] = f"Notebook failed: {e.status}"
+        result["probe_error"] = scrub_raw_ids(f"Notebook failed: {e.status}")
         if e.events:
-            result["probe_error"] += f" - {e.events}"
+            result["probe_error"] += f" - {scrub_raw_ids(e.events)}"
         return result
     except Exception as e:  # pragma: no cover - network/runtime dependent
-        result["probe_error"] = _redact_token_like_text(str(e))
+        result["probe_error"] = scrub_raw_ids(_redact_token_like_text(str(e)))
         return result
     finally:
         if notebook_id and not keep_notebook:
@@ -733,8 +762,8 @@ def _build_project_aliases(
             discovered_alias_for_id[project_id] = alias_for_id[project_id]
             continue
 
-        # Use the platform name directly — no slugify / no short alias.
-        key = name or f"project-{project_id.split('-')[-1][:8]}"
+        # Use the platform name directly — no slugify / no short raw-ID alias.
+        key = name or _make_unique_alias("project", set(discovered_map))
         discovered_map[key] = project_id
         discovered_alias_for_id[project_id] = key
 
@@ -932,6 +961,7 @@ def _collect_discovery_projects(
 
 def _load_projects_for_discovery(
     *,
+    config: Config,
     browser_api_module,  # noqa: ANN001
     session,  # noqa: ANN001
     workspace_id: str,
@@ -948,9 +978,7 @@ def _load_projects_for_discovery(
 
     if not projects:
         if workspace_errors:
-            sample = ", ".join(f"{ws}: {msg}" for ws, msg in workspace_errors[:3])
-            if len(workspace_errors) > 3:
-                sample += ", ..."
+            sample = _workspace_error_sample(config, session, workspace_errors)
             click.echo(
                 click.style(
                     f"Failed to list projects across discovered workspaces "
@@ -963,9 +991,7 @@ def _load_projects_for_discovery(
         raise SystemExit(1)
 
     if workspace_errors and not force:
-        sample = ", ".join(f"{ws}: {msg}" for ws, msg in workspace_errors[:3])
-        if len(workspace_errors) > 3:
-            sample += ", ..."
+        sample = _workspace_error_sample(config, session, workspace_errors)
         click.echo(
             click.style(
                 f"Warning: some workspaces failed during project discovery "
@@ -978,23 +1004,30 @@ def _load_projects_for_discovery(
         click.echo(click.style("Invalid --probe-limit (must be >= 0)", fg="red"))
         raise SystemExit(1)
 
-    # Explicit `--select-project <name|id>` takes precedence over every
+    # Explicit `--select-project <name>` takes precedence over every
     # heuristic and skips the interactive prompt entirely. Matches case-insensitively
-    # on name, exactly on project_id.
+    # on name only; raw platform IDs are not part of the human CLI boundary.
     if requested_project:
         rq = requested_project.strip()
+        if rq.startswith("project-"):
+            click.echo(
+                click.style(
+                    "--select-project takes a project name, not a raw ID.",
+                    fg="red",
+                )
+            )
+            raise SystemExit(1)
         match = None
         for project in projects:
-            if project.name.lower() == rq.lower() or project.project_id == rq:
+            if project.name.lower() == rq.lower():
                 match = project
                 break
         if not match:
-            available = ", ".join(
-                f"{p.name} ({p.project_id})" for p in projects if p.name
-            )
+            available = ", ".join(p.name for p in projects if p.name)
             click.echo(
                 click.style(
-                    f"--select-project {rq!r} not found. Candidates: {available}",
+                    f"--select-project {scrub_raw_ids(rq)!r} not found. "
+                    f"Candidates: {available}",
                     fg="red",
                 )
             )
@@ -1015,7 +1048,7 @@ def _load_projects_for_discovery(
     click.echo(click.style("Projects:", bold=True))
     for idx, project in enumerate(projects, start=1):
         suffix = project.get_quota_status() if hasattr(project, "get_quota_status") else ""
-        click.echo(f"  {idx}. {project.name} ({project.project_id}){suffix}")
+        click.echo(f"  {idx}. {project.name}{suffix}")
 
     if len(projects) == 1:
         # Single project — unambiguous, keep the zero-friction default.
@@ -1291,7 +1324,7 @@ def _print_shared_path_group_summary(
             continue
         alias = str(alias_for_id.get(project_id) or "").strip()
         if not alias:
-            alias = _slugify_alias(str(getattr(project, "name", "") or "").strip()) or project_id
+            alias = _slugify_alias(str(getattr(project, "name", "") or "").strip()) or "project"
 
         entry = project_catalog.get(project_id) or {}
         shared_group = str(entry.get("shared_path_group") or "").strip()
@@ -2031,9 +2064,7 @@ def _run_shared_path_probe(
     for idx, project in enumerate(to_probe, start=1):
         project_id = str(getattr(project, "project_id", "") or "").strip()
         project_name = str(getattr(project, "name", "") or "").strip()
-        project_alias = str(
-            alias_for_id.get(project_id) or _slugify_alias(project_name) or project_id
-        )
+        project_alias = str(alias_for_id.get(project_id) or _slugify_alias(project_name) or "project")
         click.echo(f"[{idx}/{len(to_probe)}] {project_name} ({project_alias})")
 
         probe_result = _probe_project_shared_path_group(
@@ -2120,27 +2151,6 @@ def _detect_storage_tier(path: str) -> str | None:
     return None
 
 
-def _substitute_storage_tier(path: str, new_tier: str) -> str:
-    """Rewrite ``/inspire/<old>/...`` to ``/inspire/<new>/...``; no-op otherwise."""
-    parts = path.split("/")
-    if len(parts) >= 3 and parts[1] == "inspire" and parts[2] in _STORAGE_TIER_NAMES:
-        parts[2] = new_tier
-        return "/".join(parts)
-    return path
-
-
-def _extract_project_topic(path: str) -> str | None:
-    parts = [p for p in str(path or "").split("/") if p]
-    try:
-        idx = parts.index("project")
-    except ValueError:
-        return None
-    if idx + 1 >= len(parts):
-        return None
-    topic = parts[idx + 1].strip()
-    return topic or None
-
-
 def _default_path_aliases(
     *,
     account_key: str,
@@ -2177,18 +2187,15 @@ def _persist_default_path_aliases(
     account_key: str,
     selected_project: Any,
     project_catalog: dict[str, dict[str, Any]],
-    target_dir: str | None,
+    selected_tier: str,
     force: bool,
 ) -> None:
     project_id = str(getattr(selected_project, "project_id", "") or "").strip()
     entry = project_catalog.get(project_id, {})
     project_topic = str(entry.get("path") or "").strip()
     if not project_topic:
-        project_topic = _extract_project_topic(target_dir or "") or ""
-    if not project_topic:
         return
 
-    selected_tier = _detect_storage_tier(target_dir or "") or "ssd"
     defaults = _default_path_aliases(
         account_key=account_key,
         project_topic=project_topic,
@@ -2228,7 +2235,7 @@ def _prompt_storage_tier(current_path: str) -> str:
     else:
         suggested = detected if detected is not None else "ssd"
     click.echo("")
-    click.echo("Remote workspace storage tier — pick where `target_dir` lives:")
+    click.echo("Remote workspace storage tier — pick the default path alias tier:")
     for tier, desc in _STORAGE_TIERS:
         marker = "  (catalog default)" if tier == detected else ""
         click.echo(f"  {tier:<8} {desc}{marker}")
@@ -2241,60 +2248,10 @@ def _prompt_storage_tier(current_path: str) -> str:
     return str(choice).lower()
 
 
-def _prompt_target_dir(
-    *,
-    force: bool,
-    cli_target_dir: str | None,
-    config: Config | None = None,
-    selected_project: Any,
-    project_catalog: dict[str, dict[str, Any]],
-) -> str | None:
-    """Prompt for target_dir, using the catalog workdir as suggestion.
-
-    Interactive path: first ask for a storage tier (ssd / hdd / qb-ilm /
-    qb-ilm2) and rewrite ``/inspire/<tier>/`` in the catalog-suggested
-    workdir accordingly, then prompt for the full path with the tier-
-    substituted default pre-filled. This lets users opt out of the
-    platform's HDD default without having to hand-edit the path.
-
-    The picker is skipped when ``--force`` is set (non-interactive) or
-    when an explicit ``--target-dir`` was passed on the CLI.
-    """
-    project_id = str(getattr(selected_project, "project_id", "") or "").strip()
-    entry = project_catalog.get(project_id, {})
-    catalog_workdir = str(entry.get("workdir") or "").strip()
-
+def _select_default_path_alias_tier(*, force: bool) -> str:
     if force:
-        existing = str(getattr(config, "target_dir", "") or "").strip() if config else ""
-        return cli_target_dir or existing or catalog_workdir or None
-
-    if cli_target_dir:
-        default = cli_target_dir
-    else:
-        # Prefer the user's existing target_dir over the catalog-suggested
-        # workdir — they may have appended a project-specific subdirectory
-        # (e.g. `.../chj_code/<repo>`) that the catalog doesn't know about.
-        # Only fall back to the catalog workdir if no previous value exists.
-        existing = str(getattr(config, "target_dir", "") or "").strip() if config else ""
-        default = existing or catalog_workdir or ""
-        if default:
-            tier = _prompt_storage_tier(default)
-            if tier != _detect_storage_tier(default):
-                default = _substitute_storage_tier(default, tier)
-
-    if default:
-        result = click.prompt(
-            "Target directory on shared filesystem",
-            default=default,
-            show_default=True,
-        )
-    else:
-        result = click.prompt(
-            "Target directory on shared filesystem (e.g. /inspire/...)",
-            default="",
-            show_default=False,
-        )
-    return result.strip() or None
+        return "ssd"
+    return _prompt_storage_tier("")
 
 
 def _persist_context_defaults(
@@ -2414,7 +2371,7 @@ def _write_discovered_project_config(
     selected_project: Any,
     project_catalog: dict[str, dict[str, Any]],
     force: bool,
-    target_dir: str | None = None,
+    selected_tier: str,
 ) -> None:
     # Build [context] from the discovered state and copy defaults that the
     # helpers may have stashed under top-level keys. Identity (username /
@@ -2426,16 +2383,12 @@ def _write_discovered_project_config(
         project_data=project_data,
     )
 
-    if target_dir:
-        paths_section = _get_or_create_dict_table(container=project_data, key="paths")
-        paths_section["target_dir"] = target_dir
-
     _persist_default_path_aliases(
         project_data=project_data,
         account_key=account_key,
         selected_project=selected_project,
         project_catalog=project_catalog,
-        target_dir=target_dir,
+        selected_tier=selected_tier,
         force=force,
     )
 
@@ -2498,8 +2451,6 @@ def _persist_discovery_catalog(request: _DiscoveryPersistRequest) -> None:
     probe_pubkey = request.probe_pubkey
     probe_timeout = request.probe_timeout
     prompted_credentials = request.prompted_credentials
-    cli_target_dir = request.cli_target_dir
-
     global_path = Config.writable_config_path()
     if global_path is None:
         raise click.ClickException("No active account configured. Run `inspire account add` first.")
@@ -2717,13 +2668,7 @@ def _persist_discovery_catalog(request: _DiscoveryPersistRequest) -> None:
     selected_alias = alias_for_id.get(selected_project.project_id)
     if not selected_alias:
         selected_alias = _slugify_alias(selected_project.name) or "default"
-    target_dir = _prompt_target_dir(
-        force=force,
-        cli_target_dir=cli_target_dir,
-        config=config,
-        selected_project=selected_project,
-        project_catalog=project_catalog,
-    )
+    selected_tier = _select_default_path_alias_tier(force=force)
     _write_discovered_project_config(
         project_path=project_path,
         project_data=project_data,
@@ -2733,12 +2678,17 @@ def _persist_discovery_catalog(request: _DiscoveryPersistRequest) -> None:
         selected_project=selected_project,
         project_catalog=project_catalog,
         force=force,
-        target_dir=target_dir,
+        selected_tier=selected_tier,
     )
 
-    resolved, _ = Config.from_files_and_env(require_credentials=False, require_target_dir=False)
+    resolved, _ = Config.from_files_and_env(require_credentials=False)
     if not str(getattr(resolved, "job_project_id", "") or "").startswith("project-"):
-        click.echo(click.style("Wrote config, but could not resolve a project_id", fg="red"))
+        click.echo(
+            click.style(
+                "Wrote config, but could not resolve the selected project name",
+                fg="red",
+            )
+        )
         raise SystemExit(1)
 
     _ensure_ssh_key()
@@ -2759,7 +2709,6 @@ def _init_discover_mode(
     probe_timeout: int,
     cli_username: str | None = None,
     cli_base_url: str | None = None,
-    cli_target_dir: str | None = None,
     cli_select_project: str | None = None,
 ) -> None:
     """Initialize per-account catalogs by discovering projects and compute groups."""
@@ -2768,7 +2717,7 @@ def _init_discover_mode(
     from inspire.platform.web.session.browser_client import _close_browser_client
     from inspire.platform.web.session import DEFAULT_WORKSPACE_ID
 
-    config, _ = Config.from_files_and_env(require_credentials=False, require_target_dir=False)
+    config, _ = Config.from_files_and_env(require_credentials=False)
     session, prompted_credentials, account_key, workspace_id = _resolve_discover_runtime(
         config=config,
         web_session_module=web_session_module,
@@ -2779,8 +2728,9 @@ def _init_discover_mode(
 
     click.echo(click.style("Discovering account catalog...", bold=True))
     click.echo(f"Account: {account_key}")
-    click.echo(f"Workspace: {workspace_id}")
+    click.echo(f"Workspace: {_workspace_label_for_output(config, session, workspace_id)}")
     projects, selected_project = _load_projects_for_discovery(
+        config=config,
         browser_api_module=browser_api_module,
         session=session,
         workspace_id=workspace_id,
@@ -2806,7 +2756,6 @@ def _init_discover_mode(
                 probe_pubkey=probe_pubkey,
                 probe_timeout=probe_timeout,
                 prompted_credentials=prompted_credentials,
-                cli_target_dir=cli_target_dir,
             )
         )
     finally:

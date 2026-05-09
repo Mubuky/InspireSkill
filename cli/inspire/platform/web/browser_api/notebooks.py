@@ -322,7 +322,7 @@ def list_notebook_compute_groups(
 def _config_compute_groups_fallback(workspace_id: str | None = None) -> list[dict]:
     """Build synthetic compute group list from InspireSkill config."""
     try:
-        cfg, _ = Config.from_files_and_env(require_credentials=False, require_target_dir=False)
+        cfg, _ = Config.from_files_and_env(require_credentials=False)
     except Exception:
         return []
 

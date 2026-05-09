@@ -19,6 +19,7 @@ from inspire.cli.context import (
 from inspire.cli.formatters import human_formatter, json_formatter
 from inspire.cli.utils.auth import AuthManager, AuthenticationError
 from inspire.cli.utils.errors import exit_with_error as _handle_error
+from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.config import (
     Config,
     ConfigError,
@@ -219,7 +220,6 @@ def check_config(ctx: Context, json_output_local: bool) -> None:
     try:
         cfg, sources = Config.from_files_and_env(
             require_credentials=False,
-            require_target_dir=False,
         )
         global_path, project_path = Config.get_config_paths()
         _validate_project_base_url_shape(project_path)
@@ -251,7 +251,6 @@ def check_config(ctx: Context, json_output_local: bool) -> None:
         result = {
             "username": cfg.username,
             "base_url": cfg.base_url,
-            "target_dir": cfg.target_dir,
             "log_pattern": cfg.log_pattern,
             "timeout": cfg.timeout,
             "max_retries": cfg.max_retries,
@@ -274,10 +273,9 @@ def check_config(ctx: Context, json_output_local: bool) -> None:
             else:
                 click.echo(human_formatter.format_error("Authentication failed"))
 
-            click.echo(f"\nUsername:     {cfg.username}")
+            click.echo(f"\nUsername:     {scrub_raw_ids(cfg.username)}")
             click.echo(f"Base URL:     {cfg.base_url}")
-            click.echo(f"Target dir:   {cfg.target_dir or '(not set - required for logs)'}")
-            click.echo(f"Log pattern:  {cfg.log_pattern}")
+            click.echo(f"Log pattern:  {scrub_raw_ids(cfg.log_pattern)}")
             click.echo(f"Timeout:      {cfg.timeout}s")
             click.echo(f"Max retries:  {cfg.max_retries}")
             click.echo(f"Retry delay:  {cfg.retry_delay}s")
@@ -302,7 +300,7 @@ def check_config(ctx: Context, json_output_local: bool) -> None:
                 click.echo(click.style(f"  Note: {default_base_url_hint}", fg="yellow"))
 
             if auth_error:
-                click.echo(f"\nDetails: {auth_error}")
+                click.echo(f"\nDetails: {scrub_raw_ids(auth_error)}")
 
         if not auth_ok:
             sys.exit(EXIT_AUTH_ERROR)

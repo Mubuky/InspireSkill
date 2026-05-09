@@ -44,9 +44,6 @@ def _notebook_name_to_id(ctx: Context, name: str) -> str:
     from inspire.cli.commands.notebook import notebook_lookup as _nb
     from inspire.cli.utils.notebook_cli import WEB_AUTH_HINT, get_base_url, load_config, require_web_session
 
-    if _nb._looks_like_notebook_id(name):
-        return name
-
     session = require_web_session(
         ctx,
         hint=WEB_AUTH_HINT,

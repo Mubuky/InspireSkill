@@ -134,8 +134,7 @@ class TestConfigSchema:
         assert "INSPIRE_USERNAME" not in project_env_vars
         assert "INSPIRE_PASSWORD" not in project_env_vars
 
-        # Paths like target_dir should be project
-        assert "INSPIRE_TARGET_DIR" in project_env_vars
+        # Path-related options that remain configurable should be project-scoped.
         assert "INSPIRE_LOG_PATTERN" in project_env_vars
 
         # GitHub repo should be project
@@ -212,7 +211,7 @@ timeout = 60
         assert Config._toml_key_to_field("api.timeout") == "timeout"
         assert Config._toml_key_to_field("proxy.requests_http") == "requests_http_proxy"
         assert Config._toml_key_to_field("proxy.playwright") == "playwright_proxy"
-        assert Config._toml_key_to_field("paths.target_dir") == "target_dir"
+        assert Config._toml_key_to_field("paths.log_pattern") == "log_pattern"
         assert Config._toml_key_to_field("nonexistent.key") is None
 
 
@@ -236,7 +235,6 @@ class TestLayeredConfig:
             "INSPIRE_REQUESTS_HTTPS_PROXY",
             "INSPIRE_PLAYWRIGHT_PROXY",
             "INSPIRE_RTUNNEL_PROXY",
-            "INSPIRE_TARGET_DIR",
             "INSP_GITHUB_SERVER",
         ]
         for var in env_vars:
@@ -286,13 +284,13 @@ class TestLayeredConfig:
         project_dir = tmp_path / ".inspire"
         project_dir.mkdir()
         (project_dir / "config.toml").write_text(
-            "[paths]\ntarget_dir = \"/inspire/test\"\n"
+            "[path_aliases]\nme = \"/inspire/test\"\n"
         )
         monkeypatch.chdir(tmp_path)
 
         cfg, sources = Config.from_files_and_env(require_credentials=False)
-        assert cfg.target_dir == "/inspire/test"
-        assert sources["target_dir"] == SOURCE_PROJECT
+        assert cfg.path_aliases["me"] == "/inspire/test"
+        assert sources["path_aliases"] == SOURCE_PROJECT
 
     def test_from_files_and_env_loads_project_path_aliases(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clean_env: None
@@ -375,7 +373,6 @@ class TestAccountConfigLayer:
             "INSPIRE_PASSWORD",
             "INSPIRE_BASE_URL",
             "INSPIRE_TIMEOUT",
-            "INSPIRE_TARGET_DIR",
         ):
             monkeypatch.delenv(var, raising=False)
         yield
@@ -503,7 +500,6 @@ class TestAccountConfigLayer:
     @pytest.mark.parametrize(
         "key_line,dotted_key",
         [
-            ('[paths]\ntarget_dir = "/inspire/ssd/foo"', "paths.target_dir"),
             ('[paths]\nlog_pattern = "train_*.log"', "paths.log_pattern"),
             ('[github]\nrepo = "me/foo"', "github.repo"),
             ('[job]\nproject_id = "project-abc"', "job.project_id"),
@@ -813,7 +809,7 @@ class TestInitCommand:
 
         # Set both global and project scope env vars
         monkeypatch.setenv("INSPIRE_USERNAME", "testuser")  # global
-        monkeypatch.setenv("INSPIRE_TARGET_DIR", "/shared/myproject")  # project
+        monkeypatch.setenv("INSP_GITHUB_REPO", "user/repo")  # project
 
         runner = CliRunner()
         result = runner.invoke(init, ["--project", "--force"])
@@ -825,7 +821,7 @@ class TestInitCommand:
         assert project_config.exists()
         project_content = project_config.read_text()
         assert 'username = "testuser"' in project_content
-        assert 'target_dir = "/shared/myproject"' in project_content
+        assert 'repo = "user/repo"' in project_content
 
     def test_init_excludes_secrets(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clean_env: None
@@ -868,7 +864,6 @@ class TestInitCommand:
         monkeypatch.chdir(tmp_path)
 
         # Set only project scope env vars
-        monkeypatch.setenv("INSPIRE_TARGET_DIR", "/shared/myproject")
         monkeypatch.setenv("INSP_GITHUB_REPO", "user/repo")
 
         runner = CliRunner()
@@ -880,7 +875,6 @@ class TestInitCommand:
         project_config = tmp_path / PROJECT_CONFIG_DIR / CONFIG_FILENAME
         assert project_config.exists()
         project_content = project_config.read_text()
-        assert 'target_dir = "/shared/myproject"' in project_content
         assert 'repo = "user/repo"' in project_content
 
         # Global config should NOT exist (no global-scope vars)
@@ -1132,24 +1126,24 @@ class TestInitHelpers:
         """Test _generate_toml_content with scope_filter parameter."""
         # Set both global and project scope env vars
         monkeypatch.setenv("INSPIRE_BASE_URL", "https://custom.example.com")  # global
-        monkeypatch.setenv("INSPIRE_TARGET_DIR", "/shared/myproject")  # project
+        monkeypatch.setenv("INSP_GITHUB_REPO", "user/repo")  # project
 
         detected = _detect_env_vars()
 
         # Generate with global filter
         global_content = _generate_toml_content(detected, scope_filter="global")
         assert 'base_url = "https://custom.example.com"' in global_content
-        assert "target_dir" not in global_content
+        assert "repo" not in global_content
 
         # Generate with project filter
         project_content = _generate_toml_content(detected, scope_filter="project")
         assert "base_url" not in project_content
-        assert 'target_dir = "/shared/myproject"' in project_content
+        assert 'repo = "user/repo"' in project_content
 
         # Generate without filter (all options)
         all_content = _generate_toml_content(detected)
         assert 'base_url = "https://custom.example.com"' in all_content
-        assert 'target_dir = "/shared/myproject"' in all_content
+        assert 'repo = "user/repo"' in all_content
 
     def test_generate_toml_list_values(
         self, monkeypatch: pytest.MonkeyPatch, clean_env: None
@@ -1356,7 +1350,6 @@ class TestPreferSource:
             "INSPIRE_REQUESTS_HTTPS_PROXY",
             "INSPIRE_PLAYWRIGHT_PROXY",
             "INSPIRE_RTUNNEL_PROXY",
-            "INSPIRE_TARGET_DIR",
             "INSP_GITHUB_SERVER",
         ]
         for var in env_vars:
@@ -1370,15 +1363,15 @@ class TestPreferSource:
         project_dir = tmp_path / ".inspire"
         project_dir.mkdir()
         (project_dir / "config.toml").write_text(
-            "[paths]\ntarget_dir = \"/from-toml\"\n"
+            "[github]\nrepo = \"toml/repo\"\n"
         )
         monkeypatch.chdir(tmp_path)
-        monkeypatch.setenv("INSPIRE_TARGET_DIR", "/from-env")
+        monkeypatch.setenv("INSP_GITHUB_REPO", "env/repo")
 
         cfg, sources = Config.from_files_and_env(require_credentials=False)
 
-        assert cfg.target_dir == "/from-env"
-        assert sources["target_dir"] == SOURCE_ENV
+        assert cfg.github_repo == "env/repo"
+        assert sources["github_repo"] == SOURCE_ENV
         assert cfg.prefer_source == "env"
 
     def test_prefer_source_env_explicit(
@@ -1388,15 +1381,15 @@ class TestPreferSource:
         project_dir = tmp_path / ".inspire"
         project_dir.mkdir()
         (project_dir / "config.toml").write_text(
-            "[cli]\nprefer_source = \"env\"\n[paths]\ntarget_dir = \"/from-toml\"\n"
+            "[cli]\nprefer_source = \"env\"\n[github]\nrepo = \"toml/repo\"\n"
         )
         monkeypatch.chdir(tmp_path)
-        monkeypatch.setenv("INSPIRE_TARGET_DIR", "/from-env")
+        monkeypatch.setenv("INSP_GITHUB_REPO", "env/repo")
 
         cfg, sources = Config.from_files_and_env(require_credentials=False)
 
-        assert cfg.target_dir == "/from-env"
-        assert sources["target_dir"] == SOURCE_ENV
+        assert cfg.github_repo == "env/repo"
+        assert sources["github_repo"] == SOURCE_ENV
 
     def test_prefer_source_toml_wins(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clean_env: None
@@ -1405,15 +1398,15 @@ class TestPreferSource:
         project_dir = tmp_path / ".inspire"
         project_dir.mkdir()
         (project_dir / "config.toml").write_text(
-            "[cli]\nprefer_source = \"toml\"\n[paths]\ntarget_dir = \"/from-toml\"\n"
+            "[cli]\nprefer_source = \"toml\"\n[github]\nrepo = \"toml/repo\"\n"
         )
         monkeypatch.chdir(tmp_path)
-        monkeypatch.setenv("INSPIRE_TARGET_DIR", "/from-env")
+        monkeypatch.setenv("INSP_GITHUB_REPO", "env/repo")
 
         cfg, sources = Config.from_files_and_env(require_credentials=False)
 
-        assert cfg.target_dir == "/from-toml"
-        assert sources["target_dir"] == SOURCE_PROJECT
+        assert cfg.github_repo == "toml/repo"
+        assert sources["github_repo"] == SOURCE_PROJECT
         assert cfg.prefer_source == "toml"
 
     def test_prefer_source_toml_env_fills_unset(
@@ -1423,7 +1416,7 @@ class TestPreferSource:
         project_dir = tmp_path / ".inspire"
         project_dir.mkdir()
         (project_dir / "config.toml").write_text(
-            "[cli]\nprefer_source = \"toml\"\n[paths]\ntarget_dir = \"/from-toml\"\n"
+            "[cli]\nprefer_source = \"toml\"\n[paths]\nlog_pattern = \"from-toml.log\"\n"
         )
         monkeypatch.chdir(tmp_path)
         # Set env var for a field NOT in the project TOML
@@ -1431,8 +1424,8 @@ class TestPreferSource:
 
         cfg, sources = Config.from_files_and_env(require_credentials=False)
 
-        assert cfg.target_dir == "/from-toml"
-        assert sources["target_dir"] == SOURCE_PROJECT
+        assert cfg.log_pattern == "from-toml.log"
+        assert sources["log_pattern"] == SOURCE_PROJECT
         # github_repo (project-scope) should come from env (not in project TOML)
         assert cfg.github_repo == "owner/repo"
         assert sources["github_repo"] == SOURCE_ENV

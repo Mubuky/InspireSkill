@@ -63,15 +63,6 @@ BRIDGE_OPTIONS: list[ConfigOption] = [
 
 PATHS_OPTIONS: list[ConfigOption] = [
     ConfigOption(
-        env_var="INSPIRE_TARGET_DIR",
-        toml_key="paths.target_dir",
-        field_name="target_dir",
-        description="Target directory on Bridge shared filesystem",
-        default=None,
-        category="Paths",
-        scope="project",
-    ),
-    ConfigOption(
         env_var="INSPIRE_LOG_PATTERN",
         toml_key="paths.log_pattern",
         field_name="log_pattern",

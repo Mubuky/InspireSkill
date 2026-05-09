@@ -262,7 +262,7 @@ def list_specs(
     ctx.json_output = bool(ctx.json_output or json_output_local)
     usage = usage.lower()
     try:
-        config, _ = Config.from_files_and_env(require_credentials=False, require_target_dir=False)
+        config, _ = Config.from_files_and_env(require_credentials=False)
         session = get_web_session()
 
         target_workspace_names = _resolve_query_workspaces(

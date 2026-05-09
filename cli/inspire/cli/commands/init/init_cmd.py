@@ -252,16 +252,11 @@ def _bootstrap_first_account_if_needed(
     help="Platform base URL (prompted if not configured). Only used with --discover.",
 )
 @click.option(
-    "--target-dir",
-    default=None,
-    help="Target directory on shared filesystem (skips prompt). Only used with --discover.",
-)
-@click.option(
     "--select-project",
     "select_project_name",
     default=None,
     help=(
-        "Pick a project explicitly by name or project-id (skips the interactive "
+        "Pick a project explicitly by name (skips the interactive "
         "prompt and the platform-heuristic guess). Only used with --discover."
     ),
 )
@@ -281,7 +276,6 @@ def init(
     template_flag: bool,
     username: str | None,
     base_url: str | None,
-    target_dir: str | None,
     select_project_name: str | None,
 ) -> None:
     """Initialize Inspire CLI configuration.
@@ -353,9 +347,9 @@ def init(
                 "Probe options are only effective with --discover --probe-shared-path and were ignored."
             )
 
-        if not discover and (username or base_url or target_dir):
+        if not discover and (username or base_url):
             _warn(
-                "--username, --base-url, and --target-dir are only effective with --discover and were ignored."
+                "--username and --base-url are only effective with --discover and were ignored."
             )
 
         if global_flag and project_flag:
@@ -389,7 +383,6 @@ def init(
                 probe_timeout=probe_timeout,
                 cli_username=username,
                 cli_base_url=base_url,
-                cli_target_dir=target_dir,
                 cli_select_project=select_project_name,
             )
 

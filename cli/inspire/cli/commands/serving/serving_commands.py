@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json as _json
 from typing import Any, Optional
 
 import click
@@ -18,6 +17,7 @@ from inspire.cli.formatters import human_formatter, json_formatter
 from inspire.cli.utils.auth import AuthManager, AuthenticationError
 from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.id_resolver import resolve_by_name
+from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.config import Config, ConfigError
 from inspire.config.workspaces import select_workspace_id
 from inspire.platform.openapi import InspireAPIError
@@ -104,6 +104,24 @@ def _format_list_rows(rows: list[dict[str, str]], total: int) -> str:
     return "\n".join(lines)
 
 
+def _config_label(item: dict[str, Any], index: int) -> str:
+    name = (
+        item.get("name")
+        or item.get("config_name")
+        or item.get("image_name")
+        or item.get("model_name")
+        or item.get("resource_name")
+        or f"config {index}"
+    )
+    bits = []
+    for key in ("gpu_type", "gpu_count", "cpu_count", "memory_size_gib", "replicas"):
+        value = item.get(key)
+        if value not in (None, ""):
+            bits.append(f"{key.replace('_', ' ')}={value}")
+    suffix = f"  ({', '.join(bits)})" if bits else ""
+    return scrub_raw_ids(f"{name}{suffix}")
+
+
 @click.command("list")
 @click.option("--workspace", default=None, help="Workspace name (from [workspaces])")
 @click.option(
@@ -152,10 +170,10 @@ def list_serving(
         rows = [
             {
                 "id": s.inference_serving_id or "-",
-                "name": s.name or "-",
-                "status": s.status or "-",
+                "name": scrub_raw_ids(s.name or "-"),
+                "status": scrub_raw_ids(s.status or "-"),
                 "replicas": str(s.replicas or "-"),
-                "created_at": s.created_at or "-",
+                "created_at": scrub_raw_ids(s.created_at or "-"),
             }
             for s in items
         ]
@@ -175,7 +193,7 @@ def list_serving(
 def status_serving(ctx: Context, name: str) -> None:
     """Get detail of an inference serving (pass the serving name)."""
     try:
-        config, _ = Config.from_files_and_env(require_target_dir=False)
+        config, _ = Config.from_files_and_env()
         api = AuthManager.get_api(config)
         inference_serving_id = _resolve_serving_name(ctx, name)
         result = api.get_inference_serving_detail(inference_serving_id)
@@ -186,18 +204,19 @@ def status_serving(ctx: Context, name: str) -> None:
             return
 
         click.echo("Inference Serving Status")
-        click.echo(f"Name:     {data.get('name', 'N/A')}")
-        click.echo(f"Status:   {data.get('status', 'N/A')}")
+        click.echo(f"Name:     {scrub_raw_ids(data.get('name', 'N/A'))}")
+        click.echo(f"Status:   {scrub_raw_ids(data.get('status', 'N/A'))}")
         if data.get("replicas") is not None:
             click.echo(f"Replicas: {data.get('replicas')}")
         if data.get("image"):
-            click.echo(f"Image:    {data.get('image')}")
-        if data.get("model_id"):
-            click.echo(f"Model:    {data.get('model_id')} v{data.get('model_version', '?')}")
+            click.echo(f"Image:    {scrub_raw_ids(data.get('image'))}")
+        model_name = data.get("model_name") or data.get("model") or data.get("model_display_name")
+        if model_name:
+            click.echo(f"Model:    {scrub_raw_ids(model_name)} v{data.get('model_version', '?')}")
         if data.get("created_at"):
-            click.echo(f"Created:  {data.get('created_at')}")
+            click.echo(f"Created:  {scrub_raw_ids(data.get('created_at'))}")
         if data.get("updated_at"):
-            click.echo(f"Updated:  {data.get('updated_at')}")
+            click.echo(f"Updated:  {scrub_raw_ids(data.get('updated_at'))}")
 
     except ConfigError as e:
         _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
@@ -221,7 +240,7 @@ def status_serving(ctx: Context, name: str) -> None:
 def stop_serving(ctx: Context, name: str, pick: Optional[int]) -> None:
     """Stop an inference serving (pass the serving name)."""
     try:
-        config, _ = Config.from_files_and_env(require_target_dir=False)
+        config, _ = Config.from_files_and_env()
         api = AuthManager.get_api(config)
         inference_serving_id = _resolve_serving_name(ctx, name, pick=pick)
         api.stop_inference_serving(inference_serving_id)
@@ -273,9 +292,12 @@ def configs_serving(
         click.echo("Available Inference Serving Configs")
         if isinstance(configs, list):
             for i, c in enumerate(configs, 1):
-                click.echo(f"[{i}] {_json.dumps(c, ensure_ascii=False)[:160]}")
+                if isinstance(c, dict):
+                    click.echo(f"[{i}] {_config_label(c, i)}")
+                else:
+                    click.echo(f"[{i}] {scrub_raw_ids(c)}")
         else:
-            click.echo(_json.dumps(configs, ensure_ascii=False, indent=2))
+            click.echo(f"{len(configs) if isinstance(configs, dict) else 1} config section(s) available.")
 
     except ConfigError as e:
         _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)

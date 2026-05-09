@@ -45,6 +45,7 @@ from inspire.cli.utils.output import (
     emit_error as emit_output_error,
     emit_success as emit_output_success,
 )
+from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.cli.utils.tunnel_reconnect import (
     NotebookBridgeReconnectState,
     NotebookBridgeReconnectStatus,
@@ -69,20 +70,14 @@ def split_denylist(items: tuple[str, ...]) -> list[str]:
     return parts
 
 
-def _build_remote_command(*, command: str, target_dir: Optional[str], env_exports: str) -> str:
-    if not target_dir:
+def _build_remote_command(*, command: str, remote_cwd: Optional[str], env_exports: str) -> str:
+    if not remote_cwd:
         return f"{env_exports}{command}"
-    return f'{env_exports}cd "{target_dir}" && {command}'
+    return f'{env_exports}cd "{remote_cwd}" && {command}'
 
 
 def _resolve_exec_remote_cwd(*, cwd: Optional[str], config: Config) -> Optional[str]:
-    if cwd or config.target_dir:
-        return resolve_remote_cwd(
-            cwd=cwd,
-            target_dir=config.target_dir,
-            aliases=config.path_aliases,
-        )
-    return None
+    return resolve_remote_cwd(cwd=cwd, aliases=config.path_aliases)
 
 
 def _normalize_exec_command(command_parts: tuple[str, ...]) -> str:
@@ -128,6 +123,7 @@ def try_exec_via_ssh_tunnel(
     bridge_name: Optional[str],
     stdin_mode: bool,
     config: Config,
+    remote_cwd: Optional[str],
     env_exports: str,
     timeout_s: int,
     is_tunnel_available_fn: Callable[..., bool],
@@ -152,7 +148,7 @@ def try_exec_via_ssh_tunnel(
     ssh_execution_started = False
     full_command = _build_remote_command(
         command=command,
-        target_dir=config.target_dir,
+        remote_cwd=remote_cwd,
         env_exports=env_exports,
     )
 
@@ -387,9 +383,9 @@ def try_exec_via_ssh_tunnel(
 
             if _verbose_output(ctx) and not opened_once:
                 click.echo("Using SSH tunnel (fast path)")
-                click.echo(f"Notebook: {resolved_bridge_name}")
-                click.echo(f"Command: {command}")
-                click.echo(f"Working dir: {config.target_dir or '$HOME'}")
+                click.echo(f"Notebook: {scrub_raw_ids(resolved_bridge_name)}")
+                click.echo(f"Command: {scrub_raw_ids(command)}")
+                click.echo(f"Working dir: {scrub_raw_ids(remote_cwd or '$HOME')}")
                 if stdin_mode:
                     click.echo("Stdin: passthrough")
                 click.echo("--- Command Output ---")
@@ -464,6 +460,7 @@ def exec_via_workflow(
     wait: bool,
     timeout_s: int,
     config: Config,
+    remote_cwd: Optional[str],
     trigger_bridge_action_workflow_fn: Callable[..., None],
     wait_for_bridge_action_completion_fn: Callable[..., dict],
     fetch_bridge_output_log_fn: Callable[..., Optional[str]],
@@ -483,13 +480,13 @@ def exec_via_workflow(
     artifact_paths_list = list(artifact_path)
 
     if _verbose_output(ctx):
-        click.echo(f"Triggering bridge exec (request {request_id})")
-        click.echo(f"Command: {command}")
-        click.echo(f"Working dir: {config.target_dir or '$HOME'}")
+        click.echo("Triggering bridge exec")
+        click.echo(f"Command: {scrub_raw_ids(command)}")
+        click.echo(f"Working dir: {scrub_raw_ids(remote_cwd or '$HOME')}")
         if merged_denylist:
-            click.echo(f"Denylist: {merged_denylist}")
+            click.echo(f"Denylist: {scrub_raw_ids(merged_denylist)}")
         if artifact_paths_list:
-            click.echo(f"Artifact paths: {artifact_paths_list}")
+            click.echo(f"Artifact paths: {scrub_raw_ids(artifact_paths_list)}")
 
     try:
         logger.debug(
@@ -502,6 +499,7 @@ def exec_via_workflow(
         trigger_bridge_action_workflow_fn(
             config=config,
             raw_command=workflow_command,
+            remote_cwd=remote_cwd,
             artifact_paths=artifact_paths_list,
             request_id=request_id,
             denylist=merged_denylist,
@@ -524,7 +522,7 @@ def exec_via_workflow(
                 "request_id": request_id,
                 "command": command,
             },
-            text=f"Triggered bridge exec request {request_id}",
+            text="Triggered bridge exec request",
         )
         return EXIT_SUCCESS
 
@@ -569,11 +567,11 @@ def exec_via_workflow(
         if _verbose_output(ctx):
             click.echo("")
             click.echo("--- Command Output ---")
-            click.echo(output_log)
+            click.echo(scrub_raw_ids(output_log))
             click.echo("--- End Output ---")
             click.echo("")
         else:
-            click.echo(output_log)
+            click.echo(scrub_raw_ids(output_log))
 
     if result.get("conclusion") != "success":
         hint = result.get("html_url") or None
@@ -591,7 +589,7 @@ def exec_via_workflow(
 
     if download:
         if _verbose_output(ctx):
-            click.echo(f"Downloading artifact to {download}...")
+            click.echo(f"Downloading artifact to {scrub_raw_ids(download)}...")
         try:
             download_bridge_artifact_fn(config, request_id, Path(download))
         except ForgeError as e:
@@ -638,7 +636,7 @@ def exec_via_workflow(
     "artifact_path",
     "--artifact-path",
     multiple=True,
-    help="Path relative to INSPIRE_TARGET_DIR to upload as artifact (repeatable)",
+    help="Path relative to the remote working directory selected by --cwd or the 'me' path alias",
 )
 @click.option(
     "download",
@@ -657,7 +655,7 @@ def exec_via_workflow(
 @click.option(
     "--cwd",
     default=None,
-    help="Remote working directory or path alias (default: [paths].target_dir, else $HOME)",
+    help="Remote working directory or path alias (default: 'me' alias, else $HOME)",
 )
 @click.option(
     "stdin_mode",
@@ -685,7 +683,7 @@ def exec_command(
     artifact options are requested.
 
     NOTEBOOK is the cached notebook name (omit to use the default).
-    COMMAND is the shell command to run remotely (in --cwd, [paths].target_dir, or $HOME).
+    COMMAND is the shell command to run remotely (in --cwd, the `me` path alias, or $HOME).
     Command output (stdout/stderr) is automatically displayed after completion.
 
     \b
@@ -711,8 +709,8 @@ def exec_command(
     command = _normalize_exec_command(command_parts)
 
     try:
-        config, _ = Config.from_files_and_env(require_target_dir=False, require_credentials=False)
-        config.target_dir = _resolve_exec_remote_cwd(cwd=cwd, config=config)
+        config, _ = Config.from_files_and_env(require_credentials=False)
+        remote_cwd = _resolve_exec_remote_cwd(cwd=cwd, config=config)
     except ConfigError as e:
         emit_output_error(
             ctx,
@@ -758,6 +756,7 @@ def exec_command(
             bridge_name=bridge,
             stdin_mode=effective_stdin_mode,
             config=config,
+            remote_cwd=remote_cwd,
             env_exports=env_exports,
             timeout_s=action_timeout,
             is_tunnel_available_fn=is_tunnel_available,
@@ -776,6 +775,7 @@ def exec_command(
         wait=wait,
         timeout_s=action_timeout,
         config=config,
+        remote_cwd=remote_cwd,
         trigger_bridge_action_workflow_fn=trigger_bridge_action_workflow,
         wait_for_bridge_action_completion_fn=wait_for_bridge_action_completion,
         fetch_bridge_output_log_fn=fetch_bridge_output_log,

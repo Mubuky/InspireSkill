@@ -41,6 +41,7 @@ from inspire.cli.context import (
 from inspire.cli.formatters import json_formatter
 from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.notebook_cli import resolve_json_output
+from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.config import ConfigError
 from inspire.platform.web.browser_api.metrics import (
     INTERVAL_CHOICES,
@@ -221,8 +222,7 @@ def _per_pod_last(metric_groups: list[MetricGroup]) -> list[tuple[str, float]]:
 def _format_text_summary(
     *,
     resource_label: str,
-    task_id: str,
-    logic_compute_group_id: str,
+    task_name: str,
     start_ts: int,
     end_ts: int,
     interval_label: str,
@@ -241,8 +241,8 @@ def _format_text_summary(
 
     lines.extend(
         [
-            f"{resource_label} Metrics — {task_id}",
-            f"LCG: {logic_compute_group_id}   Pods: {len(pods)}",
+            f"{resource_label} Metrics — {scrub_raw_ids(task_name)}",
+            f"Pods: {len(pods)}",
             f"Window: {_iso_utc(start_ts)} → {_iso_utc(end_ts)}   Interval: {interval_label}",
             "",
         ]
@@ -409,7 +409,7 @@ def build_metrics_command(
         "--lcg",
         "logic_compute_group_id",
         default=None,
-        help="Override logic_compute_group_id (auto-resolved from detail endpoint by default).",
+        help="Debug override for the compute-group handle; normal use auto-resolves it from the resource name.",
     )
     @click.option(
         "--plot",
@@ -505,12 +505,12 @@ def build_metrics_command(
                 _handle_error(
                     ctx,
                     "ConfigError",
-                    f"Unable to resolve logic_compute_group_id for {resource_name} '{task_id}'.",
+                    f"Unable to resolve compute group for {resource_name} {name!r}.",
                     EXIT_CONFIG_ERROR,
                     hint=(
-                        "Auto-resolution reads logic_compute_group_id from the resource's "
-                        "detail endpoint — make sure the resource exists and you have access. "
-                        "The --lcg escape hatch takes a raw id for debugging only."
+                        "Auto-resolution reads the resource detail endpoint. Make sure the "
+                        "resource exists and you have access, or rerun with --json if you "
+                        "are debugging the raw API contract."
                     ),
                 )
                 return
@@ -571,7 +571,7 @@ def build_metrics_command(
             )
             try:
                 chart_path = render_metrics_png(
-                    task_id=task_id,
+                    task_id=scrub_raw_ids(name),
                     task_label=resource_label,
                     start_ts=start_ts,
                     end_ts=end_ts,
@@ -592,8 +592,7 @@ def build_metrics_command(
         click.echo(
             _format_text_summary(
                 resource_label=resource_label,
-                task_id=task_id,
-                logic_compute_group_id=lcg,
+                task_name=name,
                 start_ts=start_ts,
                 end_ts=end_ts,
                 interval_label=interval,

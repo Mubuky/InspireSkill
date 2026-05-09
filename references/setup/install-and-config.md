@@ -71,7 +71,7 @@ inspire config show --compact
 
 `inspire account add` 会询问平台 username、password、base URL、代理和是否设为活动账号。结果写入 `~/.inspire/accounts/<name>/config.toml`，包含身份、`base_url`、代理等。
 
-账号配置不包含 `target_dir`。`target_dir` 是项目级远端工作目录，必须在仓库中初始化。
+账号配置不包含远端工作目录。远端路径通过项目级 `[path_aliases]` 管理，`init --discover` 会写入默认 alias。
 
 ## 5. 项目级初始化
 

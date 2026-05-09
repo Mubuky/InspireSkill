@@ -22,6 +22,7 @@ from inspire.cli.utils.notebook_cli import (
     require_web_session,
 )
 from inspire.cli.utils.output import emit_success as emit_output_success
+from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.cli.utils.tunnel_reconnect import (
     NotebookBridgeReconnectState,
     NotebookBridgeReconnectStatus,
@@ -195,7 +196,7 @@ def _run_notebook_command_with_reconnect(
             _handle_error(
                 ctx,
                 "ConfigError",
-                f"No cached notebook connection for '{profile_name}'.",
+                f"No cached notebook connection for '{scrub_raw_ids(profile_name)}'.",
                 EXIT_CONFIG_ERROR,
                 hint="Run 'inspire notebook connections' to see cached notebook names.",
             )
@@ -621,16 +622,18 @@ def run_notebook_ssh(
             if bridge_notebook_id:
                 click.echo(
                     (
-                        f"Cached notebook '{profile_name}' targets notebook '{bridge_notebook_id}'; "
-                        f"refreshing tunnel for '{notebook_id}'."
+                        "Cached notebook connection "
+                        f"'{scrub_raw_ids(profile_name)}' points to a different notebook; "
+                        f"refreshing tunnel for '{scrub_raw_ids(requested_identifier)}'."
                     ),
                     err=True,
                 )
             else:
                 click.echo(
                     (
-                        f"Cached notebook '{profile_name}' has no notebook binding metadata; "
-                        f"refreshing tunnel for '{notebook_id}'."
+                        f"Cached notebook '{scrub_raw_ids(profile_name)}' has no notebook "
+                        "binding metadata; refreshing tunnel for "
+                        f"'{scrub_raw_ids(requested_identifier)}'."
                     ),
                     err=True,
                 )
@@ -693,7 +696,8 @@ def run_notebook_ssh(
         cached_config.remove_bridge(legacy_entry)
         save_tunnel_config(cached_config)
         click.echo(
-            f"Migrated cached bridge '{legacy_entry}' → '{notebook_display_name}' "
+            f"Migrated cached bridge '{scrub_raw_ids(legacy_entry)}' → "
+            f"'{scrub_raw_ids(notebook_display_name)}' "
             f"(one notebook keeps one cache entry, keyed by name).",
             err=True,
         )
@@ -812,7 +816,8 @@ def run_notebook_ssh(
             hint=(
                 f"Retry 'inspire notebook ssh {profile_name}' in a few seconds, "
                 f"or run 'inspire notebook test {profile_name}' to inspect connectivity. "
-                f"Proxy readiness report: {proxy_status} ({redact_proxy_url(proxy_url)})."
+                "Proxy readiness report: "
+                f"{scrub_raw_ids(proxy_status)} ({scrub_raw_ids(redact_proxy_url(proxy_url))})."
                 f"{ssh_capability_hint}"
             ),
         )
@@ -821,7 +826,8 @@ def run_notebook_ssh(
     internet_status = "yes" if has_internet else "no"
     gpu_label = gpu_type if gpu_type else "CPU"
     click.echo(
-        f"Added bridge '{profile_name}' (internet: {internet_status}, GPU: {gpu_label})",
+        f"Added bridge '{scrub_raw_ids(profile_name)}' "
+        f"(internet: {internet_status}, GPU: {scrub_raw_ids(gpu_label)})",
         err=True,
     )
 

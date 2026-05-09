@@ -250,18 +250,18 @@ def resolve_quota(
 
     if not matches:
         raise QuotaMatchError(
-            f"--quota {spec.display()} matches no spec in workspace {workspace_id}."
+            f"--quota {spec.display()} matches no spec in the selected workspace."
             f"\nAvailable:\n{_format_row_catalog(all_rows)}"
         )
 
     if len(matches) > 1:
         lines = [
-            f"  {m.compute_group_name}  (gpu_type={m.gpu_type or 'CPU'}, quota_id={m.quota_id})"
+            f"  {m.compute_group_name}  (gpu_type={m.gpu_type or 'CPU'})"
             for m in matches
         ]
         raise QuotaMatchError(
-            f"--quota {spec.display()} matches multiple specs in workspace "
-            f"{workspace_id}; pass --group to disambiguate:\n" + "\n".join(lines)
+            f"--quota {spec.display()} matches multiple specs in the selected workspace; "
+            "pass --group to disambiguate:\n" + "\n".join(lines)
         )
 
     return matches[0]

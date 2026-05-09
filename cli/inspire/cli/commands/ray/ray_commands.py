@@ -18,6 +18,7 @@ from inspire.cli.context import (
 from inspire.cli.formatters import human_formatter, json_formatter
 from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.id_resolver import resolve_by_name
+from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.config import Config, ConfigError
 from inspire.config.workspaces import select_workspace_id
 from inspire.platform.web import browser_api as browser_api_module
@@ -108,7 +109,7 @@ def _format_ray_list_rows(rows: list[dict[str, str]]) -> str:
     "--created-by",
     "created_by",
     default=None,
-    help="Filter by creator user ID (user-…); repeatable-friendly comma-separated list.",
+    help="Advanced creator filter; comma-separated values are accepted.",
 )
 @click.option("--page-num", type=int, default=1, show_default=True, help="Page number")
 @click.option("--page-size", type=int, default=20, show_default=True, help="Page size")
@@ -159,12 +160,12 @@ def list_ray(
         rows = [
             {
                 "ray_job_id": job.ray_job_id or "N/A",
-                "name": job.name or "N/A",
-                "status": job.status or "N/A",
-                "created_at": job.created_at or "N/A",
-                "created_by_name": job.created_by_name or "N/A",
+                "name": scrub_raw_ids(job.name or "N/A"),
+                "status": scrub_raw_ids(job.status or "N/A"),
+                "created_at": scrub_raw_ids(job.created_at or "N/A"),
+                "created_by_name": scrub_raw_ids(job.created_by_name or "N/A"),
                 "created_by_id": job.created_by_id or "",
-                "project_name": job.project_name or "",
+                "project_name": scrub_raw_ids(job.project_name or ""),
                 "project_id": job.project_id or "",
                 "workspace_id": job.workspace_id or "",
             }
@@ -213,23 +214,23 @@ def status_ray(ctx: Context, name: str) -> None:
             return
 
         click.echo("Ray Job Status")
-        click.echo(f"Name:       {data.get('name', 'N/A')}")
-        click.echo(f"Status:     {data.get('status', 'N/A')}")
+        click.echo(f"Name:       {scrub_raw_ids(data.get('name', 'N/A'))}")
+        click.echo(f"Status:     {scrub_raw_ids(data.get('status', 'N/A'))}")
         if data.get("sub_status"):
-            click.echo(f"Sub:        {data.get('sub_status')}")
+            click.echo(f"Sub:        {scrub_raw_ids(data.get('sub_status'))}")
         if data.get("priority") is not None:
             click.echo(f"Priority:   {data.get('priority')}")
         if data.get("priority_level"):
-            click.echo(f"Priority Level: {data.get('priority_level')}")
+            click.echo(f"Priority Level: {scrub_raw_ids(data.get('priority_level'))}")
         created_by = data.get("created_by") or {}
         if created_by.get("name"):
-            click.echo(f"Created By: {created_by.get('name')}")
+            click.echo(f"Created By: {scrub_raw_ids(created_by.get('name'))}")
         if data.get("project_name"):
-            click.echo(f"Project:    {data.get('project_name')}")
+            click.echo(f"Project:    {scrub_raw_ids(data.get('project_name'))}")
         if data.get("created_at"):
-            click.echo(f"Created:    {data.get('created_at')}")
+            click.echo(f"Created:    {scrub_raw_ids(data.get('created_at'))}")
         if data.get("finished_at"):
-            click.echo(f"Finished:   {data.get('finished_at')}")
+            click.echo(f"Finished:   {scrub_raw_ids(data.get('finished_at'))}")
         click.echo(
             "\nUse `inspire --json ray status <name>` to see full head / worker "
             "spec and elastic instance ranges."
@@ -286,7 +287,7 @@ def _resolve_project_id(config: Config, requested: Optional[str]) -> str:
     if requested:
         if requested.startswith("project-"):
             raise ConfigError(
-                f"--project takes a project name, not a raw ID ({requested!r}). "
+                "--project takes a project name, not a raw ID. "
                 "See `inspire config context` for available names."
             )
         if requested in config.projects:
@@ -312,21 +313,38 @@ def _resolve_project_id(config: Config, requested: Optional[str]) -> str:
     )
 
 
+def _project_label(config: Config, project_id: str, requested: Optional[str]) -> str:
+    if requested:
+        return requested
+    for name, candidate in (config.projects or {}).items():
+        if candidate == project_id:
+            return name
+    entry = (config.project_catalog or {}).get(project_id)
+    if isinstance(entry, dict) and entry.get("name"):
+        return str(entry["name"])
+    return "(project name unavailable)"
+
+
+def _workspace_label(config: Config, workspace_id: str, requested: Optional[str]) -> str:
+    if requested:
+        return requested
+    for name, candidate in (config.workspaces or {}).items():
+        if candidate == workspace_id:
+            return name
+    return "(workspace name unavailable)"
+
+
 def _resolve_image_id(raw: str, *, session, ctx: Context) -> str:
-    """Turn a Docker image URL (or already-internal image_id) into a mirror_id.
+    """Turn a visible image name or Docker image URL into a mirror_id.
 
     Ray's create body takes ``mirror_id`` (the platform's internal image id),
     not the pullable Docker URL. We walk public + private + official image
-    catalogues looking for an exact URL match; if the caller already passed
-    a known image_id (no slashes, no colon suffix), return it as-is.
+    catalogues looking for an exact URL/name match.
     """
     raw = (raw or "").strip()
     if not raw:
         raise ConfigError("Image is empty.")
-    # Escape hatch — if this looks like a raw id (no slashes), trust it.
-    if "/" not in raw and ":" not in raw:
-        return raw
-
+    target = raw.lower()
     for source in ("private", "public", "official"):
         try:
             images = browser_api_module.list_images_by_source(source=source, session=session)
@@ -335,11 +353,18 @@ def _resolve_image_id(raw: str, *, session, ctx: Context) -> str:
                 click.echo(f"  image lookup via {source} failed: {e}", err=True)
             continue
         for img in images:
-            if (img.url or "").strip() == raw:
+            labels = {
+                str(img.url or "").strip(),
+                str(img.name or "").strip(),
+            }
+            if img.name and img.version:
+                labels.add(f"{img.name}:{img.version}")
+            if target in {label.lower() for label in labels if label}:
                 return img.image_id
+    display = scrub_raw_ids(raw)
     raise ConfigError(
-        f"Image {raw!r} not found in public/private/official catalogues. "
-        "Pass --head-image-id / --worker image_id=... directly if you already know it."
+        f"Image {display!r} not found in public/private/official catalogues. "
+        "Pass a visible image name or Docker URL from `inspire image list`."
     )
 
 
@@ -404,7 +429,7 @@ def _parse_worker_spec(raw: str) -> dict[str, Any]:
     "--project",
     "-p",
     default=None,
-    help="Project name / alias / ID (default from [context].project)",
+    help="Project name / alias (default from [context].project)",
 )
 @click.option("--workspace", default=None, help="Workspace name (from [workspaces])")
 @click.option(
@@ -419,7 +444,7 @@ def _parse_worker_spec(raw: str) -> dict[str, Any]:
 @click.option(
     "--head-image",
     default=None,
-    help="Head node image — Docker URL (will be resolved to mirror_id) or internal image_id",
+    help="Head node image name or Docker URL (resolved through the visible image catalog)",
 )
 @click.option(
     "--head-image-type",
@@ -452,7 +477,7 @@ def _parse_worker_spec(raw: str) -> dict[str, Any]:
     multiple=True,
     help=(
         "Worker group spec (repeatable). Format (note ';' separator): "
-        "'name=<grp>;image=<url|id>;group=<group-name>;quota=<gpu,cpu,mem>;"
+        "'name=<grp>;image=<url-or-name>;group=<group-name>;quota=<gpu,cpu,mem>;"
         "min=<n>;max=<n>[;image_type=SOURCE_PUBLIC][;shm=<gib>]'"
     ),
 )
@@ -469,7 +494,7 @@ def _parse_worker_spec(raw: str) -> dict[str, Any]:
 @click.option(
     "--dry-run",
     is_flag=True,
-    help="Print the assembled request body and exit without submitting.",
+    help="Preview the request and exit without submitting; with --json, print the raw API body.",
 )
 @pass_context
 def create_ray(
@@ -513,7 +538,7 @@ def create_ray(
         inspire ray create --json-body body.json
     """
     try:
-        config, _ = Config.from_files_and_env(require_target_dir=False)
+        config, _ = Config.from_files_and_env()
         session = get_web_session()
 
         if json_body_path is not None:
@@ -540,8 +565,18 @@ def create_ray(
             )
 
         if dry_run:
-            # Print the raw POST body so it can be piped back via --json-body.
-            click.echo(json.dumps(body, indent=2, ensure_ascii=False))
+            if ctx.json_output:
+                click.echo(json.dumps(body, indent=2, ensure_ascii=False))
+                return
+            click.echo("Ray create request preview")
+            click.echo(f"Name:      {scrub_raw_ids(body.get('name'))}")
+            click.echo(
+                f"Project:   {scrub_raw_ids(_project_label(config, body.get('project_id', ''), project))}"
+            )
+            click.echo(
+                f"Workspace: {scrub_raw_ids(_workspace_label(config, body.get('workspace_id', ''), workspace))}"
+            )
+            click.echo(f"Workers:   {len(body.get('worker_groups') or [])} group(s)")
             return
 
         data = browser_api_module.create_ray_job(body, session=session)
@@ -551,12 +586,16 @@ def create_ray(
             return
 
         click.echo(human_formatter.format_success(f"Ray job created: {body.get('name')}"))
-        click.echo(f"Project:   {body.get('project_id')}")
-        click.echo(f"Workspace: {body.get('workspace_id')}")
+        click.echo(
+            f"Project:   {scrub_raw_ids(_project_label(config, body.get('project_id', ''), project))}"
+        )
+        click.echo(
+            f"Workspace: {scrub_raw_ids(_workspace_label(config, body.get('workspace_id', ''), workspace))}"
+        )
         click.echo(f"Workers:   {len(body.get('worker_groups') or [])} group(s)")
         sub_msg = data.get("sub_msg") or ""
         if sub_msg:
-            click.echo(f"Platform note: {sub_msg}")
+            click.echo(f"Platform note: {scrub_raw_ids(sub_msg)}")
 
     except ConfigError as e:
         _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
@@ -616,7 +655,7 @@ def _assemble_create_body(
         explicit_workspace_name=workspace,
     )
     if resolved_workspace_id is None:
-        raise ConfigError("Missing workspace_id. Set --workspace or configure [workspaces].")
+        raise ConfigError("Missing workspace. Set --workspace or configure [workspaces].")
 
     def _resolve_ray(triple: str, group_name: str) -> Any:
         try:
@@ -760,9 +799,9 @@ def events_ray(
 
         for e in events:
             ts = _format_ts(e.get("last_timestamp") or e.get("first_timestamp"))
-            etype = (e.get("type") or "").ljust(7)
-            reason_str = (e.get("reason") or "").ljust(28)
-            msg = e.get("message") or ""
+            etype = scrub_raw_ids(e.get("type") or "").ljust(7)
+            reason_str = scrub_raw_ids(e.get("reason") or "").ljust(28)
+            msg = scrub_raw_ids(e.get("message") or "")
             count = e.get("count")
             tag = f" (×{count})" if count and int(count) > 1 else ""
             click.echo(f"{ts}  {etype} {reason_str} {msg}{tag}")
@@ -806,18 +845,16 @@ def instances_ray(ctx: Context, name: str) -> None:
             click.echo("No Ray pod instances found (job may not have been scheduled yet).")
             return
 
-        id_w = max(len("Instance"), *(len(i.get("instance_id", "")) for i in instances))
-        click.echo(f"{'Type':<8} {'Group':<12} {'Status':<10} {'Instance':<{id_w}}  CPU/GPU/Mem")
-        click.echo("-" * (id_w + 50))
-        for inst in instances:
-            itype = (inst.get("instance_type") or "").ljust(8)
-            group = (inst.get("worker_group_name") or "").ljust(12)
-            status = (inst.get("status") or "").ljust(10)
-            iid = (inst.get("instance_id") or "").ljust(id_w)
+        click.echo(f"{'#':>3} {'Type':<8} {'Group':<12} {'Status':<10} CPU/GPU/Mem")
+        click.echo("-" * 52)
+        for idx, inst in enumerate(instances, start=1):
+            itype = scrub_raw_ids(inst.get("instance_type") or "").ljust(8)
+            group = scrub_raw_ids(inst.get("worker_group_name") or "").ljust(12)
+            status = scrub_raw_ids(inst.get("status") or "").ljust(10)
             cpu = inst.get("cpu_count") or 0
             gpu = inst.get("gpu_count") or 0
             mem = inst.get("memory_size") or 0
-            click.echo(f"{itype} {group} {status} {iid}  {cpu}C/{gpu}G/{mem}GiB")
+            click.echo(f"{idx:>3} {itype} {group} {status} {cpu}C/{gpu}G/{mem}GiB")
 
     except (SessionExpiredError, ValueError) as e:
         _handle_error(ctx, "AuthenticationError", str(e), EXIT_AUTH_ERROR)
@@ -855,7 +892,7 @@ def delete_ray(ctx: Context, name: str, yes: bool, pick: Optional[int]) -> None:
     """
     if not yes and not ctx.json_output:
         click.confirm(
-            f"Permanently delete Ray job '{name}'? This cannot be undone.",
+            f"Permanently delete Ray job '{scrub_raw_ids(name)}'? This cannot be undone.",
             abort=True,
         )
 

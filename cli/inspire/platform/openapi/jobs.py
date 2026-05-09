@@ -101,8 +101,7 @@ def create_training_job_smart(
         result = api._make_request("POST", api.endpoints.TRAIN_JOB_CREATE, payload)
 
         if result.get("code") == 0:
-            job_id = result["data"].get("job_id")
-            logger.info("🚀 Training job created successfully! Job ID: %s", job_id)
+            logger.info("Training job created successfully")
             return result
 
         error_code = result.get("code")

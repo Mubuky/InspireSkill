@@ -11,6 +11,7 @@ import click
 
 from inspire.cli.context import EXIT_GENERAL_ERROR, Context
 from inspire.cli.formatters import human_formatter, json_formatter
+from inspire.cli.utils.raw_ids import scrub_raw_ids
 
 
 def _emit_debug_report_hint(ctx: Context) -> None:
@@ -37,7 +38,10 @@ def emit_error(
             err=True,
         )
     else:
-        click.echo(human_formatter.format_error(message, hint=hint), err=True)
+        click.echo(
+            human_formatter.format_error(scrub_raw_ids(message), hint=scrub_raw_ids(hint)),
+            err=True,
+        )
         _emit_debug_report_hint(ctx)
     return exit_code
 

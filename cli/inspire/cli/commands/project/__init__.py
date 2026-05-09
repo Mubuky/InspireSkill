@@ -2,7 +2,7 @@
 
 Usage:
     inspire project list
-    inspire project detail <project-id>
+    inspire project detail <project-name>
     inspire project owners
 """
 
@@ -21,7 +21,7 @@ def project():
     Examples:
         inspire project list                # quota table
         inspire project list --json         # JSON with all fields
-        inspire project detail <project-id> # single-project detail
+        inspire project detail <project-name> # single-project detail
         inspire project owners              # "负责人" dropdown contents
     """
     pass

@@ -64,7 +64,6 @@ retry_delay = 1.0
 # rtunnel = "http://127.0.0.1:7897"
 
 [paths]
-target_dir = "/shared/EBM_dev"
 log_pattern = "training_master_*.log"
 log_cache_dir = "~/.inspire/logs"
 
@@ -100,18 +99,18 @@ denylist = ["*.tmp", ".git/*"]
 # command that needs a workspace requires --workspace <alias> explicitly
 # in v3.1.0+ (no implicit default; project does NOT auto-resolve a
 # workspace either).
-# cpu = "ws-..."       # CPU 资源空间
-# gpu = "ws-..."       # 分布式训练空间 (H100 / H200)
-# internet = "ws-..."  # workspace with public internet (e.g. RTX 4090)
+# cpu = "CPU 资源空间"
+# gpu = "分布式训练空间"
+# internet = "可联网资源空间"
 
 [job]
-# project_id = "project-..."
+# project = "CI-情境智能"
 # image = "pytorch:latest"
 # priority = 10
 # shm_size = 32  # Default shared memory (GiB) for notebooks; jobs use it when set
 
 [notebook]
-# quota = "1,20,200"  # gpu,cpu,mem (GiB); must match a quota_id in the workspace
+# quota = "1,20,200"  # gpu,cpu,mem (GiB); must match a resource spec in the workspace
 # image = "pytorch:latest"
 # post_start = "bash /workspace/bootstrap.sh"  # none | shell command
 

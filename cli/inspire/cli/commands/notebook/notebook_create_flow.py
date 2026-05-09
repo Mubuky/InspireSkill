@@ -35,6 +35,7 @@ from inspire.cli.utils.quota_resolver import (
     parse_quota,
     resolve_quota,
 )
+from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.config import Config, ConfigError
 from inspire.config.workspaces import select_workspace_id
 from inspire.platform.web import browser_api as browser_api_module
@@ -96,7 +97,7 @@ def _workspace_label(
             if str(candidate_id) == workspace_id:
                 return str(alias)
 
-    return workspace_id
+    return "(workspace name unavailable)"
 
 
 def _format_create_diagnostics(
@@ -107,19 +108,19 @@ def _format_create_diagnostics(
 ) -> str:
     lines = [
         f"Notebook: {diagnostics.name}",
-        f"Workspace: {diagnostics.workspace}",
-        f"Project: {diagnostics.project}",
-        f"Compute group: {diagnostics.compute_group}",
+        f"Workspace: {scrub_raw_ids(diagnostics.workspace)}",
+        f"Project: {scrub_raw_ids(diagnostics.project)}",
+        f"Compute group: {scrub_raw_ids(diagnostics.compute_group)}",
         f"Image: {diagnostics.image}",
         f"Resource: {diagnostics.resource}",
     ]
     if reason:
-        lines.append(f"Reason: {reason}")
+        lines.append(f"Reason: {scrub_raw_ids(reason)}")
 
     event_text = (events or "").strip()
     if event_text:
         lines.append("Platform events:")
-        lines.extend(f"  {line}" for line in event_text.splitlines() if line.strip())
+        lines.extend(f"  {scrub_raw_ids(line)}" for line in event_text.splitlines() if line.strip())
     else:
         lines.append("Platform events: no platform events returned yet.")
     return "\n".join(lines)
@@ -128,7 +129,7 @@ def _format_create_diagnostics(
 def _sanitize_notebook_id(text: str, notebook_id: str) -> str:
     if not notebook_id:
         return text
-    return text.replace(notebook_id, "<notebook-id>")
+    return scrub_raw_ids(text.replace(notebook_id, "<notebook-id>"))
 
 
 def _event_message(event: dict) -> str:
@@ -147,7 +148,7 @@ def _fetch_event_preview(notebook_id: str, session: WebSession) -> str:
             session=session,
         )
     except Exception as exc:  # noqa: BLE001 - diagnostics must not hide the root error
-        return f"failed to fetch platform events: {exc}"
+        return f"failed to fetch platform events: {scrub_raw_ids(exc)}"
 
     lines = []
     for event in events[-10:]:
@@ -394,11 +395,11 @@ def create_notebook_and_report(
             _handle_error(
                 ctx,
                 "APIError",
-                f"Notebook '{name}' was submitted, but the platform response did not expose a usable notebook id.",
+                f"Notebook '{name}' was submitted, but the platform response did not expose a usable notebook handle.",
                 EXIT_API_ERROR,
                 hint=_format_create_diagnostics(
                     diagnostics,
-                    reason="Create API response did not include notebook_id/id, and live lookup by name did not find the new notebook.",
+                    reason="Create API response did not include a notebook handle, and live lookup by name did not find the new notebook.",
                 ),
             )
             return None
@@ -550,7 +551,7 @@ def maybe_run_post_start(
         return
 
     if not json_output:
-        click.echo(f"Starting {post_start_spec.label}...")
+        click.echo(f"Starting {scrub_raw_ids(post_start_spec.label)}...")
 
     try:
         started = browser_api_module.run_command_in_notebook(
@@ -561,23 +562,34 @@ def maybe_run_post_start(
             completion_marker=post_start_spec.completion_marker,
         )
         if not json_output and started:
-            click.echo(f"{post_start_spec.label} started (log: {post_start_spec.log_path})")
+            click.echo(
+                f"{scrub_raw_ids(post_start_spec.label)} started "
+                f"(log: {scrub_raw_ids(post_start_spec.log_path)})"
+            )
             if diagnostics is not None:
                 quoted_name = shlex.quote(diagnostics.name)
                 click.echo(
-                    f'  To stop: inspire notebook exec {quoted_name} "kill $(cat {post_start_spec.pid_file})"'
+                    "  To stop: inspire notebook exec "
+                    f'{quoted_name} "kill $(cat {scrub_raw_ids(post_start_spec.pid_file)})"'
                 )
             else:
-                click.echo(f'  To stop: inspire notebook exec "kill $(cat {post_start_spec.pid_file})"')
+                click.echo(
+                    '  To stop: inspire notebook exec '
+                    f'"kill $(cat {scrub_raw_ids(post_start_spec.pid_file)})"'
+                )
         if not json_output and not started:
             click.echo(
                 f"Warning: Failed to confirm {post_start_spec.label.lower()} startup; check "
-                f"{post_start_spec.log_path} inside the notebook.",
+                f"{scrub_raw_ids(post_start_spec.log_path)} inside the notebook.",
                 err=True,
             )
     except Exception as e:
         if not json_output:
-            click.echo(f"Warning: Failed to start {post_start_spec.label.lower()}: {e}", err=True)
+            click.echo(
+                "Warning: Failed to start "
+                f"{scrub_raw_ids(post_start_spec.label.lower())}: {scrub_raw_ids(e)}",
+                err=True,
+            )
             if diagnostics is not None:
                 click.echo(
                     _format_create_diagnostics(
@@ -662,7 +674,7 @@ def _cap_task_priority(
     if not json_output:
         click.echo(
             f"Capping priority {task_priority} -> {max_priority} "
-            f"(max for project '{selected_project.name}')"
+            f"(max for project '{scrub_raw_ids(selected_project.name)}')"
         )
     return max_priority
 
@@ -678,7 +690,7 @@ def _fetch_notebook_images(
     try:
         images = browser_api_module.list_images(workspace_id=workspace_id, session=session)
     except Exception as e:
-        _handle_error(ctx, "APIError", f"Failed to fetch images: {e}", EXIT_API_ERROR)
+        _handle_error(ctx, "APIError", f"Failed to fetch images: {scrub_raw_ids(e)}", EXIT_API_ERROR)
         return None
 
     if image and not _find_image_match(images, image):
@@ -706,9 +718,9 @@ def _fetch_notebook_images(
 def _resolve_notebook_name(name: Optional[str], *, json_output: bool) -> str:
     if name:
         return name
-    generated = f"notebook-{uuid.uuid4().hex[:8]}"
+    generated = f"notebookrun-{uuid.uuid4().hex[:8]}"
     if not json_output:
-        click.echo(f"Generated name: {generated}")
+        click.echo(f"Generated name: {scrub_raw_ids(generated)}")
     return generated
 
 
@@ -849,7 +861,8 @@ def run_notebook_create(
     resource_display = format_quota_display(resolved_quota)
     if not json_output:
         click.echo(
-            f"Creating notebook with {resource_display} on {resolved_quota.compute_group_name}..."
+            f"Creating notebook with {scrub_raw_ids(resource_display)} on "
+            f"{scrub_raw_ids(resolved_quota.compute_group_name)}..."
         )
 
     task_priority = _resolve_task_priority(priority, config)
@@ -897,7 +910,7 @@ def run_notebook_create(
         return
 
     if not json_output:
-        click.echo(f"Using image: {selected_image.name}")
+        click.echo(f"Using image: {scrub_raw_ids(selected_image.name)}")
 
     name = _resolve_notebook_name(name, json_output=json_output)
     workspace_label = _workspace_label(
@@ -956,7 +969,7 @@ def run_notebook_create(
     )
 
     if not json_output:
-        click.echo(f"\nUse `inspire notebook status {name}` to check status.")
+        click.echo(f"\nUse `inspire notebook status {scrub_raw_ids(name)}` to check status.")
 
 
 __all__ = ["run_notebook_create", "maybe_run_post_start", "format_quota_display"]

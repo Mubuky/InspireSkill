@@ -25,7 +25,7 @@ WEB_AUTH_HINT = (
 
 def get_base_url() -> str:
     try:
-        config, _ = Config.from_files_and_env(require_credentials=False, require_target_dir=False)
+        config, _ = Config.from_files_and_env(require_credentials=False)
         return config.base_url
     except Exception:
         return os.environ.get("INSPIRE_BASE_URL", "https://api.example.com")

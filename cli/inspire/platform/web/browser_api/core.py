@@ -37,7 +37,7 @@ def _get_base_url() -> str:
     try:
         from inspire.config import Config
 
-        config, _ = Config.from_files_and_env(require_credentials=False, require_target_dir=False)
+        config, _ = Config.from_files_and_env(require_credentials=False)
         if config.base_url:
             _cached_base_url = config.base_url
             return _cached_base_url
@@ -82,7 +82,7 @@ def _get_browser_api_prefix() -> str:
     try:
         from inspire.config import Config
 
-        config, _ = Config.from_files_and_env(require_credentials=False, require_target_dir=False)
+        config, _ = Config.from_files_and_env(require_credentials=False)
         if config.browser_api_prefix:
             _cached_browser_api_prefix = config.browser_api_prefix
             return _cached_browser_api_prefix

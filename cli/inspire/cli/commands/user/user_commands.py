@@ -41,14 +41,11 @@ def whoami_user(ctx: Context) -> None:
             return
 
         click.echo("Current User")
-        click.echo(f"ID:        {info.get('id', 'N/A')}")
         click.echo(f"Name:      {info.get('name', 'N/A')}")
         click.echo(f"Login:     {(info.get('extra_info') or {}).get('login_name', 'N/A')}")
         click.echo(f"Role:      {info.get('global_role', 'N/A')}")
         if info.get("email"):
             click.echo(f"Email:     {info.get('email')}")
-        if info.get("workspace_id"):
-            click.echo(f"Workspace: {info.get('workspace_id')}")
 
     except AuthenticationError as e:
         _handle_error(ctx, "AuthenticationError", str(e), EXIT_AUTH_ERROR)
@@ -154,7 +151,8 @@ def permissions_user(
             click.echo("No permissions granted in this workspace.")
             return
 
-        click.echo(f"Permissions in workspace {resolved_workspace or '(default)'} ({len(perms)} granted)")
+        workspace_label = workspace or "(current workspace)"
+        click.echo(f"Permissions in workspace {workspace_label} ({len(perms)} granted)")
         for p in sorted(perms):
             click.echo(f"  {p}")
 

@@ -29,8 +29,8 @@ _NON_ASCII_DATA = {
         "workspace": "CPU 资源空间",
         "project": "情境智能 / 数据加工",
     },
-    "paths": {
-        "target_dir": "/inspire/hdd/project/情境智能/zillionx/repo",
+    "path_aliases": {
+        "me": "/inspire/hdd/project/情境智能/zillionx/repo",
     },
 }
 
@@ -58,4 +58,4 @@ def test_discover_write_round_trip_utf8(tmp_path: Path) -> None:
     # Round-trip via tomllib (the loader the CLI uses on read).
     parsed = tomllib.loads(decoded)
     assert parsed["context"]["workspace"] == "CPU 资源空间"
-    assert parsed["paths"]["target_dir"] == "/inspire/hdd/project/情境智能/zillionx/repo"
+    assert parsed["path_aliases"]["me"] == "/inspire/hdd/project/情境智能/zillionx/repo"

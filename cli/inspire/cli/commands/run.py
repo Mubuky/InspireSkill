@@ -37,6 +37,7 @@ from inspire.cli.utils.quota_resolver import (
     parse_quota,
     resolve_quota,
 )
+from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.config import Config, ConfigError
 from inspire.config.workspaces import select_workspace_id
 from inspire.platform.web.session import get_web_session
@@ -82,7 +83,7 @@ def _run_flow(
     project: str | None,
 ) -> None:
     try:
-        config, _ = Config.from_files_and_env(require_target_dir=True)
+        config, _ = Config.from_files_and_env()
         api = AuthManager.get_api(config)
 
         if priority is None:
@@ -190,20 +191,17 @@ def _run_flow(
                 click.echo(json_formatter.format_json(data if data else result))
             else:
                 if isinstance(result, dict):
-                    message = result.get("message") or "Job created (no job ID returned)"
+                    message = result.get("message") or "Job created (no usable job handle returned)"
                     click.echo(human_formatter.format_success(message))
-                    if result.get("data") and ctx.debug:
-                        click.echo(str(result["data"]))
                 else:
                     click.echo(human_formatter.format_success("Job created"))
-                    if ctx.debug:
-                        click.echo(str(result))
+                click.echo(f"Check status with: inspire job status {scrub_raw_ids(name)}")
             sys.exit(EXIT_SUCCESS)
 
         if ctx.json_output:
             click.echo(json_formatter.format_json(data))
         else:
-            click.echo(f"Job created: {name}")
+            click.echo(f"Job created: {scrub_raw_ids(name)}")
             if ctx.debug:
                 click.echo(f"Quota: {quota_spec.display()}")
                 if nodes > 1:
@@ -211,13 +209,14 @@ def _run_flow(
                 if priority is not None:
                     click.echo(f"Priority: {priority}")
                 click.echo(
-                    f"Command: {wrapped_command[:80]}{'...' if len(wrapped_command) > 80 else ''}"
+                    f"Command: {scrub_raw_ids(wrapped_command[:80])}"
+                    f"{'...' if len(wrapped_command) > 80 else ''}"
                 )
                 if log_path:
-                    click.echo(f"Log file: {log_path}")
+                    click.echo(f"Log file: {scrub_raw_ids(log_path)}")
             elif priority is not None:
                 click.echo(f"Priority: {priority}")
-            click.echo(f"Check status with: inspire job status {name}")
+            click.echo(f"Check status with: inspire job status {scrub_raw_ids(name)}")
 
         if watch:
             if ctx.json_output:
@@ -228,8 +227,10 @@ def _run_flow(
             try:
                 _exec_inspire_subcommand(["job", "logs", name, "--follow"])
             except Exception as e:
-                click.echo(f"Failed to start log follow: {e}", err=True)
-                click.echo(f"You can still run: inspire job logs {name} --follow")
+                click.echo(f"Failed to start log follow: {scrub_raw_ids(e)}", err=True)
+                click.echo(
+                    f"You can still run: inspire job logs {scrub_raw_ids(name)} --follow"
+                )
                 sys.exit(EXIT_GENERAL_ERROR)
 
         sys.exit(EXIT_SUCCESS)

@@ -6,8 +6,8 @@ Layer order (later wins):
 
 Identity (username / password / base_url / proxy) lives in the active
 account's ``~/.inspire/accounts/<name>/config.toml``. Per-repo state
-(``[context].project``, ``[paths].target_dir``, …) lives in
-``./.inspire/config.toml``. Without an active account, identity fields
+(``[context].project``, ``[path_aliases]``, …) lives in ``./.inspire/config.toml``.
+Without an active account, identity fields
 stay empty; callers that pass ``require_credentials=True`` will get a
 ``ConfigError`` pointing at ``inspire account add``.
 """
@@ -91,7 +91,6 @@ def _warn_legacy_workspace_default(account_path: Path | None, project_path: Path
 
 def config_from_files_and_env(
     *,
-    require_target_dir: bool = False,
     require_credentials: bool = True,
 ) -> tuple[Config, dict[str, str]]:
     """Load config from files + env vars with layered precedence."""
@@ -124,7 +123,6 @@ def config_from_files_and_env(
     _validate_required_config(
         config_dict=config_dict,
         require_credentials=require_credentials,
-        require_target_dir=require_target_dir,
     )
 
     config_dict["prefer_source"] = project_layer_state.prefer_source

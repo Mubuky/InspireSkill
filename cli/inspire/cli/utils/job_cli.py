@@ -45,7 +45,7 @@ def resolve_job_id(
         exit_with_error(
             ctx,
             "ValidationError",
-            f"v2 CLI takes a job name, not an id / partial-id ({name!r}).",
+            "v2 CLI takes a job name, not an id / partial-id.",
             EXIT_VALIDATION_ERROR,
             hint=(
                 "Use `inspire job list -A` to find the name and pass that instead. "

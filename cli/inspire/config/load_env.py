@@ -8,7 +8,7 @@ from inspire.config.env import _parse_denylist, _parse_remote_timeout
 from inspire.config.models import Config, ConfigError
 
 
-def config_from_env(*, require_target_dir: bool = False) -> Config:
+def config_from_env() -> Config:
     """Create configuration from environment variables."""
     username = os.getenv("INSPIRE_USERNAME")
     password = os.getenv("INSPIRE_PASSWORD")
@@ -17,15 +17,6 @@ def config_from_env(*, require_target_dir: bool = False) -> Config:
         raise ConfigError(
             "Missing platform credentials. Run `inspire account add <name>` "
             "to configure them; the active account is the supported source."
-        )
-
-    target_dir = os.getenv("INSPIRE_TARGET_DIR")
-
-    if require_target_dir and not target_dir:
-        raise ConfigError(
-            "Missing INSPIRE_TARGET_DIR environment variable.\n"
-            "This is required for Bridge operations (sync, exec, logs).\n"
-            "Set it with: export INSPIRE_TARGET_DIR='/path/to/shared/directory'"
         )
 
     timeout = 30
@@ -75,7 +66,6 @@ def config_from_env(*, require_target_dir: bool = False) -> Config:
         username=username,
         password=password,
         base_url=os.getenv("INSPIRE_BASE_URL", "https://api.example.com"),
-        target_dir=target_dir,
         log_pattern=os.getenv("INSPIRE_LOG_PATTERN", "training_master_*.log"),
         timeout=timeout,
         max_retries=max_retries,
@@ -89,56 +79,6 @@ def config_from_env(*, require_target_dir: bool = False) -> Config:
         log_cache_dir=log_cache_dir,
         remote_timeout=_parse_remote_timeout(os.getenv("INSP_REMOTE_TIMEOUT", "90")),
         default_remote=os.getenv("INSPIRE_DEFAULT_REMOTE", "origin"),
-        bridge_action_timeout=bridge_action_timeout,
-        bridge_action_denylist=_parse_denylist(os.getenv("INSPIRE_BRIDGE_DENYLIST")),
-        requests_http_proxy=os.getenv("INSPIRE_REQUESTS_HTTP_PROXY"),
-        requests_https_proxy=os.getenv("INSPIRE_REQUESTS_HTTPS_PROXY"),
-        playwright_proxy=os.getenv("INSPIRE_PLAYWRIGHT_PROXY"),
-        rtunnel_proxy=os.getenv("INSPIRE_RTUNNEL_PROXY"),
-    )
-
-
-def config_from_env_for_sync() -> Config:
-    """Create configuration for sync/bridge commands (doesn't require platform credentials)."""
-    target_dir = os.getenv("INSPIRE_TARGET_DIR")
-    if not target_dir:
-        raise ConfigError(
-            "Missing INSPIRE_TARGET_DIR environment variable.\n"
-            "This specifies the target directory on the Bridge.\n"
-            "Set it with: export INSPIRE_TARGET_DIR='/path/to/shared/directory'"
-        )
-
-    github_repo = os.getenv("INSP_GITHUB_REPO")
-    github_token = os.getenv("INSP_GITHUB_TOKEN") or os.getenv("GITHUB_TOKEN")
-    github_server = os.getenv("INSP_GITHUB_SERVER", "https://github.com")
-    if not github_repo:
-        raise ConfigError(
-            "Missing INSP_GITHUB_REPO environment variable.\n"
-            "Set it with: export INSP_GITHUB_REPO='owner/repo'"
-        )
-
-    bridge_action_timeout = 600
-    bat_env = os.getenv("INSPIRE_BRIDGE_ACTION_TIMEOUT")
-    if bat_env:
-        try:
-            bridge_action_timeout = int(bat_env)
-        except ValueError as e:
-            raise ConfigError(
-                "Invalid INSPIRE_BRIDGE_ACTION_TIMEOUT value. It must be an integer number of seconds."
-            ) from e
-
-    return Config(
-        username="",
-        password="",
-        target_dir=target_dir,
-        github_repo=github_repo,
-        github_token=github_token,
-        github_server=github_server,
-        github_log_workflow=os.getenv("INSP_GITHUB_LOG_WORKFLOW", "retrieve_job_log.yml"),
-        github_sync_workflow=os.getenv("INSP_GITHUB_SYNC_WORKFLOW", "sync_code.yml"),
-        github_bridge_workflow=os.getenv("INSP_GITHUB_BRIDGE_WORKFLOW", "run_bridge_action.yml"),
-        default_remote=os.getenv("INSPIRE_DEFAULT_REMOTE", "origin"),
-        remote_timeout=_parse_remote_timeout(os.getenv("INSP_REMOTE_TIMEOUT", "90")),
         bridge_action_timeout=bridge_action_timeout,
         bridge_action_denylist=_parse_denylist(os.getenv("INSPIRE_BRIDGE_DENYLIST")),
         requests_http_proxy=os.getenv("INSPIRE_REQUESTS_HTTP_PROXY"),

@@ -24,6 +24,7 @@ from inspire.cli.context import (
 )
 from inspire.cli.formatters import json_formatter
 from inspire.cli.utils.errors import exit_with_error as _handle_error
+from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.config import Config, ConfigError
 
 
@@ -45,9 +46,9 @@ def _project_name_for_id(cfg: Config, project_id: str | None) -> str | None:  # 
 def _collect_context(cfg: Config) -> dict[str, Any]:
     from inspire.accounts import current_account, list_accounts
 
-    active_account = current_account() or cfg.username or None
+    active_account = scrub_raw_ids(current_account() or cfg.username or "") or None
 
-    active_project_name = _project_name_for_id(cfg, cfg.job_project_id)
+    active_project_name = scrub_raw_ids(_project_name_for_id(cfg, cfg.job_project_id) or "") or None
     # `active.workspace` was the singular default-workspace concept removed
     # in v3.1.0. The `[workspaces]` alias map below still surfaces every
     # configured workspace, but no single one is "active" by default.
@@ -56,7 +57,7 @@ def _collect_context(cfg: Config) -> dict[str, Any]:
     # Projects: name + optional path segment (e.g. 'embodied-multimodality').
     projects_by_name: dict[str, dict[str, str]] = {}
     for name in (cfg.projects or {}):
-        projects_by_name[name] = {"name": name}
+        projects_by_name[scrub_raw_ids(name)] = {"name": scrub_raw_ids(name)}
     for project_id, entry in (cfg.project_catalog or {}).items():
         if not isinstance(entry, dict):
             continue
@@ -74,21 +75,22 @@ def _collect_context(cfg: Config) -> dict[str, Any]:
             )
         if not catalog_name:
             continue
+        catalog_name = scrub_raw_ids(catalog_name)
         bucket = projects_by_name.setdefault(catalog_name, {"name": catalog_name})
         if isinstance(path, str) and path.strip():
-            bucket["path"] = path.strip()
+            bucket["path"] = scrub_raw_ids(path.strip())
     projects_view = sorted(projects_by_name.values(), key=lambda e: e["name"])
 
     # Workspaces: just the name list, sorted.
     workspaces_view = sorted(
-        name
+        scrub_raw_ids(name)
         for name in (cfg.workspaces or {})
         if isinstance(name, str) and name.strip()
     )
 
     # Compute groups: name + the workspace name it belongs to (when resolvable).
     ws_name_for_id: dict[str, str] = {
-        ws_id: name for name, ws_id in (cfg.workspaces or {}).items()
+        ws_id: scrub_raw_ids(name) for name, ws_id in (cfg.workspaces or {}).items()
     }
     compute_groups_view: list[dict[str, Any]] = []
     for group in cfg.compute_groups or []:
@@ -97,10 +99,10 @@ def _collect_context(cfg: Config) -> dict[str, Any]:
         name = str(group.get("name") or "").strip()
         if not name:
             continue
-        group_entry: dict[str, Any] = {"name": name}
+        group_entry: dict[str, Any] = {"name": scrub_raw_ids(name)}
         gpu = str(group.get("gpu_type") or "").strip()
         if gpu:
-            group_entry["gpu_type"] = gpu
+            group_entry["gpu_type"] = scrub_raw_ids(gpu)
         workspace_ids = group.get("workspace_ids") or []
         workspace_names = [
             ws_name_for_id[ws_id]
@@ -125,7 +127,7 @@ def _collect_context(cfg: Config) -> dict[str, Any]:
         "projects": projects_view,
         "workspaces": workspaces_view,
         "compute_groups": compute_groups_view,
-        "accounts": sorted(list_accounts()),
+        "accounts": sorted(scrub_raw_ids(account) for account in list_accounts()),
     }
 
 
@@ -206,7 +208,6 @@ def show_context(ctx: Context, json_output_local: bool) -> None:
     try:
         cfg, _sources = Config.from_files_and_env(
             require_credentials=False,
-            require_target_dir=False,
         )
     except ConfigError as e:
         _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)

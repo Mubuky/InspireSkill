@@ -27,6 +27,7 @@ matplotlib.use("Agg")  # no display server needed
 import matplotlib.dates as mdates  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 
+from inspire.cli.utils.raw_ids import scrub_raw_ids  # noqa: E402
 from inspire.platform.web.browser_api.metrics import MetricGroup  # noqa: E402
 
 # Metric → human-readable subplot title. English avoids font-fallback glyphs
@@ -74,10 +75,10 @@ def _short_pod_label(name: str) -> str:
     for marker in ("-worker-", "-replica-", "-master-", "-launcher-"):
         idx = name.rfind(marker)
         if idx >= 0:
-            return name[idx + 1 :]
+            return scrub_raw_ids(name[idx + 1 :])
     if len(name) <= 28:
-        return name
-    return name[:25] + "…"
+        return scrub_raw_ids(name)
+    return scrub_raw_ids(name[:25] + "…")
 
 
 def _is_rate(metric: str) -> bool:
@@ -98,28 +99,12 @@ def _format_percent(val: float, _pos: int | None = None) -> str:
     return f"{val * 100:.0f}%"
 
 
-# Known resource-type prefixes on task IDs. Longer prefixes must come first
-# so ``hpc-job-...`` is not shortened to ``job-...`` by the ``hpc-`` rule.
-_ID_PREFIXES = ("hpc-job-", "job-", "sv-", "hpc-", "nb-")
-
-
-def _short_id(task_id: str) -> str:
-    """Shorten a task id to a hash-length tag, stripping known type prefixes.
-
-    - ``job-a211cbef-c30f-4602-...`` → ``a211cbef`` (strip ``job-`` first;
-      a naive ``split('-',1)`` would return literal ``"job"``, producing
-      titles like "Train Job job" in the subplot header)
-    - ``hpc-job-xxxx-...``           → ``xxxx``
-    - ``91fbc44e-9c40-...``          → ``91fbc44e`` (bare UUID path)
-    """
-    cleaned = task_id.strip()
-    for prefix in _ID_PREFIXES:
-        if cleaned.startswith(prefix):
-            cleaned = cleaned[len(prefix) :]
-            break
-    if "-" in cleaned:
-        return cleaned.split("-", 1)[0]
-    return cleaned[:8] if len(cleaned) > 8 else cleaned
+def _display_task_label(task_id: str) -> str:
+    cleaned = str(task_id or "").strip()
+    safe = scrub_raw_ids(cleaned)
+    if not safe or safe != cleaned:
+        return "task"
+    return safe if len(safe) <= 48 else safe[:45] + "…"
 
 
 def render_metrics_png(
@@ -171,7 +156,7 @@ def render_metrics_png(
     pod_count_for_title = max_pods
     pod_hint = f"  ·  {pod_count_for_title} pods" if pod_count_for_title > 1 else ""
     fig.suptitle(
-        f"{task_label} {_short_id(task_id)}{pod_hint}  ·  "
+        f"{task_label} {_display_task_label(task_id)}{pod_hint}  ·  "
         f"{start_dt.strftime('%Y-%m-%d %H:%M')} → {end_dt.strftime('%Y-%m-%d %H:%M')}",
         fontsize=12,
         y=0.995,

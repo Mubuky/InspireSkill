@@ -23,6 +23,7 @@ from inspire.cli.context import (
 from inspire.cli.formatters import json_formatter
 from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.notebook_cli import resolve_json_output
+from inspire.cli.utils.raw_ids import scrub_raw_ids
 
 _NVIDIA_SMI_QUERY = (
     "nvidia-smi "
@@ -63,7 +64,7 @@ def _select_target_bridges(
                 "ConfigError",
                 (
                     f"Bridge '{bridge_name}' is not notebook-backed "
-                    "(missing notebook_id metadata)."
+                    "(missing notebook handle metadata)."
                 ),
                 EXIT_CONFIG_ERROR,
                 hint="Recreate it with 'inspire notebook ssh <notebook>'.",
@@ -261,27 +262,17 @@ def _build_summary(items: list[dict[str, Any]]) -> dict[str, int]:
     return {"total": len(items), "ok": ok, "failed": failed}
 
 
-def _short_notebook_id(notebook_id: str) -> str:
-    text = (notebook_id or "").strip()
-    if not text:
-        return "-"
-    if len(text) <= 14:
-        return text
-    return f"{text[:11]}..."
-
-
 def _format_human_output(payload: dict[str, Any]) -> str:
     lines = [
         "Notebook GPU Telemetry (tunnel-backed)",
         f"Sample: {payload['timestamp']}",
         "",
-        f"{'Bridge':<22} {'Notebook':<15} {'GPUs':>4} {'Util':>8} {'Memory':>25} {'Status'}",
-        "-" * 96,
+        f"{'Notebook':<24} {'GPUs':>4} {'Util':>8} {'Memory':>25} {'Status'}",
+        "-" * 78,
     ]
 
     for item in payload["items"]:
-        bridge = str(item.get("bridge", ""))
-        notebook_id = _short_notebook_id(str(item.get("notebook_id", "")))
+        bridge = scrub_raw_ids(item.get("bridge", ""))
         aggregate = item.get("aggregate") or {}
         error = str(item.get("error", "") or "")
 
@@ -294,14 +285,14 @@ def _format_human_output(payload: dict[str, Any]) -> str:
             status = click.style("ok", fg="green")
             memory = f"{mem_used}/{mem_total} MiB ({mem_pct:.1f}%)"
             lines.append(
-                f"{bridge:<22} {notebook_id:<15} {gpus:>4} {util_avg:>7.1f}% "
+                f"{bridge:<24} {gpus:>4} {util_avg:>7.1f}% "
                 f"{memory:>25} {status}"
             )
             continue
 
         status = click.style("error", fg="red")
-        reason = error or "Unknown failure"
-        lines.append(f"{bridge:<22} {notebook_id:<15} {0:>4} {'-':>8} {'-':>25} {status} {reason}")
+        reason = scrub_raw_ids(error or "Unknown failure")
+        lines.append(f"{bridge:<24} {0:>4} {'-':>8} {'-':>25} {status} {reason}")
 
     summary = payload["summary"]
     lines.extend(

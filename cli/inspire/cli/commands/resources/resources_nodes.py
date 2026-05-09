@@ -86,7 +86,7 @@ def list_nodes(
         config = None
         try:
             config, _ = Config.from_files_and_env(
-                require_credentials=False, require_target_dir=False
+                require_credentials=False
             )
         except Exception:
             config = None

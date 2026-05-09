@@ -18,6 +18,7 @@ from inspire.cli.formatters import human_formatter, json_formatter
 from inspire.cli.utils import job_submit
 from inspire.cli.utils.auth import AuthManager, AuthenticationError
 from inspire.cli.utils.errors import exit_with_error as _handle_error
+from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.cli.utils.quota_resolver import (
     QuotaMatchError,
     QuotaParseError,
@@ -49,7 +50,7 @@ def run_job_create(
 ) -> None:
     """Run the job creation flow."""
     try:
-        config, _ = Config.from_files_and_env(require_target_dir=True)
+        config, _ = Config.from_files_and_env()
         api = AuthManager.get_api(config)
 
         if priority is None:
@@ -116,7 +117,7 @@ def run_job_create(
                     if not ctx.json_output:
                         click.echo(
                             f"Capping priority {priority} → {max_priority} "
-                            f"(max for project '{selected.name}')"
+                            f"(max for project '{scrub_raw_ids(selected.name)}')"
                         )
                     priority = max_priority
             except ValueError:
@@ -124,10 +125,13 @@ def run_job_create(
 
         if not ctx.json_output:
             if fallback_msg:
-                click.echo(fallback_msg)
-            click.echo(f"Using project: {selected.name}{selected.get_quota_status()}")
+                click.echo(scrub_raw_ids(fallback_msg))
             click.echo(
-                f"Using compute group: {resolved_quota.compute_group_name} "
+                f"Using project: {scrub_raw_ids(selected.name)}"
+                f"{scrub_raw_ids(selected.get_quota_status())}"
+            )
+            click.echo(
+                f"Using compute group: {scrub_raw_ids(resolved_quota.compute_group_name)} "
                 f"({resolved_quota.gpu_count}x{resolved_quota.gpu_type or 'CPU'}, "
                 f"{resolved_quota.cpu_count} CPU, {resolved_quota.memory_gib} GiB)"
             )
@@ -182,20 +186,18 @@ def run_job_create(
             else:
                 display_cmd = wrapped_command
                 suffix = ""
-            click.echo(f"Command:  {display_cmd}{suffix}")
+            click.echo(f"Command:  {scrub_raw_ids(display_cmd)}{suffix}")
             if log_path:
-                click.echo(f"Log file:  {log_path}")
-            click.echo(f"\nCheck status with: inspire job status {name}")
+                click.echo(f"Log file:  {scrub_raw_ids(log_path)}")
+            click.echo(f"\nCheck status with: inspire job status {scrub_raw_ids(name)}")
             return
 
         if isinstance(result, dict):
             message = result.get("message") or f"Job created: {name}"
             click.echo(human_formatter.format_success(message))
-            if result.get("data"):
-                click.echo(str(result["data"]))
         else:
             click.echo(human_formatter.format_success(f"Job created: {name}"))
-            click.echo(str(result))
+        click.echo(f"Check status with: inspire job status {scrub_raw_ids(name)}")
 
     except ConfigError as e:
         _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
@@ -214,7 +216,7 @@ def run_job_create(
     help=(
         "Resource quota as 'gpu,cpu,mem' (mem in GiB). "
         "Example: '4,80,800' for 4 GPU + 80 CPU + 800 GiB. "
-        "The triple must match a quota_id in the workspace (see 'inspire resources specs'); "
+            "The triple must match a resource spec in the workspace (see 'inspire resources specs'); "
         "pass --group to disambiguate when multiple compute groups offer the same triple."
     ),
 )
@@ -294,12 +296,11 @@ def create(
 ) -> None:
     """Create a new training job.
 
-    If ``INSPIRE_TARGET_DIR`` is configured, stdout/stderr are captured under that
-    shared directory for later ``inspire job logs`` retrieval.
+    If the ``me`` path alias is configured, stdout/stderr are captured there for
+    later ``inspire job logs`` retrieval.
 
     \b
     Examples:
-        export INSPIRE_TARGET_DIR="/train/logs"
         inspire job create -n pr-123 -q 4,80,800 -c "cd /path && bash train.sh"
         inspire job create -n test -q 1,20,200 -c "python train.py" --priority 9
         inspire job create -n test -q 4,80,800 -c "python train.py" --group H200

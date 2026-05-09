@@ -8,6 +8,7 @@ import click
 
 from inspire.cli.context import Context
 from inspire.cli.formatters import json_formatter
+from inspire.cli.utils.raw_ids import scrub_raw_ids
 
 
 def _emit_debug_report_hint(ctx: Context) -> None:
@@ -47,11 +48,11 @@ def emit_error(
 
     if human_lines is not None:
         for line in human_lines:
-            click.echo(line, err=True)
+            click.echo(scrub_raw_ids(line), err=True)
         _emit_debug_report_hint(ctx)
         return
 
-    click.echo(message, err=True)
+    click.echo(scrub_raw_ids(message), err=True)
     if hint:
-        click.echo(f"Hint: {hint}", err=True)
+        click.echo(f"Hint: {scrub_raw_ids(hint)}", err=True)
     _emit_debug_report_hint(ctx)

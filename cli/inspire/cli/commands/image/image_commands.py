@@ -22,6 +22,7 @@ from inspire.cli.utils.notebook_cli import (
     require_web_session,
     resolve_json_output,
 )
+from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.platform.web import browser_api as browser_api_module
 
 
@@ -33,7 +34,7 @@ def _resolve_image_name(ctx: Context, name: str, *, pick: Optional[int] = None) 
     fall through to the shared ambiguity UI.
     """
     def _lister():
-        session = require_web_session(ctx)
+        session = require_web_session(ctx, hint=WEB_AUTH_HINT)
         bucket = []
         for source in ("private", "public", "official"):
             try:
@@ -352,14 +353,15 @@ def register_image_cmd(
     image_data = result.get("image", {})
     image_id = image_data.get("image_id", "") or result.get("image_id", "")
     registry_url = image_data.get("address", "") or result.get("address", "")
+    image_label = scrub_raw_ids(f"{name}:{version}")
 
     if wait and image_id:
         if not json_output:
-            click.echo(f"Image '{image_id}' registered. Waiting for READY status...")
+            click.echo(f"Image '{image_label}' registered. Waiting for READY status...")
         try:
             browser_api_module.wait_for_image_ready(image_id=image_id, session=session)
             if not json_output:
-                click.echo(f"Image '{image_id}' is now READY.")
+                click.echo(f"Image '{image_label}' is now READY.")
         except (TimeoutError, ValueError) as e:
             _handle_error(ctx, "APIError", str(e), EXIT_API_ERROR)
             return
@@ -368,13 +370,14 @@ def register_image_cmd(
         click.echo(json_formatter.format_json({"image_id": image_id, "result": result}))
         return
 
-    click.echo(f"Image registered: {image_id or 'unknown'}")
+    click.echo(f"Image registered: {image_label}")
     if registry_url and method.lower() == "push":
         click.echo("\nTo push your image:")
-        click.echo(f"  docker tag <local-image> {registry_url}")
-        click.echo(f"  docker push {registry_url}")
+        safe_registry_url = scrub_raw_ids(registry_url)
+        click.echo(f"  docker tag <local-image> {safe_registry_url}")
+        click.echo(f"  docker push {safe_registry_url}")
     if not wait and image_id:
-        click.echo(f"\nUse `inspire image detail {name}` to check status.")
+        click.echo(f"\nUse `inspire image detail {image_label}` to check status.")
 
 
 # ---------------------------------------------------------------------------
@@ -494,6 +497,7 @@ def save_image_cmd(
         return
 
     image_id = result.get("image", {}).get("image_id", "") or result.get("image_id", "")
+    image_label = scrub_raw_ids(f"{name}:{version}")
 
     if not image_id:
         try:
@@ -533,26 +537,27 @@ def save_image_cmd(
             visibility_applied = False
             if not json_output:
                 click.echo(
-                    f"Warning: could not force visibility={requested_visibility} via /image/update: {e}",
+                    "Warning: could not force "
+                    f"visibility={requested_visibility} via /image/update: {scrub_raw_ids(e)}",
                     err=True,
                 )
     elif requested_visibility and not image_id:
         visibility_applied = False
         if not json_output:
-            click.echo(
-                "Warning: save returned empty image_id and list fallback didn't find the image; "
-                "visibility not applied. Re-run 'inspire image set-visibility <id> --public/--private' "
-                "after confirming the image via 'inspire image list --source private'.",
-                err=True,
-            )
+                click.echo(
+                    "Warning: save returned no image handle and list fallback didn't find the image; "
+                    f"visibility not applied. Re-run 'inspire image set-visibility {image_label} --public/--private' "
+                    "after confirming the image via 'inspire image list --source private'.",
+                    err=True,
+                )
 
     if wait and image_id:
         if not json_output:
-            click.echo(f"Image '{image_id}' is being saved. Waiting for READY status...")
+            click.echo(f"Image '{image_label}' is being saved. Waiting for READY status...")
         try:
             browser_api_module.wait_for_image_ready(image_id=image_id, session=session)
             if not json_output:
-                click.echo(f"Image '{image_id}' is now READY.")
+                click.echo(f"Image '{image_label}' is now READY.")
         except (TimeoutError, ValueError) as e:
             _handle_error(ctx, "APIError", str(e), EXIT_API_ERROR)
             return
@@ -570,12 +575,12 @@ def save_image_cmd(
         )
         return
 
-    click.echo(f"Notebook saved as image: {image_id or 'unknown'}")
+    click.echo(f"Notebook saved as image: {image_label}")
     if requested_visibility and image_id:
         label = "public" if requested_visibility == _VISIBILITY_PUBLIC else "private"
         click.echo(f"Visibility: {label}")
     if not wait and image_id:
-        click.echo(f"Use `inspire image detail {name}` to check build status.")
+        click.echo(f"Use `inspire image detail {image_label}` to check build status.")
 
 
 # ---------------------------------------------------------------------------
@@ -651,7 +656,7 @@ def set_image_visibility_cmd(
         )
         return
 
-    click.echo(f"Image '{name}' visibility set to {label}.")
+    click.echo(f"Image '{scrub_raw_ids(name)}' visibility set to {label}.")
 
 
 # ---------------------------------------------------------------------------
@@ -703,7 +708,7 @@ def delete_image_cmd(
     image_id = _resolve_image_name(ctx, name, pick=pick)
 
     if not force and not json_output:
-        if not click.confirm(f"Delete image '{name}'?"):
+        if not click.confirm(f"Delete image '{scrub_raw_ids(name)}'?"):
             click.echo("Cancelled.")
             return
 
@@ -721,7 +726,7 @@ def delete_image_cmd(
         )
         return
 
-    click.echo(f"Image '{name}' has been deleted.")
+    click.echo(f"Image '{scrub_raw_ids(name)}' has been deleted.")
 
 
 # ---------------------------------------------------------------------------

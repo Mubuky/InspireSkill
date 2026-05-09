@@ -10,6 +10,7 @@ from inspire.bridge.tunnel import load_tunnel_config
 from inspire.bridge.tunnel.ssh import _test_ssh_connection
 from inspire.cli.context import Context, pass_context
 from inspire.cli.formatters import human_formatter, json_formatter
+from inspire.cli.utils.raw_ids import scrub_raw_ids
 
 
 def _check_bridges(bridges, config, timeout=5):
@@ -112,9 +113,8 @@ def tunnel_list(ctx: Context, no_check: bool) -> None:
             else:
                 status_mark = " " + click.style("[not responding]", fg="red")
 
-        click.echo(f"{default_mark}{bridge.name}:{no_internet_mark}{status_mark}")
-        click.echo(f"    URL: {bridge.proxy_url}")
-        click.echo(f"    SSH: {bridge.ssh_user}@localhost:{bridge.ssh_port}")
+        click.echo(f"{default_mark}{scrub_raw_ids(bridge.name)}:{no_internet_mark}{status_mark}")
+        click.echo(f"    SSH: {scrub_raw_ids(bridge.ssh_user)}@localhost:{bridge.ssh_port}")
         click.echo(f"    Internet: {'yes' if bridge.has_internet else 'no'}")
         if is_default:
             click.echo(human_formatter.format_success("    (default)"))

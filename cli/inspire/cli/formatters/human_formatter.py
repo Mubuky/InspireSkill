@@ -9,6 +9,8 @@ import sys
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from inspire.cli.utils.raw_ids import scrub_raw_ids
+
 # ---------------------------------------------------------------------------
 # Messages
 # ---------------------------------------------------------------------------
@@ -24,9 +26,9 @@ def format_error(message: str, hint: Optional[str] = None) -> str:
     Returns:
         Formatted error string
     """
-    lines = [f"Error: {message}"]
+    lines = [f"Error: {scrub_raw_ids(message)}"]
     if hint:
-        lines.append(f"Hint: {hint}")
+        lines.append(f"Hint: {scrub_raw_ids(hint)}")
     return "\n".join(lines)
 
 
@@ -39,7 +41,7 @@ def format_success(message: str) -> str:
     Returns:
         Formatted success string
     """
-    return f"OK {message}"
+    return f"OK {scrub_raw_ids(message)}"
 
 
 def format_warning(message: str) -> str:
@@ -51,7 +53,7 @@ def format_warning(message: str) -> str:
     Returns:
         Formatted warning string
     """
-    return f"Warning: {message}"
+    return f"Warning: {scrub_raw_ids(message)}"
 
 
 def print_error(message: str, hint: Optional[str] = None) -> None:
@@ -148,7 +150,7 @@ def format_job_status(job_data: Dict[str, Any]) -> str:
     if job_data.get("priority_level"):
         fields.append(("Priority Level", str(job_data["priority_level"])))
     if job_data.get("sub_msg"):
-        fields.append(("Message", job_data["sub_msg"][:40]))
+        fields.append(("Message", scrub_raw_ids(job_data["sub_msg"][:40])))
 
     # Timeline
     if job_data.get("created_at"):
@@ -157,7 +159,7 @@ def format_job_status(job_data: Dict[str, Any]) -> str:
         fields.append(("Finished", _format_timestamp(job_data["finished_at"])))
 
     for label, value in fields:
-        lines.append(f"{label}: {value}")
+        lines.append(f"{label}: {scrub_raw_ids(value)}")
 
     return "\n".join(lines)
 
@@ -175,12 +177,14 @@ def format_job_list(jobs: List[Dict[str, Any]]) -> str:
         return "No jobs found."
 
     # Determine dynamic column widths to avoid truncation while keeping the table aligned.
-    name_width = max(len("Name"), *(len(str(job.get("name", "N/A"))) for job in jobs))
-    status_strings = [str(job.get("status", "UNKNOWN")) for job in jobs]
+    name_strings = [scrub_raw_ids(job.get("name", "N/A")) for job in jobs]
+    name_width = max(len("Name"), *(len(name) for name in name_strings))
+    status_strings = [scrub_raw_ids(job.get("status", "UNKNOWN")) for job in jobs]
     status_width = (
         max(len("Status"), *(len(s) for s in status_strings)) if status_strings else len("Status")
     )
-    created_width = max(len("Created"), *(len(str(job.get("created_at", "N/A"))) for job in jobs))
+    created_strings = [scrub_raw_ids(job.get("created_at", "N/A")) for job in jobs]
+    created_width = max(len("Created"), *(len(created) for created in created_strings))
 
     header_line = (
         f"{'Name':<{name_width}}  {'Status':<{status_width}}  {'Created':<{created_width}}"
@@ -188,9 +192,7 @@ def format_job_list(jobs: List[Dict[str, Any]]) -> str:
     separator = "-" * len(header_line)
     lines = ["Jobs", header_line, separator]
 
-    for job, status_str in zip(jobs, status_strings):
-        name = str(job.get("name", "N/A"))
-        created = str(job.get("created_at", "N/A"))
+    for name, status_str, created in zip(name_strings, status_strings, created_strings):
 
         lines.append(
             f"{name:<{name_width}}  {status_str:<{status_width}}  {created:<{created_width}}"
@@ -231,8 +233,8 @@ def format_resources(specs: List[Dict[str, Any]], groups: List[Dict[str, Any]]) 
     )
 
     for group in groups:
-        name = group.get("name", "Unknown")
-        location = group.get("location", "")
+        name = scrub_raw_ids(group.get("name", "Unknown"))
+        location = scrub_raw_ids(group.get("location", ""))
         lines.append(f"- {name}" + (f" ({location})" if location else ""))
 
     lines.extend(
@@ -264,17 +266,19 @@ def format_nodes(nodes: List[Dict[str, Any]], total: int = 0) -> str:
 
     lines = [
         "Cluster nodes",
-        f"{'Node ID':<40} {'Pool':<12} {'Status':<12} {'GPUs':<8}",
+        f"{'Node':<40} {'Pool':<12} {'Status':<12} {'GPUs':<8}",
         "-" * 80,
     ]
 
     for node in nodes:
-        node_id = str(node.get("node_id", "N/A"))[:38]
-        pool = node.get("resource_pool", "unknown")
-        status = node.get("status", "unknown")
+        node_label = scrub_raw_ids(
+            node.get("name") or node.get("node_name") or node.get("node_id") or "N/A"
+        )[:38]
+        pool = scrub_raw_ids(node.get("resource_pool", "unknown"))
+        status = scrub_raw_ids(node.get("status", "unknown"))
         gpus = str(node.get("gpu_count", "?"))
 
-        lines.append(f"{node_id:<40} {pool:<12} {status:<12} {gpus:<8}")
+        lines.append(f"{node_label:<40} {pool:<12} {status:<12} {gpus:<8}")
 
     lines.append("-" * 80)
     if total:
@@ -314,11 +318,11 @@ def format_image_list(images: List[Dict[str, Any]]) -> str:
         raw_source = str(img.get("source", ""))
         rendered.append(
             {
-                "name": str(img.get("name", "N/A")),
-                "version": str(img.get("version", "")),
-                "source": source_labels.get(raw_source, raw_source),
-                "status": str(img.get("status", "")),
-                "framework": str(img.get("framework", "")),
+                "name": scrub_raw_ids(img.get("name", "N/A")),
+                "version": scrub_raw_ids(img.get("version", "")),
+                "source": scrub_raw_ids(source_labels.get(raw_source, raw_source)),
+                "status": scrub_raw_ids(img.get("status", "")),
+                "framework": scrub_raw_ids(img.get("framework", "")),
             }
         )
 
@@ -365,8 +369,8 @@ def format_project_list(projects: List[Dict[str, Any]]) -> str:
     ]
 
     for proj in projects:
-        name = str(proj.get("name", "N/A"))[:24]
-        priority = str(proj.get("priority_level", ""))[:10] or "-"
+        name = scrub_raw_ids(str(proj.get("name", "N/A")))[:24]
+        priority = scrub_raw_ids(str(proj.get("priority_level", "")))[:10] or "-"
         budget = proj.get("member_remain_budget", 0.0)
         budget_str = f"{budget:,.0f}"
 
@@ -400,7 +404,6 @@ def format_image_detail(image_data: Dict[str, Any]) -> str:
     source = source_labels.get(raw_source, raw_source)
 
     fields = [
-        ("Image ID", image_data.get("image_id", "N/A")),
         ("Name", image_data.get("name", "N/A")),
         ("Version", image_data.get("version", "")),
         ("Framework", image_data.get("framework", "")),
@@ -413,6 +416,6 @@ def format_image_detail(image_data: Dict[str, Any]) -> str:
 
     for label, value in fields:
         if value:
-            lines.append(f"{label}: {value}")
+            lines.append(f"{label}: {scrub_raw_ids(value)}")
 
     return "\n".join(lines)

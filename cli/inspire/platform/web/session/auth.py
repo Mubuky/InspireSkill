@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 
 def _load_runtime_config() -> Config:
-    config, _ = Config.from_files_and_env(require_credentials=False, require_target_dir=False)
+    config, _ = Config.from_files_and_env(require_credentials=False)
     return config
 
 

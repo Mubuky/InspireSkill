@@ -21,7 +21,7 @@ def make_sync_config(tmp_path: Path) -> Config:
     return Config(
         username="",
         password="",
-        target_dir=str(tmp_path),
+        path_aliases={"me": str(tmp_path)},
         github_repo="owner/repo",
         github_token="ghp_test",
         github_server="https://github.com",
@@ -43,17 +43,17 @@ def make_tunnel_config(name: str = "gpu-main") -> TunnelConfig:
     return tunnel_config
 
 
-def test_bridge_exec_without_target_dir_runs_in_remote_default_cwd(
+def test_bridge_exec_without_default_path_alias_runs_in_remote_default_cwd(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     config = make_sync_config(tmp_path)
-    config.target_dir = None
+    config.path_aliases = {}
     captured: Dict[str, Any] = {}
 
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
     monkeypatch.setattr(exec_cmd_module, "load_tunnel_config", lambda: make_tunnel_config())
     monkeypatch.setattr(exec_cmd_module, "is_tunnel_available", lambda **kwargs: True)
@@ -81,7 +81,7 @@ def test_bridge_exec_invalid_remote_env_human_returns_config_error(
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
     monkeypatch.setattr(
         exec_cmd_module,
@@ -105,7 +105,7 @@ def test_bridge_exec_invalid_remote_env_json_returns_config_error(
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
     monkeypatch.setattr(
         exec_cmd_module,
@@ -133,7 +133,7 @@ def test_bridge_exec_invalid_remote_env_workflow_branch_returns_config_error(
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     def fake_trigger(*args: Any, **kwargs: Any) -> None:
@@ -156,13 +156,13 @@ def test_bridge_ssh_invalid_remote_env_human_returns_config_error(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     config = make_sync_config(tmp_path)
-    config.target_dir = str(tmp_path / "project")
+    config.path_aliases = {"me": str(tmp_path / "project")}
     config.remote_env = {"NOT-VALID": "value"}
 
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
     monkeypatch.setattr(ssh_cmd_module, "load_tunnel_config", lambda: make_tunnel_config())
     monkeypatch.setattr(
@@ -182,13 +182,13 @@ def test_bridge_ssh_invalid_remote_env_json_returns_config_error(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     config = make_sync_config(tmp_path)
-    config.target_dir = str(tmp_path / "project")
+    config.path_aliases = {"me": str(tmp_path / "project")}
     config.remote_env = {"NOT-VALID": "value"}
 
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
     monkeypatch.setattr(ssh_cmd_module, "load_tunnel_config", lambda: make_tunnel_config())
     monkeypatch.setattr(
@@ -215,18 +215,20 @@ def test_bridge_exec_triggers_and_no_wait(monkeypatch: pytest.MonkeyPatch, tmp_p
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     def fake_trigger(
         config: Config,
         raw_command: str,
+        remote_cwd: Optional[str],
         artifact_paths: List[str],
         request_id: str,
         denylist: Optional[List[str]] = None,
     ) -> None:
         called["trigger"] = {
             "raw_command": raw_command,
+            "remote_cwd": remote_cwd,
             "artifact_paths": artifact_paths,
             "request_id": request_id,
             "denylist": denylist,
@@ -243,6 +245,7 @@ def test_bridge_exec_triggers_and_no_wait(monkeypatch: pytest.MonkeyPatch, tmp_p
     assert result.exit_code == EXIT_SUCCESS
     assert "trigger" in called
     assert called["trigger"]["raw_command"] == "echo hi"
+    assert called["trigger"]["remote_cwd"] == str(tmp_path)
 
 
 def test_bridge_exec_uses_env_denylist(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -254,12 +257,13 @@ def test_bridge_exec_uses_env_denylist(monkeypatch: pytest.MonkeyPatch, tmp_path
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     def fake_trigger(
         config: Config,
         raw_command: str,
+        remote_cwd: Optional[str],
         artifact_paths: List[str],
         request_id: str,
         denylist: Optional[List[str]] = None,
@@ -284,7 +288,7 @@ def test_bridge_exec_reports_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     def fake_trigger(*args: Any, **kwargs: Any) -> None:
@@ -313,7 +317,7 @@ def test_bridge_exec_displays_output_log(monkeypatch: pytest.MonkeyPatch, tmp_pa
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     def fake_trigger(*args: Any, **kwargs: Any) -> None:
@@ -345,7 +349,7 @@ def test_bridge_exec_json_includes_output(monkeypatch: pytest.MonkeyPatch, tmp_p
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     def fake_trigger(*args: Any, **kwargs: Any) -> None:
@@ -385,7 +389,7 @@ def test_bridge_exec_ssh_streaming_success(monkeypatch: pytest.MonkeyPatch, tmp_
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     def fake_is_tunnel_available(*args: Any, **kwargs: Any) -> bool:
@@ -430,7 +434,7 @@ def test_bridge_exec_supports_command_after_double_dash(
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
     monkeypatch.setattr(exec_cmd_module, "is_tunnel_available", lambda *args, **kwargs: True)
     monkeypatch.setattr(exec_cmd_module, "load_tunnel_config", make_tunnel_config)
@@ -460,7 +464,7 @@ def test_bridge_exec_stdin_streaming_passes_stdin_mode_to_ssh(
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
     monkeypatch.setattr(exec_cmd_module, "is_tunnel_available", lambda *args, **kwargs: True)
     monkeypatch.setattr(exec_cmd_module, "load_tunnel_config", make_tunnel_config)
@@ -491,7 +495,7 @@ def test_bridge_exec_auto_stdin_streaming_passes_stdin_mode_to_ssh(
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
     monkeypatch.setattr(exec_cmd_module, "is_tunnel_available", lambda *args, **kwargs: True)
     monkeypatch.setattr(exec_cmd_module, "load_tunnel_config", make_tunnel_config)
@@ -523,7 +527,7 @@ def test_bridge_exec_ssh_json_uses_buffered(
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     def fake_is_tunnel_available(*args: Any, **kwargs: Any) -> bool:
@@ -572,7 +576,7 @@ def test_bridge_exec_ssh_json_stdin_uses_buffered_with_pass_stdin(
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
     monkeypatch.setattr(exec_cmd_module, "is_tunnel_available", lambda *args, **kwargs: True)
     monkeypatch.setattr(exec_cmd_module, "load_tunnel_config", make_tunnel_config)
@@ -613,7 +617,7 @@ def test_bridge_exec_stdin_rejects_artifact_workflow_mode(
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     def fake_trigger(*args: Any, **kwargs: Any) -> None:
@@ -639,7 +643,7 @@ def test_bridge_exec_ssh_streaming_timeout(monkeypatch: pytest.MonkeyPatch, tmp_
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     def fake_is_tunnel_available(*args: Any, **kwargs: Any) -> bool:
@@ -668,7 +672,7 @@ def test_bridge_exec_ssh_streaming_failure(monkeypatch: pytest.MonkeyPatch, tmp_
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     def fake_is_tunnel_available(*args: Any, **kwargs: Any) -> bool:
@@ -700,7 +704,7 @@ def test_bridge_exec_does_not_fallback_after_ssh_execution_starts(
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     tunnel_config = make_tunnel_config()
@@ -734,7 +738,7 @@ def test_bridge_exec_errors_when_bridge_configured_but_not_responding(
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     def fake_is_tunnel_available(*args: Any, **kwargs: Any) -> bool:
@@ -761,7 +765,7 @@ def test_bridge_exec_json_errors_when_bridge_configured_but_not_responding(
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     def fake_is_tunnel_available(*args: Any, **kwargs: Any) -> bool:
@@ -792,7 +796,7 @@ def test_bridge_exec_fails_fast_when_notebook_is_stopped(
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     tunnel_config = TunnelConfig()
@@ -840,7 +844,7 @@ def test_bridge_exec_fails_fast_when_notebook_is_pending(
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     tunnel_config = TunnelConfig()
@@ -888,7 +892,7 @@ def test_bridge_exec_json_fails_fast_when_notebook_is_stopped(
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     tunnel_config = TunnelConfig()
@@ -938,7 +942,7 @@ def test_bridge_exec_errors_when_no_bridge_configured(
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     def fake_load_tunnel_config() -> TunnelConfig:
@@ -962,7 +966,7 @@ def test_bridge_exec_passes_requested_bridge_to_ssh(
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     def fake_is_tunnel_available(*args: Any, **kwargs: Any) -> bool:
@@ -998,7 +1002,7 @@ def test_bridge_exec_errors_when_requested_bridge_missing(
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     def fake_is_tunnel_available(*args: Any, **kwargs: Any) -> bool:
@@ -1035,7 +1039,7 @@ def test_bridge_exec_rebuilds_notebook_tunnel_before_command(
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     tunnel_config = TunnelConfig()
@@ -1088,7 +1092,7 @@ def test_bridge_exec_reconnects_after_disconnect(
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     tunnel_config = TunnelConfig()
@@ -1148,7 +1152,7 @@ def test_bridge_exec_non_notebook_bridge_exit_255_is_not_retried(
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     tunnel_config = TunnelConfig()
@@ -1188,7 +1192,7 @@ def test_bridge_exec_json_exit_255_is_not_retried_when_tunnel_is_healthy(
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     tunnel_config = TunnelConfig()
@@ -1241,7 +1245,7 @@ def test_bridge_exec_exit_255_probe_exception_is_not_retried(
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     tunnel_config = TunnelConfig()
@@ -1288,7 +1292,7 @@ def test_bridge_exec_rebuild_failure_errors_after_retry_exhausted(
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     tunnel_config = TunnelConfig()
@@ -1326,7 +1330,7 @@ def test_bridge_exec_json_errors_after_reconnect_exhausted(
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     tunnel_config = TunnelConfig()
@@ -1355,13 +1359,13 @@ def test_bridge_exec_json_errors_after_reconnect_exhausted(
 
 def test_bridge_ssh_uses_requested_bridge(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     config = make_sync_config(tmp_path)
-    config.target_dir = str(tmp_path / "project")
+    config.path_aliases = {"me": str(tmp_path / "project")}
     captured: Dict[str, Any] = {}
 
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     tunnel_config = TunnelConfig()
@@ -1398,7 +1402,7 @@ def test_bridge_ssh_rebuilds_notebook_tunnel_before_connect(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     config = make_sync_config(tmp_path)
-    config.target_dir = str(tmp_path / "project")
+    config.path_aliases = {"me": str(tmp_path / "project")}
     config.tunnel_retries = 2
     config.tunnel_retry_pause = 0.0
     calls: Dict[str, Any] = {"availability": 0, "rebuild": 0, "ssh": 0}
@@ -1406,7 +1410,7 @@ def test_bridge_ssh_rebuilds_notebook_tunnel_before_connect(
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     tunnel_config = TunnelConfig()
@@ -1453,7 +1457,7 @@ def test_bridge_ssh_fails_fast_when_notebook_is_stopped(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     config = make_sync_config(tmp_path)
-    config.target_dir = str(tmp_path / "project")
+    config.path_aliases = {"me": str(tmp_path / "project")}
     config.tunnel_retries = 3
     config.tunnel_retry_pause = 0.0
     calls: Dict[str, int] = {"rebuild": 0}
@@ -1461,7 +1465,7 @@ def test_bridge_ssh_fails_fast_when_notebook_is_stopped(
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     tunnel_config = TunnelConfig()
@@ -1501,7 +1505,7 @@ def test_bridge_ssh_fails_fast_when_notebook_is_pending(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     config = make_sync_config(tmp_path)
-    config.target_dir = str(tmp_path / "project")
+    config.path_aliases = {"me": str(tmp_path / "project")}
     config.tunnel_retries = 3
     config.tunnel_retry_pause = 0.0
     calls: Dict[str, int] = {"rebuild": 0}
@@ -1509,7 +1513,7 @@ def test_bridge_ssh_fails_fast_when_notebook_is_pending(
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     tunnel_config = TunnelConfig()
@@ -1549,7 +1553,7 @@ def test_bridge_ssh_reconnects_after_disconnect(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     config = make_sync_config(tmp_path)
-    config.target_dir = str(tmp_path / "project")
+    config.path_aliases = {"me": str(tmp_path / "project")}
     config.tunnel_retries = 2
     config.tunnel_retry_pause = 0.0
     calls: Dict[str, Any] = {"rebuild": 0}
@@ -1557,7 +1561,7 @@ def test_bridge_ssh_reconnects_after_disconnect(
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     tunnel_config = TunnelConfig()
@@ -1596,12 +1600,12 @@ def test_bridge_ssh_unavailable_non_notebook_bridge_errors(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     config = make_sync_config(tmp_path)
-    config.target_dir = str(tmp_path / "project")
+    config.path_aliases = {"me": str(tmp_path / "project")}
 
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     tunnel_config = TunnelConfig()
@@ -1626,12 +1630,12 @@ def test_bridge_ssh_missing_bridge_reports_bridge_not_found(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     config = make_sync_config(tmp_path)
-    config.target_dir = str(tmp_path / "project")
+    config.path_aliases = {"me": str(tmp_path / "project")}
 
     monkeypatch.setattr(
         Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     tunnel_config = TunnelConfig()

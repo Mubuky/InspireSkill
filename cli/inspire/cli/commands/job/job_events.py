@@ -80,7 +80,7 @@ from .job_commands import WebJobResolutionError, _close_web_client, _resolve_web
     help="Show only the last N events (applied after --type / --reason).",
 )
 @click.option("--web", is_flag=True, help="Resolve the job via the web UI API")
-@click.option("--workspace", default=None, help="Workspace alias or ws-... id (web mode)")
+@click.option("--workspace", default=None, help="Workspace alias or name (web mode)")
 @click.option(
     "--all-workspaces",
     "-A",
@@ -93,7 +93,7 @@ from .job_commands import WebJobResolutionError, _close_web_client, _resolve_web
     help="Include jobs from all users when resolving a web job name",
 )
 @click.option(
-    "--created-by", default=None, help="Filter web job name resolution by creator user ID"
+    "--created-by", default=None, help="Advanced creator filter for web job name resolution"
 )
 @click.option(
     "--max-pages",
@@ -129,7 +129,7 @@ def events(
       inspire job events <job-name> --type Warning
       inspire job events <job-name> --reason Unschedulable
       inspire job events <job-name> --instance <pod-name>
-      inspire job events --web job-...
+      inspire job events --web <job-name>
       inspire job events -A <job-name> --all-instances
       inspire job events <job-name> --from-cache
     """

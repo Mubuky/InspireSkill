@@ -320,6 +320,7 @@ def trigger_log_retrieval_workflow(
 def trigger_bridge_action_workflow(
     config: Config,
     raw_command: str,
+    remote_cwd: str | None,
     artifact_paths: list[str],
     request_id: str,
     denylist: Optional[list[str]] = None,
@@ -328,7 +329,7 @@ def trigger_bridge_action_workflow(
     inputs = {
         "raw_command": raw_command,
         "denylist": "\n".join(denylist or []),
-        "target_dir": config.target_dir or "",
+        "remote_cwd": remote_cwd or "",
         "artifact_paths": "\n".join(artifact_paths),
         "request_id": request_id,
     }

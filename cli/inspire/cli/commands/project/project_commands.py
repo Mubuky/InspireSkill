@@ -17,6 +17,8 @@ from inspire.cli.context import (
 from inspire.cli.formatters import human_formatter, json_formatter
 from inspire.cli.formatters.human_formatter import format_epoch
 from inspire.cli.utils.errors import exit_with_error as _handle_error
+from inspire.cli.utils.id_resolver import resolve_by_name
+from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.cli.utils.notebook_cli import (
     WEB_AUTH_HINT,
     require_web_session,
@@ -50,6 +52,28 @@ def _project_to_dict(proj: browser_api_module.ProjectInfo) -> dict:
         "priority_level": proj.priority_level,
         "priority_name": proj.priority_name,
     }
+
+
+def _resolve_project_name(ctx: Context, name: str, *, session) -> str:  # noqa: ANN001
+    def _lister():
+        projects = browser_api_module.list_projects(session=session)
+        return [
+            {
+                "name": project.name,
+                "id": project.project_id,
+                "status": project.priority_name,
+                "created_at": "",
+            }
+            for project in projects
+        ]
+
+    return resolve_by_name(
+        ctx,
+        name=name,
+        resource_type="project",
+        list_candidates=_lister,
+        json_output=ctx.json_output,
+    )
 
 
 def _unique_workspace_ids(values: list[str | None]) -> list[str]:
@@ -435,7 +459,7 @@ def list_projects_cmd(
 
             try:
                 _cfg, _ = _Cfg.from_files_and_env(
-                    require_credentials=False, require_target_dir=False
+                    require_credentials=False
                 )
                 cfg_candidates: list[str | None] = []
                 cfg_workspaces = getattr(_cfg, "workspaces", None)
@@ -579,12 +603,13 @@ def list_projects_cmd(
 
 
 @click.command("detail")
-@click.argument("project_id")
+@click.argument("project")
 @pass_context
-def detail_project_cmd(ctx: Context, project_id: str) -> None:
-    """Show detail for a single project (`GET /api/v1/project/{id}`)."""
+def detail_project_cmd(ctx: Context, project: str) -> None:
+    """Show detail for a single project by name."""
     session = require_web_session(ctx, hint="inspire project detail requires a logged-in web session")
     try:
+        project_id = _resolve_project_name(ctx, project, session=session)
         data = browser_api_module.get_project_detail(project_id, session=session)
     except Exception as e:
         _handle_error(ctx, "APIError", str(e), EXIT_API_ERROR)
@@ -595,23 +620,25 @@ def detail_project_cmd(ctx: Context, project_id: str) -> None:
         return
 
     click.echo("Project")
-    click.echo(f"  ID:            {data.get('id', project_id)}")
-    click.echo(f"  Name:          {data.get('name') or data.get('en_name') or 'N/A'}")
+    click.echo(f"  Name:          {scrub_raw_ids(data.get('name') or data.get('en_name') or 'N/A')}")
     if data.get("en_name") and data.get("en_name") != data.get("name"):
-        click.echo(f"  English name:  {data.get('en_name')}")
+        click.echo(f"  English name:  {scrub_raw_ids(data.get('en_name'))}")
     if data.get("description"):
-        click.echo(f"  Description:   {data.get('description')}")
+        click.echo(f"  Description:   {scrub_raw_ids(data.get('description'))}")
     if data.get("budget"):
         click.echo(f"  Budget:        {data.get('budget')}")
     if data.get("children_budget"):
         click.echo(f"  Children bgt:  {data.get('children_budget')}")
     if data.get("priority_name"):
-        click.echo(f"  Priority:      {data.get('priority_name')} ({data.get('priority_level', '?')})")
+        click.echo(
+            f"  Priority:      {scrub_raw_ids(data.get('priority_name'))} "
+            f"({scrub_raw_ids(data.get('priority_level', '?'))})"
+        )
     if data.get("created_at"):
         click.echo(f"  Created:       {format_epoch(data.get('created_at'))}")
     owner = data.get("creator") if isinstance(data.get("creator"), dict) else None
     if owner:
-        click.echo(f"  Creator:       {owner.get('name', owner.get('id', '?'))}")
+        click.echo(f"  Creator:       {scrub_raw_ids(owner.get('name') or '?')}")
 
 
 @click.command("owners")

@@ -21,11 +21,11 @@ class ValidationError(InspireAPIError):
 
 
 class JobNotFoundError(InspireAPIError):
-    """Job not found or invalid job ID"""
+    """Job not found or invalid job handle"""
 
 
 API_ERROR_CODES = {
-    100002: "Parameter error - the job ID may be invalid, truncated, or the job no longer exists",
+    100002: "Parameter error - the job handle may be invalid or the job no longer exists",
     100001: "Authentication error",
     100003: "Permission denied",
     100004: "Resource not found",
@@ -52,10 +52,10 @@ def _validate_job_id_format(job_id: str) -> Optional[str]:
     Returns None if valid, or an error message if invalid.
     """
     if not job_id:
-        return "Job ID cannot be empty"
+        return "Job handle cannot be empty"
 
     if not job_id.startswith("job-"):
-        return f"Job ID should start with 'job-', got: {job_id[:20]}..."
+        return "Job handle format is invalid"
 
     if JOB_ID_PATTERN.match(job_id):
         return None  # Valid
@@ -64,10 +64,11 @@ def _validate_job_id_format(job_id: str) -> Optional[str]:
     if actual_len < JOB_ID_EXPECTED_LENGTH:
         missing = JOB_ID_EXPECTED_LENGTH - actual_len
         return (
-            f"Job ID appears to be truncated (got {actual_len} chars, expected {JOB_ID_EXPECTED_LENGTH}). "
-            f"Missing {missing} character(s). Did you copy the full ID?"
+            "Job handle appears to be truncated "
+            f"(got {actual_len} chars, expected {JOB_ID_EXPECTED_LENGTH}). "
+            f"Missing {missing} character(s)."
         )
     elif actual_len > JOB_ID_EXPECTED_LENGTH:
-        return f"Job ID is too long (got {actual_len} chars, expected {JOB_ID_EXPECTED_LENGTH})"
+        return f"Job handle is too long (got {actual_len} chars, expected {JOB_ID_EXPECTED_LENGTH})"
     else:
-        return "Job ID format is invalid. Expected format: job-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+        return "Job handle format is invalid"

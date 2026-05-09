@@ -15,6 +15,7 @@ from inspire.cli.context import (
     pass_context,
 )
 from inspire.cli.utils.errors import exit_with_error as _handle_error
+from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.config import (
     Config,
     ConfigError,
@@ -125,7 +126,7 @@ def _show_table(
             value_str, _is_set = _get_field_value(cfg, option)
             source = _get_source_for_option(sources, option)
             source_label, source_color = SOURCE_LABELS.get(source, ("?", "white"))
-            value_display = value_str or "(not set)"
+            value_display = scrub_raw_ids(value_str or "(not set)")
             max_value_len = max(max_value_len, len(value_display))
             category_items.append((option, value_display, source_label, source_color))
 
@@ -290,7 +291,7 @@ def show_config(
 
     try:
         cfg, sources = Config.from_files_and_env(
-            require_credentials=False, require_target_dir=False
+            require_credentials=False
         )
         global_path, project_path = Config.get_config_paths()
 

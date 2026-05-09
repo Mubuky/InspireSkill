@@ -9,6 +9,7 @@ import click
 
 from inspire.cli.context import Context, EXIT_VALIDATION_ERROR
 from inspire.cli.utils.errors import exit_with_error
+from inspire.cli.utils.raw_ids import scrub_raw_ids
 
 
 _FULL_UUID_RE = re.compile(
@@ -68,7 +69,7 @@ def resolve_partial_id(
             "NotFound",
             f"No {resource_type} matching '{partial}'.",
             EXIT_VALIDATION_ERROR,
-            hint=f"Run 'inspire {resource_type} list' to see available IDs.",
+            hint=f"Run 'inspire {resource_type} list' to see available names.",
         )
 
     if len(matches) == 1:
@@ -95,7 +96,9 @@ def resolve_partial_id(
 
     click.echo(f"{len(matches)} {resource_type}s share the name '{partial}':")
     for idx, (full_id, label) in enumerate(matches, start=1):
-        click.echo(f"  [{idx}] {full_id}  {label}")
+        del full_id
+        display = scrub_raw_ids(label) or "(no extra context)"
+        click.echo(f"  [{idx}] {display}")
 
     choice = click.prompt(
         f"Select {resource_type}",
@@ -150,7 +153,7 @@ def resolve_by_name(
         exit_with_error(
             ctx,
             "ValidationError",
-            f"v2 CLI takes a {resource_type} name, not an id ({name!r}).",
+            f"v2 CLI takes a {resource_type} name, not an id / partial-id.",
             EXIT_VALIDATION_ERROR,
             hint=(
                 f"Find the name with `inspire {resource_type} list` and pass that. "
@@ -231,10 +234,10 @@ def resolve_by_name(
         created = c.get("created_at")
         if created:
             bits.append(f"created_at={created}")
-        ws = c.get("workspace_id")
+        ws = c.get("workspace_name") or c.get("workspace")
         if ws:
-            bits.append(f"ws={ws}")
-        return "  ".join(bits) if bits else ""
+            bits.append(f"workspace={ws}")
+        return scrub_raw_ids("  ".join(bits)) if bits else ""
 
     lines = [f"  [{i}] {_label(c)}" for i, c in enumerate(matches, start=1)]
     exit_with_error(
@@ -260,7 +263,26 @@ def _looks_like_platform_id(value: str) -> bool:
     v = value.strip().lower()
     if not v:
         return False
-    id_prefixes = ("job-", "hpc-job-", "rj-", "sv-", "image-", "notebook-", "nb-")
+    id_prefixes = (
+        "job-",
+        "hpc-job-",
+        "ray-",
+        "rj-",
+        "sv-",
+        "serving-",
+        "image-",
+        "img-",
+        "mirror-",
+        "model-",
+        "notebook-",
+        "nb-",
+        "project-",
+        "ws-",
+        "lcg-",
+        "quota-",
+        "spec-",
+        "user-",
+    )
     if any(v.startswith(p) for p in id_prefixes):
         return True
     # Bare UUID — stripping only colons/underscores would be wrong, just match exactly.
@@ -297,7 +319,7 @@ def reject_id_at_boundary(
         exit_with_error(
             ctx,
             "ValidationError",
-            f"v2 CLI takes a {resource_type} name, not an id ({name!r}).",
+            f"v2 CLI takes a {resource_type} name, not an id / partial-id.",
             EXIT_VALIDATION_ERROR,
             hint=f"Find the name with `{list_command}` and pass that.",
         )

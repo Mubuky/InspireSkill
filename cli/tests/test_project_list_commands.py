@@ -62,7 +62,7 @@ def test_project_list_uses_config_workspaces_when_session_discovery_missing(monk
     monkeypatch.setattr(
         config_module.Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (cfg, {})),
+        classmethod(lambda cls, require_credentials=True: (cfg, {})),
     )
     monkeypatch.setattr(project_cmd_module, "_PROJECT_LIST_MAX_WORKERS", 1)
 

@@ -15,7 +15,6 @@ _DEFAULTS_FIELD_MAP = {
     "notebook_post_start": "notebook_post_start",
     "priority": "job_priority",
     "shm_size": "shm_size",
-    "target_dir": "target_dir",
     "log_pattern": "log_pattern",
     "project_order": "project_order",
 }
@@ -41,7 +40,6 @@ def _default_config_values() -> dict[str, Any]:
         "username": "",
         "password": "",
         "base_url": "https://api.example.com",
-        "target_dir": None,
         "log_pattern": "training_master_*.log",
         "timeout": 30,
         "max_retries": 3,
@@ -212,7 +210,6 @@ def _coerce_project_default(field_name: str, raw_value: Any) -> Any:
     if field_name in {"job_priority", "shm_size"}:
         return int(raw_value)
     if field_name in {
-        "target_dir",
         "job_image",
         "notebook_image",
         "notebook_quota",

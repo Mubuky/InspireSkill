@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib
 import json
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -23,6 +24,13 @@ metrics_plot = importlib.import_module("inspire.cli.utils.metrics_plot")
 notebook_metrics_module = importlib.import_module(
     "inspire.cli.commands.notebook.notebook_metrics"
 )
+notebook_cli_module = importlib.import_module("inspire.cli.utils.notebook_cli")
+notebook_lookup_module = importlib.import_module(
+    "inspire.cli.commands.notebook.notebook_lookup"
+)
+
+_NOTEBOOK_NAME = "demo-notebook"
+_NOTEBOOK_ID = "nb-xyz"
 
 
 class _FakeSession:
@@ -48,6 +56,14 @@ def _install_common_fakes(
     """
     session = _FakeSession()
     monkeypatch.setattr(metrics_shared, "get_web_session", lambda: session)
+    monkeypatch.setattr(notebook_cli_module, "require_web_session", lambda *args, **kwargs: session)
+    monkeypatch.setattr(notebook_cli_module, "load_config", lambda _ctx: SimpleNamespace(workspaces={}))
+    monkeypatch.setattr(notebook_cli_module, "get_base_url", lambda: "https://example.test")
+    monkeypatch.setattr(
+        notebook_lookup_module,
+        "_resolve_notebook_id",
+        lambda *args, **kwargs: (_NOTEBOOK_ID, None),
+    )
 
     class _FakeBrowserApi:
         @staticmethod
@@ -112,7 +128,16 @@ def test_metrics_json_output_is_raw_time_series_and_skips_plot(
     runner = CliRunner()
     result = runner.invoke(
         cli_main,
-        ["--json", "notebook", "metrics", "nb-xyz", "--metric", "gpu,cpu", "--window", "30m"],
+        [
+            "--json",
+            "notebook",
+            "metrics",
+            _NOTEBOOK_NAME,
+            "--metric",
+            "gpu,cpu",
+            "--window",
+            "30m",
+        ],
     )
 
     assert result.exit_code == 0, result.output
@@ -120,7 +145,7 @@ def test_metrics_json_output_is_raw_time_series_and_skips_plot(
     assert envelope["success"] is True
     payload = envelope["data"]
     assert payload["resource"] == "notebook"
-    assert payload["notebook_id"] == "nb-xyz"
+    assert payload["notebook_id"] == _NOTEBOOK_ID
     assert payload["logic_compute_group_id"] == "lcg-abc"
     assert payload["task_type"] == "interactive_modeling"
     assert payload["metric_types"] == ["gpu_usage_rate", "cpu_usage_rate"]
@@ -151,7 +176,7 @@ def test_metrics_default_output_writes_png_and_prints_path(
         tmp_metrics_dir=str(tmp_path),
     )
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["notebook", "metrics", "nb-xyz", "--metric", "gpu"])
+    result = runner.invoke(cli_main, ["notebook", "metrics", _NOTEBOOK_NAME, "--metric", "gpu"])
 
     assert result.exit_code == 0, result.output
 
@@ -159,11 +184,11 @@ def test_metrics_default_output_writes_png_and_prints_path(
     out_path = render_captures[0]["out_path"]
     # Default path now includes the resource name to disambiguate the four CLI
     # entry points that share the same base dir.
-    expected = tmp_path / "notebook-nb-xyz-1000000.png"
+    expected = tmp_path / "notebook-demo-notebook-1000000.png"
     assert out_path == expected
     assert f"Chart: {expected}" in result.output
     assert render_captures[0]["task_label"] == "Notebook"
-    assert render_captures[0]["task_id"] == "nb-xyz"
+    assert render_captures[0]["task_id"] == _NOTEBOOK_NAME
 
     assert "gpu_usage_rate" in result.output
     assert "min=10.0%" in result.output
@@ -184,7 +209,7 @@ def test_metrics_no_plot_suppresses_render(
     )
     runner = CliRunner()
     result = runner.invoke(
-        cli_main, ["notebook", "metrics", "nb-xyz", "--metric", "gpu", "--no-plot"]
+        cli_main, ["notebook", "metrics", _NOTEBOOK_NAME, "--metric", "gpu", "--no-plot"]
     )
     assert result.exit_code == 0, result.output
     assert render_captures == []
@@ -203,7 +228,7 @@ def test_metrics_sparkline_flag_includes_block_chars(
     )
     runner = CliRunner()
     result = runner.invoke(
-        cli_main, ["notebook", "metrics", "nb-xyz", "--metric", "gpu", "--sparkline"]
+        cli_main, ["notebook", "metrics", _NOTEBOOK_NAME, "--metric", "gpu", "--sparkline"]
     )
     assert result.exit_code == 0, result.output
     assert any(ch in result.output for ch in "▁▂▃▄▅▆▇█")
@@ -227,7 +252,7 @@ def test_metrics_custom_plot_path_is_honored(
         [
             "notebook",
             "metrics",
-            "nb-xyz",
+            _NOTEBOOK_NAME,
             "--metric",
             "gpu",
             "--plot",
@@ -247,7 +272,7 @@ def test_metrics_rejects_unknown_alias(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     runner = CliRunner()
     result = runner.invoke(
-        cli_main, ["notebook", "metrics", "nb-xyz", "--metric", "throughput"]
+        cli_main, ["notebook", "metrics", _NOTEBOOK_NAME, "--metric", "throughput"]
     )
     assert result.exit_code == EXIT_VALIDATION_ERROR
     assert "unknown metric" in result.output
@@ -260,9 +285,10 @@ def test_metrics_errors_when_lcg_unresolvable(monkeypatch: pytest.MonkeyPatch) -
         groups=[],
     )
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["notebook", "metrics", "nb-xyz"])
+    result = runner.invoke(cli_main, ["notebook", "metrics", _NOTEBOOK_NAME])
     assert result.exit_code == EXIT_CONFIG_ERROR
-    assert "logic_compute_group_id" in result.output
+    assert "Unable to resolve compute group" in result.output
+    assert "logic_compute_group_id" not in result.output
 
 
 def test_metrics_cli_honors_explicit_lcg(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -280,7 +306,7 @@ def test_metrics_cli_honors_explicit_lcg(monkeypatch: pytest.MonkeyPatch) -> Non
             "--json",
             "notebook",
             "metrics",
-            "nb-xyz",
+            _NOTEBOOK_NAME,
             "--lcg",
             "lcg-explicit",
             "--metric",
@@ -306,7 +332,7 @@ def test_metrics_absolute_window(monkeypatch: pytest.MonkeyPatch) -> None:
             "--json",
             "notebook",
             "metrics",
-            "nb-xyz",
+            _NOTEBOOK_NAME,
             "--metric",
             "gpu",
             "--start",
@@ -377,7 +403,7 @@ def test_multi_pod_text_summary_surfaces_stragglers(
     )
     runner = CliRunner()
     result = runner.invoke(
-        cli_main, ["notebook", "metrics", "nb-xyz", "--metric", "gpu"]
+        cli_main, ["notebook", "metrics", _NOTEBOOK_NAME, "--metric", "gpu"]
     )
     assert result.exit_code == 0, result.output
     # Pod count reflected.

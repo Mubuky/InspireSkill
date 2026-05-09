@@ -30,14 +30,13 @@ from .load_common import (
 )
 
 # Keys whose *value* must differ per repository — a single account is used
-# across many repos, each with its own remote workdir / Inspire project /
+# across many repos, each with its own path aliases / Inspire project /
 # GitHub repo binding. Putting these at account level silently shadows the
 # correct project-level value, so we reject them outright. Other project-
 # scope fields (workspace aliases, default images/priority, workflow names,
 # etc.) *can* live at the account layer as defaults and are not policed here.
 ACCOUNT_LAYER_DISALLOWED_KEYS = frozenset(
     {
-        "paths.target_dir",
         "paths.log_pattern",
         "github.repo",
         "job.project_id",
@@ -160,7 +159,7 @@ def _reject_per_repo_keys(raw: dict[str, Any], account_path: Path) -> None:
         f"{', '.join(offending)}. These must live in the repo's own "
         "./.inspire/config.toml (run 'inspire init --discover' from inside "
         "the repo), not at the account level — a single account usually has "
-        "many repos with different remote workdirs / Inspire projects / "
+        "many repos with different path aliases / Inspire projects / "
         "GitHub bindings, and placing per-repo values here silently shadows "
         "the correct ones."
     )

@@ -25,6 +25,7 @@ from inspire.bridge.tunnel import (
 from inspire.bridge.tunnel.scp import run_scp_transfer
 from inspire.cli.formatters import json_formatter
 from inspire.cli.utils.errors import exit_with_error as _handle_error
+from inspire.cli.utils.raw_ids import scrub_raw_ids
 
 
 def _scp_failure_details(result: object) -> str | None:
@@ -47,7 +48,7 @@ def _warn_if_remote_path_is_relative(remote_path: str, *, download: bool) -> Non
     click.echo(
         (
             f"Warning: remote {role} '{remote_path}' is relative on the notebook; "
-            "it does not use INSPIRE_TARGET_DIR. Prefer an absolute path."
+            "it does not use path aliases. Prefer an absolute path."
         ),
         err=True,
     )
@@ -75,7 +76,7 @@ def bridge_scp(
     NOTEBOOK is the cached notebook name (omit to use the default).
     By default, uploads SOURCE (local) to DESTINATION (remote).
     Use --download to download SOURCE (remote) to DESTINATION (local).
-    Remote paths are literal and do not inherit INSPIRE_TARGET_DIR; relative
+    Remote paths are literal and do not inherit path aliases; relative
     remote paths trigger a warning. Use alias:sub/path to expand [path_aliases].
 
     \b
@@ -96,7 +97,7 @@ def bridge_scp(
     )
     bridge = notebook
     try:
-        config, _ = Config.from_files_and_env(require_target_dir=False, require_credentials=False)
+        config, _ = Config.from_files_and_env(require_credentials=False)
     except ConfigError as e:
         _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
 
@@ -144,11 +145,11 @@ def bridge_scp(
     direction = "download" if download else "upload"
 
     if not ctx.json_output and ctx.debug:
-        click.echo(f"SCP {direction}: {source} -> {destination}")
+        click.echo(f"SCP {direction}: {scrub_raw_ids(source)} -> {scrub_raw_ids(destination)}")
         if bridge:
-            click.echo(f"Notebook: {bridge}")
+            click.echo(f"Notebook: {scrub_raw_ids(bridge)}")
         if used_alias:
-            click.echo(f"Remote path: {remote_path}")
+            click.echo(f"Remote path: {scrub_raw_ids(remote_path)}")
         if recursive:
             click.echo("Mode: recursive")
 
@@ -167,7 +168,7 @@ def bridge_scp(
             detail = _scp_failure_details(result)
             message = f"SCP {direction} failed with exit code {result.returncode}"
             if detail:
-                message = f"{message}: {detail}"
+                message = f"{message}: {scrub_raw_ids(detail)}"
             _handle_error(
                 ctx,
                 "SCPFailed",
@@ -191,9 +192,9 @@ def bridge_scp(
             click.echo("OK")
 
     except BridgeNotFoundError as e:
-        _handle_error(ctx, "BridgeNotFound", str(e), EXIT_GENERAL_ERROR)
+        _handle_error(ctx, "BridgeNotFound", scrub_raw_ids(e), EXIT_GENERAL_ERROR)
     except TunnelNotAvailableError as e:
-        _handle_error(ctx, "TunnelError", str(e), EXIT_GENERAL_ERROR)
+        _handle_error(ctx, "TunnelError", scrub_raw_ids(e), EXIT_GENERAL_ERROR)
     except subprocess.TimeoutExpired:
         msg = f"SCP {direction} timed out after {timeout}s"
         _handle_error(ctx, "Timeout", msg, EXIT_TIMEOUT)

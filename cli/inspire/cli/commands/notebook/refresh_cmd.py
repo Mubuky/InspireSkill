@@ -9,6 +9,7 @@ import click
 from inspire.bridge.tunnel import load_tunnel_config, save_tunnel_config
 from inspire.cli.context import Context, EXIT_CONFIG_ERROR, pass_context
 from inspire.cli.formatters import human_formatter, json_formatter
+from inspire.cli.utils.raw_ids import scrub_raw_ids
 
 
 @click.command("update")
@@ -147,12 +148,12 @@ def tunnel_update(
         )
         return
 
-    click.echo(f"Updated cached notebook: {name}")
+    click.echo(f"Updated cached notebook: {scrub_raw_ids(name)}")
     for field in updated_fields:
         if field == "url":
-            click.echo(f"  URL: {bridge.proxy_url}")
+            click.echo("  URL: updated")
         elif field == "ssh_user":
-            click.echo(f"  SSH user: {bridge.ssh_user}")
+            click.echo(f"  SSH user: {scrub_raw_ids(bridge.ssh_user)}")
         elif field == "ssh_port":
             click.echo(f"  SSH port: {bridge.ssh_port}")
         elif field == "has_internet":

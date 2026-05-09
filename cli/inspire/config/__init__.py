@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from inspire.config.env import _parse_denylist, _parse_remote_timeout, build_env_exports
 from inspire.config.load import config_from_files_and_env, get_config_paths
-from inspire.config.load_env import config_from_env, config_from_env_for_sync
+from inspire.config.load_env import config_from_env
 from inspire.config.models import (
     CONFIG_FILENAME,
     PROJECT_CONFIG_DIR,
@@ -17,6 +17,7 @@ from inspire.config.models import (
 )
 from inspire.config.path_aliases import (  # noqa: F401
     PATH_ALIASES_SECTION,
+    default_remote_cwd,
     resolve_remote_cwd,
     resolve_remote_path_alias,
     write_project_path_alias,
@@ -62,8 +63,8 @@ __all__ = [
     "_parse_remote_timeout",
     "build_env_exports",
     "config_from_env",
-    "config_from_env_for_sync",
     "config_from_files_and_env",
+    "default_remote_cwd",
     "get_categories",
     "get_config_paths",
     "get_option_by_env",

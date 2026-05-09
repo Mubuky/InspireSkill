@@ -16,6 +16,7 @@ from inspire.cli.context import (
 from inspire.cli.formatters import human_formatter, json_formatter
 from inspire.cli.utils.auth import AuthManager, AuthenticationError
 from inspire.cli.utils.errors import exit_with_error as _handle_error
+from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.config import Config, ConfigError
 from inspire.cli.utils.id_resolver import resolve_by_name
 from inspire.config.workspaces import select_workspace_id
@@ -63,7 +64,7 @@ def _resolve_project_id(config: Config, requested: Optional[str]) -> str:
     if requested:
         if requested.startswith("project-"):
             raise ConfigError(
-                f"--project takes a project name, not a raw ID ({requested!r}). "
+                "--project takes a project name, not a raw ID. "
                 "See `inspire config context` for available names."
             )
         if requested in config.projects:
@@ -88,6 +89,27 @@ def _resolve_project_id(config: Config, requested: Optional[str]) -> str:
         "Missing project. Set --project <name> or configure [context].project in "
         "./.inspire/config.toml."
     )
+
+
+def _project_label(config: Config, project_id: str, requested: Optional[str]) -> str:
+    if requested:
+        return requested
+    for name, candidate in (config.projects or {}).items():
+        if candidate == project_id:
+            return name
+    entry = (config.project_catalog or {}).get(project_id)
+    if isinstance(entry, dict) and entry.get("name"):
+        return str(entry["name"])
+    return "(project name unavailable)"
+
+
+def _workspace_label(config: Config, workspace_id: str, requested: Optional[str]) -> str:
+    if requested:
+        return requested
+    for name, candidate in (config.workspaces or {}).items():
+        if candidate == workspace_id:
+            return name
+    return "(workspace name unavailable)"
 
 
 def _extract_data(result: dict[str, Any]) -> dict[str, Any]:
@@ -128,7 +150,7 @@ def _format_hpc_list_rows(rows: list[dict[str, str]]) -> str:
 
 @click.command("list")
 @click.option("--workspace", default=None, help="Workspace name (from [workspaces])")
-@click.option("--created-by", default=None, help="Filter by creator user ID")
+@click.option("--created-by", default=None, help="Advanced creator filter")
 @click.option("--status", "status_filter", default=None, help="Filter by job status")
 @click.option("--page-num", type=int, default=1, show_default=True, help="Page number")
 @click.option("--page-size", type=int, default=50, show_default=True, help="Page size")
@@ -163,12 +185,12 @@ def list_hpc(
         rows = [
             {
                 "job_id": job.job_id or "N/A",
-                "name": job.name or "N/A",
-                "status": job.status or "N/A",
-                "created_at": job.created_at or "N/A",
-                "entrypoint": job.entrypoint or "",
-                "project_name": job.project_name or "",
-                "compute_group_name": job.compute_group_name or "",
+                "name": scrub_raw_ids(job.name or "N/A"),
+                "status": scrub_raw_ids(job.status or "N/A"),
+                "created_at": scrub_raw_ids(job.created_at or "N/A"),
+                "entrypoint": scrub_raw_ids(job.entrypoint or ""),
+                "project_name": scrub_raw_ids(job.project_name or ""),
+                "compute_group_name": scrub_raw_ids(job.compute_group_name or ""),
                 "workspace_id": job.workspace_id or "",
             }
             for job in jobs
@@ -310,7 +332,7 @@ def create_hpc(
             resolve_quota,
         )
 
-        config, _ = Config.from_files_and_env(require_target_dir=False)
+        config, _ = Config.from_files_and_env()
         api = AuthManager.get_api(config)
 
         resolved_project_id = _resolve_project_id(config, project)
@@ -392,12 +414,17 @@ def create_hpc(
             return
 
         click.echo(human_formatter.format_success(f"HPC job created: {name}"))
-        click.echo(f"Project:   {resolved_project_id}")
-        click.echo(f"Workspace: {resolved_workspace_id}")
-        click.echo(f"Spec:      {spec_id}")
+        click.echo(
+            f"Project:   {scrub_raw_ids(_project_label(config, resolved_project_id, project))}"
+        )
+        click.echo(
+            f"Workspace: {scrub_raw_ids(_workspace_label(config, resolved_workspace_id, workspace))}"
+        )
+        click.echo(f"Resource:  {quota_spec.display()}")
+        click.echo(f"Compute:   {scrub_raw_ids(resolved_quota.compute_group_name)}")
         if final_priority is not None:
             click.echo(f"Requested Priority: {final_priority}")
-        click.echo(f"Entry:     {entrypoint}")
+        click.echo(f"Entry:     {scrub_raw_ids(entrypoint)}")
 
     except ConfigError as e:
         _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
@@ -415,7 +442,7 @@ def create_hpc(
 def status_hpc(ctx: Context, name: str) -> None:
     """Get status/details of an HPC job (pass the job name)."""
     try:
-        config, _ = Config.from_files_and_env(require_target_dir=False)
+        config, _ = Config.from_files_and_env()
         api = AuthManager.get_api(config)
         job_id = _resolve_hpc_name(ctx, name)
         result = api.get_hpc_job_detail(job_id)
@@ -426,20 +453,20 @@ def status_hpc(ctx: Context, name: str) -> None:
             return
 
         click.echo("HPC Job Status")
-        click.echo(f"Name:   {data.get('name', 'N/A')}")
-        click.echo(f"Status: {data.get('status', 'N/A')}")
+        click.echo(f"Name:   {scrub_raw_ids(data.get('name', 'N/A'))}")
+        click.echo(f"Status: {scrub_raw_ids(data.get('status', 'N/A'))}")
         if data.get("priority") is not None:
             click.echo(f"Requested Priority: {data.get('priority')}")
         if data.get("priority_name"):
-            click.echo(f"Priority Name: {data.get('priority_name')}")
+            click.echo(f"Priority Name: {scrub_raw_ids(data.get('priority_name'))}")
         if data.get("priority_level"):
-            click.echo(f"Priority Level: {data.get('priority_level')}")
+            click.echo(f"Priority Level: {scrub_raw_ids(data.get('priority_level'))}")
         if data.get("sub_status"):
-            click.echo(f"Sub:    {data.get('sub_status')}")
+            click.echo(f"Sub:    {scrub_raw_ids(data.get('sub_status'))}")
         if data.get("created_at"):
-            click.echo(f"Created: {data.get('created_at')}")
+            click.echo(f"Created: {scrub_raw_ids(data.get('created_at'))}")
         if data.get("updated_at"):
-            click.echo(f"Updated: {data.get('updated_at')}")
+            click.echo(f"Updated: {scrub_raw_ids(data.get('updated_at'))}")
 
     except ConfigError as e:
         _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
@@ -463,7 +490,7 @@ def status_hpc(ctx: Context, name: str) -> None:
 def stop_hpc(ctx: Context, name: str, pick: Optional[int]) -> None:
     """Stop an HPC job (pass the job name)."""
     try:
-        config, _ = Config.from_files_and_env(require_target_dir=False)
+        config, _ = Config.from_files_and_env()
         api = AuthManager.get_api(config)
         job_id = _resolve_hpc_name(ctx, name, pick=pick)
         api.stop_hpc_job(job_id)
@@ -511,7 +538,7 @@ def delete_hpc(ctx: Context, name: str, yes: bool, pick: Optional[int]) -> None:
     """
     if not yes and not ctx.json_output:
         click.confirm(
-            f"Permanently delete HPC job '{name}'? This cannot be undone.",
+            f"Permanently delete HPC job '{scrub_raw_ids(name)}'? This cannot be undone.",
             abort=True,
         )
 

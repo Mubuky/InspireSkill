@@ -35,6 +35,7 @@ from inspire.cli.utils.job_shell import (
     open_job_shell,
     select_job_instance,
 )
+from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.config import Config, ConfigError
 from inspire.config.workspaces import select_workspace_id
 from inspire.platform.web import browser_api as browser_api_module
@@ -90,7 +91,10 @@ def _resolve_explicit_workspace(config: Config, workspace: Optional[str]) -> Opt
     if not workspace:
         raise ConfigError("Workspace cannot be empty")
     if _looks_like_workspace_id(workspace):
-        return select_workspace_id(config, explicit_workspace_id=workspace)
+        raise ConfigError(
+            "--workspace takes a workspace name or alias, not a raw ID. "
+            "See `inspire config context` for available names."
+        )
     return select_workspace_id(config, explicit_workspace_name=workspace)
 
 
@@ -313,11 +317,11 @@ def _format_web_job_status(job_data: dict) -> str:
     lines = ["Web Job Status"]
     for label, value in fields:
         if value not in (None, ""):
-            lines.append(f"{label}: {value}")
+            lines.append(f"{label}: {scrub_raw_ids(value)}")
     command = str(job_data.get("command") or "").strip()
     if command:
         lines.append("Command:")
-        lines.append(command)
+        lines.append(scrub_raw_ids(command))
     return "\n".join(lines)
 
 
@@ -325,23 +329,33 @@ def _format_job_instances(instances: list[dict]) -> str:
     if not instances:
         return "No job instances found."
 
-    name_w = max(len("Instance"), *(len(str(i.get("name") or "")) for i in instances))
-    status_w = max(len("Status"), *(len(str(i.get("instance_status") or "")) for i in instances))
-    type_w = max(len("Type"), *(len(str(i.get("instance_type") or "")) for i in instances))
-    node_w = max(len("Node"), *(len(str(i.get("node") or "")) for i in instances))
+    rendered = [
+        {
+            "name": scrub_raw_ids(i.get("name") or ""),
+            "status": scrub_raw_ids(i.get("instance_status") or ""),
+            "type": scrub_raw_ids(i.get("instance_type") or ""),
+            "node": scrub_raw_ids(i.get("node") or ""),
+            "created": human_formatter.format_epoch(i.get("created_at")),
+        }
+        for i in instances
+    ]
+    name_w = max(len("Instance"), *(len(str(i["name"])) for i in rendered))
+    status_w = max(len("Status"), *(len(str(i["status"])) for i in rendered))
+    type_w = max(len("Type"), *(len(str(i["type"])) for i in rendered))
+    node_w = max(len("Node"), *(len(str(i["node"])) for i in rendered))
     header = (
         f"{'Instance':<{name_w}} {'Status':<{status_w}} "
         f"{'Type':<{type_w}} {'Node':<{node_w}} {'Created'}"
     )
     sep = "-" * len(header)
     lines = ["Job Instances", header, sep]
-    for inst in instances:
+    for inst in rendered:
         lines.append(
-            f"{str(inst.get('name') or ''):<{name_w}} "
-            f"{str(inst.get('instance_status') or ''):<{status_w}} "
-            f"{str(inst.get('instance_type') or ''):<{type_w}} "
-            f"{str(inst.get('node') or ''):<{node_w}} "
-            f"{human_formatter.format_epoch(inst.get('created_at'))}"
+            f"{inst['name']:<{name_w}} "
+            f"{inst['status']:<{status_w}} "
+            f"{inst['type']:<{type_w}} "
+            f"{inst['node']:<{node_w}} "
+            f"{inst['created']}"
         )
     lines.append(sep)
     lines.append(f"Total: {len(instances)} instance(s)")
@@ -358,7 +372,7 @@ def _resolve_web_job_id(
     created_by: Optional[str],
     max_pages: int,
     pick: Optional[int] = None,
-    allow_raw_id: bool = True,
+    allow_raw_id: bool = False,
 ) -> str:
     job = (job or "").strip()
     if not job:
@@ -367,14 +381,14 @@ def _resolve_web_job_id(
         if allow_raw_id:
             return job
         raise WebJobValidationError(
-            f"v2 CLI takes a job name, not an id / partial-id ({job!r}). "
+            "v2 CLI takes a job name, not an id / partial-id. "
             "Use `inspire job list -A` to find the name and pass that instead."
         )
     if not allow_raw_id and (
         is_full_uuid(job, prefix="job-") or is_partial_id(job, prefix="job-")
     ):
         raise WebJobValidationError(
-            f"v2 CLI takes a job name, not an id / partial-id ({job!r}). "
+            "v2 CLI takes a job name, not an id / partial-id. "
             "Use `inspire job list -A` to find the name and pass that instead."
         )
 
@@ -397,25 +411,29 @@ def _resolve_web_job_id(
         candidate_rows = exact if exact else rows
         if pick < 1 or pick > len(candidate_rows):
             raise WebJobResolutionError(
-                f"--pick {pick} out of range; {len(candidate_rows)} web jobs match {job!r}."
+                f"--pick {pick} out of range; {len(candidate_rows)} web jobs match "
+                f"{scrub_raw_ids(job)!r}."
             )
         return str(candidate_rows[pick - 1]["job_id"])
     if len(exact) == 1:
         return str(exact[0]["job_id"])
     if len(exact) > 1:
-        candidate_names = ", ".join(str(row.get("name") or "") for row in exact[:5])
+        candidate_names = ", ".join(scrub_raw_ids(row.get("name") or "") for row in exact[:5])
         raise WebJobResolutionError(
-            f"Multiple web jobs share name {job!r}; refine the name. Candidates: {candidate_names}"
+            f"Multiple web jobs share name {scrub_raw_ids(job)!r}; refine the name. "
+            f"Candidates: {candidate_names}"
         )
     if len(rows) == 1:
         return str(rows[0]["job_id"])
     if rows:
-        candidate_names = ", ".join(str(row.get("name") or "") for row in rows[:5])
+        candidate_names = ", ".join(scrub_raw_ids(row.get("name") or "") for row in rows[:5])
         raise WebJobResolutionError(
-            f"Multiple web jobs match {job!r}; pass the full job name. Candidates: {candidate_names}"
+            f"Multiple web jobs match {scrub_raw_ids(job)!r}; pass the full job name. "
+            f"Candidates: {candidate_names}"
         )
     raise WebJobResolutionError(
-        f"No web job matching {job!r} found. Try `inspire job list -A --name {job}`."
+        f"No web job matching {scrub_raw_ids(job)!r} found. "
+        f"Try `inspire job list -A --name {scrub_raw_ids(job)}`."
     )
 
 
@@ -430,14 +448,29 @@ def _format_job_list(rows: list[dict]) -> str:
     if not rows:
         return "No jobs found."
 
-    name_w = max(len("Name"), *(len(str(r["name"])) for r in rows))
-    status_w = max(len("Status"), *(len(str(r["status"])) for r in rows))
-    created_w = max(len("Created"), *(len(str(r["created_at"])) for r in rows))
+    rendered_rows = [
+        {
+            **r,
+            "name": scrub_raw_ids(r.get("name", "")),
+            "status": scrub_raw_ids(r.get("status", "")),
+            "created_at": scrub_raw_ids(r.get("created_at", "")),
+            "workspace_name": scrub_raw_ids(r.get("workspace_name", "")),
+            "created_by_name": scrub_raw_ids(r.get("created_by_name", "")),
+        }
+        for r in rows
+    ]
+
+    name_w = max(len("Name"), *(len(str(r["name"])) for r in rendered_rows))
+    status_w = max(len("Status"), *(len(str(r["status"])) for r in rendered_rows))
+    created_w = max(len("Created"), *(len(str(r["created_at"])) for r in rendered_rows))
     workspace_w = max(
         len("Workspace"),
-        *(len(str(r.get("workspace_name") or "")) for r in rows),
+        *(len(str(r.get("workspace_name") or "")) for r in rendered_rows),
     )
-    user_w = max(len("Created By"), *(len(str(r.get("created_by_name") or "")) for r in rows))
+    user_w = max(
+        len("Created By"),
+        *(len(str(r.get("created_by_name") or "")) for r in rendered_rows),
+    )
 
     header = (
         f"{'Name':<{name_w}}  {'Status':<{status_w}}  "
@@ -445,7 +478,7 @@ def _format_job_list(rows: list[dict]) -> str:
     )
     sep = "-" * len(header)
     lines = ["Jobs", header, sep]
-    for row in rows:
+    for row in rendered_rows:
         workspace = str(row.get("workspace_name") or "")
         created_by = str(row.get("created_by_name") or "")
         lines.append(
@@ -664,8 +697,8 @@ def _watch_jobs(
                         s = (entry.get("status") or "").lower()
                         emoji = "✅" if "succeeded" in s else "❌"
                         click.echo(
-                            f"{str(entry.get('name', 'N/A')):<32}  "
-                            f"{emoji} {entry.get('status', 'N/A')}"
+                            f"{scrub_raw_ids(entry.get('name', 'N/A')):<32}  "
+                            f"{emoji} {scrub_raw_ids(entry.get('status', 'N/A'))}"
                         )
                 click.echo(f"\n(refreshing every {interval}s; Ctrl+C to stop)")
 
@@ -710,7 +743,7 @@ def _watch_jobs(
     is_flag=True,
     help="Include jobs from all users (default: current user only)",
 )
-@click.option("--created-by", default=None, help="Filter by creator user ID")
+@click.option("--created-by", default=None, help="Advanced creator filter")
 @click.option("--page-num", type=int, default=1, show_default=True, help="Web list page number")
 @click.option("--page-size", type=int, default=100, show_default=True, help="Web list page size")
 @click.option(
@@ -825,7 +858,7 @@ def list_jobs(
     help="Resolve the job name across every visible workspace, not just the current one",
 )
 @click.option("--all-users", is_flag=True, help="Include jobs from all users when resolving a name")
-@click.option("--created-by", default=None, help="Filter web job name resolution by creator user ID")
+@click.option("--created-by", default=None, help="Advanced creator filter for web job name resolution")
 @click.option(
     "--max-pages",
     type=int,
@@ -852,7 +885,7 @@ def status(
     \b
     Example:
         inspire job status my-training-run
-        inspire job status --web job-...
+        inspire job status --web my-training-run
     """
     try:
         config, _ = Config.from_files_and_env(require_credentials=False)
@@ -919,7 +952,7 @@ def status(
     help="Search every visible workspace when resolving a job name",
 )
 @click.option("--all-users", is_flag=True, help="Include jobs from all users when resolving a name")
-@click.option("--created-by", default=None, help="Filter name resolution by creator user ID")
+@click.option("--created-by", default=None, help="Advanced creator filter for name resolution")
 @click.option("--page-num", type=int, default=1, show_default=True, help="Instance page number")
 @click.option("--page-size", type=int, default=200, show_default=True, help="Instance page size")
 @click.option(
@@ -1070,7 +1103,7 @@ def delete(ctx: Context, job: str, yes: bool, pick: Optional[int], all_workspace
 
     if not yes and not ctx.json_output:
         click.confirm(
-            f"Permanently delete training job '{job}'? This cannot be undone.",
+            f"Permanently delete training job '{scrub_raw_ids(job)}'? This cannot be undone.",
             abort=True,
         )
 
@@ -1112,7 +1145,7 @@ def delete(ctx: Context, job: str, yes: bool, pick: Optional[int], all_workspace
     help="Resolve the job name across every visible workspace, not just the current one",
 )
 @click.option("--all-users", is_flag=True, help="Include jobs from all users in web mode")
-@click.option("--created-by", default=None, help="Filter web job name resolution by creator user ID")
+@click.option("--created-by", default=None, help="Advanced creator filter for web job name resolution")
 @click.option(
     "--max-pages",
     type=int,
@@ -1141,7 +1174,7 @@ def wait(
     \b
     Example:
         inspire job wait my-training-run --timeout 7200
-        inspire job wait --web job-... --timeout 60
+        inspire job wait --web my-training-run --timeout 60
     """
     try:
         config, _ = Config.from_files_and_env(require_credentials=False)
@@ -1173,7 +1206,9 @@ def wait(
         last_status = None
 
         if not ctx.json_output:
-            click.echo(f"Waiting for job {job} (timeout: {timeout}s, interval: {interval}s)")
+            click.echo(
+                f"Waiting for job {scrub_raw_ids(job)} (timeout: {timeout}s, interval: {interval}s)"
+            )
 
         while True:
             elapsed = time.time() - start_time
@@ -1207,14 +1242,15 @@ def wait(
                             )
                         )
                     else:
-                        click.echo(f"\nStatus: {current_status}")
+                        click.echo(f"\nStatus: {scrub_raw_ids(current_status)}")
                     last_status = current_status
                 else:
                     if not ctx.json_output:
                         mins = int(elapsed // 60)
                         secs = int(elapsed % 60)
                         click.echo(
-                            f"\r[{mins:02d}:{secs:02d}] Waiting... Status: {current_status}",
+                            f"\r[{mins:02d}:{secs:02d}] Waiting... "
+                            f"Status: {scrub_raw_ids(current_status)}",
                             nl=False,
                         )
 
@@ -1231,7 +1267,7 @@ def wait(
 
             except Exception as e:
                 if not ctx.json_output:
-                    click.echo(f"\nWarning: Failed to get status: {e}")
+                    click.echo(f"\nWarning: Failed to get status: {scrub_raw_ids(e)}")
 
             time.sleep(interval)
 
@@ -1260,7 +1296,7 @@ def wait(
     help="Resolve the job name across every visible workspace, not just the current one",
 )
 @click.option("--all-users", is_flag=True, help="Include jobs from all users in web mode")
-@click.option("--created-by", default=None, help="Filter web job name resolution by creator user ID")
+@click.option("--created-by", default=None, help="Advanced creator filter for web job name resolution")
 @click.option(
     "--max-pages",
     type=int,
@@ -1323,7 +1359,7 @@ def show_command(
                 )
             )
         else:
-            click.echo(command_value)
+            click.echo(scrub_raw_ids(command_value))
 
     except ConfigError as e:
         _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
@@ -1359,7 +1395,7 @@ def show_command(
     help="Resolve the job name across every visible workspace, not just the current one",
 )
 @click.option("--all-users", is_flag=True, help="Include jobs from all users when resolving a name")
-@click.option("--created-by", default=None, help="Filter job name resolution by creator user ID")
+@click.option("--created-by", default=None, help="Advanced creator filter for job name resolution")
 @click.option(
     "--max-pages",
     type=int,
@@ -1430,7 +1466,10 @@ def shell(
         )
 
         if not ctx.json_output:
-            click.echo(f"Opening shell: {job} / {selected.name}", err=True)
+            click.echo(
+                f"Opening shell: {scrub_raw_ids(job)} / {scrub_raw_ids(selected.name)}",
+                err=True,
+            )
             click.echo("Press Ctrl-] to disconnect.", err=True)
 
         code = open_job_shell(job_id=job_id, instance_name=selected.name, session=session)

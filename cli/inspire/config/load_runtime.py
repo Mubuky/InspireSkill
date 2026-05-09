@@ -95,7 +95,6 @@ def _validate_required_config(
     *,
     config_dict: dict[str, Any],
     require_credentials: bool,
-    require_target_dir: bool,
 ) -> None:
     if require_credentials:
         if not config_dict["username"] or not config_dict["password"]:
@@ -103,14 +102,6 @@ def _validate_required_config(
                 "Missing platform credentials for the active account. Run "
                 "`inspire account add <name>` to (re)configure them."
             )
-
-    if require_target_dir and not config_dict["target_dir"]:
-        raise ConfigError(
-            "Missing target directory configuration.\n"
-            "Set INSPIRE_TARGET_DIR env var or add to config.toml:\n"
-            "  [paths]\n"
-            "  target_dir = '/path/to/shared/directory'"
-        )
 
 
 __all__ = [

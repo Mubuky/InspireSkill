@@ -94,7 +94,7 @@ def lifecycle(ctx: Context, name: str, json_output_local: bool) -> None:
 
     if not runs:
         click.echo(
-            f"No run records for notebook {notebook_id} "
+            f"No run records for notebook {name} "
             "(may be newly-created or already GC'd)."
         )
         return

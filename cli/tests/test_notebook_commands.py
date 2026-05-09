@@ -29,7 +29,7 @@ def make_test_config(tmp_path: Path, include_compute_groups: bool = False) -> co
         username="user",
         password="pass",
         base_url="https://example.invalid",
-        target_dir=str(tmp_path / "logs"),
+        path_aliases={"me": str(tmp_path / "logs")},
         log_cache_dir=str(tmp_path / "log_cache"),
         timeout=5,
         max_retries=0,
@@ -175,7 +175,7 @@ def test_notebook_connections_reads_active_account_cache(
     monkeypatch.setattr(
         config_module.Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
 
     def fake_load_tunnel_config(account=None):  # type: ignore[no-untyped-def]
@@ -319,7 +319,7 @@ def test_notebook_start_accepts_name(monkeypatch: pytest.MonkeyPatch, tmp_path: 
         username="user",
         password="pass",
         base_url="https://example.invalid",
-        target_dir=str(tmp_path / "logs"),
+        path_aliases={"me": str(tmp_path / "logs")},
         log_cache_dir=str(tmp_path / "log_cache"),
         workspaces={"a": ws_cpu, "b": ws_gpu},
         timeout=5,
@@ -328,7 +328,7 @@ def test_notebook_start_accepts_name(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     )
 
     def fake_from_files_and_env(
-        cls, require_target_dir: bool = False, require_credentials: bool = True
+        cls, require_credentials: bool = True
     ):  # type: ignore[override]
         return config, {}
 
@@ -414,7 +414,7 @@ def test_notebook_start_name_conflict_prompts_selection(
         username="user",
         password="pass",
         base_url="https://example.invalid",
-        target_dir=str(tmp_path / "logs"),
+        path_aliases={"me": str(tmp_path / "logs")},
         log_cache_dir=str(tmp_path / "log_cache"),
         workspaces={"a": ws_cpu, "b": ws_gpu},
         timeout=5,
@@ -423,7 +423,7 @@ def test_notebook_start_name_conflict_prompts_selection(
     )
 
     def fake_from_files_and_env(
-        cls, require_target_dir: bool = False, require_credentials: bool = True
+        cls, require_credentials: bool = True
     ):  # type: ignore[override]
         return config, {}
 
@@ -520,7 +520,7 @@ def test_notebook_start_warns_when_no_wait_conflicts_with_configured_post_start(
         username="user",
         password="pass",
         base_url="https://example.invalid",
-        target_dir=str(tmp_path / "logs"),
+        path_aliases={"me": str(tmp_path / "logs")},
         log_cache_dir=str(tmp_path / "log_cache"),
         workspaces={"a": ws_cpu, "b": ws_gpu},
         notebook_post_start="echo from config",
@@ -530,7 +530,7 @@ def test_notebook_start_warns_when_no_wait_conflicts_with_configured_post_start(
     )
 
     def fake_from_files_and_env(
-        cls, require_target_dir: bool = False, require_credentials: bool = True
+        cls, require_credentials: bool = True
     ):  # type: ignore[override]
         return config, {}
 
@@ -1757,7 +1757,6 @@ def test_notebook_exec_cwd_uses_path_alias(
     config = config_module.Config(
         username="",
         password="",
-        target_dir="/inspire/hdd/project/topic/alice/default",
         path_aliases={"me": "/inspire/ssd/project/topic/alice/"},
     )
     tunnel_config = tunnel_module.TunnelConfig()
@@ -1769,7 +1768,7 @@ def test_notebook_exec_cwd_uses_path_alias(
     monkeypatch.setattr(
         config_module.Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
     monkeypatch.setattr(remote_exec_module, "load_tunnel_config", lambda: tunnel_config)
     monkeypatch.setattr(remote_exec_module, "is_tunnel_available", lambda *args, **kwargs: True)
@@ -1797,7 +1796,6 @@ def test_notebook_shell_cwd_uses_path_alias(
     config = config_module.Config(
         username="",
         password="",
-        target_dir="/inspire/hdd/project/topic/alice/default",
         path_aliases={"me": "/inspire/ssd/project/topic/alice/"},
     )
     tunnel_config = tunnel_module.TunnelConfig()
@@ -1809,7 +1807,7 @@ def test_notebook_shell_cwd_uses_path_alias(
     monkeypatch.setattr(
         config_module.Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
     monkeypatch.setattr(remote_shell_module, "load_tunnel_config", lambda: tunnel_config)
     monkeypatch.setattr(remote_shell_module, "is_tunnel_available", lambda *args, **kwargs: True)
@@ -1833,7 +1831,7 @@ def test_notebook_shell_cwd_uses_path_alias(
     )
 
 
-def test_notebook_shell_without_target_dir_uses_login_home(
+def test_notebook_shell_without_default_path_alias_uses_login_home(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config = config_module.Config(username="", password="")
@@ -1846,7 +1844,7 @@ def test_notebook_shell_without_target_dir_uses_login_home(
     monkeypatch.setattr(
         config_module.Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
     monkeypatch.setattr(remote_shell_module, "load_tunnel_config", lambda: tunnel_config)
     monkeypatch.setattr(remote_shell_module, "is_tunnel_available", lambda *args, **kwargs: True)
@@ -1868,7 +1866,7 @@ def test_notebook_shell_without_target_dir_uses_login_home(
     assert "Working directory: $HOME" in result.output
 
 
-def test_notebook_ssh_cache_hit_without_target_dir_uses_login_home(
+def test_notebook_ssh_cache_hit_without_default_path_alias_uses_login_home(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import inspire.accounts as accounts_mod
@@ -1884,7 +1882,7 @@ def test_notebook_ssh_cache_hit_without_target_dir_uses_login_home(
     monkeypatch.setattr(
         config_module.Config,
         "from_files_and_env",
-        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+        classmethod(lambda cls, require_credentials=True: (config, {})),
     )
     monkeypatch.setattr(tunnel_module, "load_tunnel_config", lambda account=None: tunnel_config)
     monkeypatch.setattr(remote_shell_module, "load_tunnel_config", lambda: tunnel_config)

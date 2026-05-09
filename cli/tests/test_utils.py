@@ -57,25 +57,6 @@ class TestConfig:
         with pytest.raises(ConfigError, match="Missing platform credentials"):
             Config.from_env()
 
-    def test_from_env_require_target_dir(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test error when target dir is required but missing."""
-        monkeypatch.setenv("INSPIRE_USERNAME", "testuser")
-        monkeypatch.setenv("INSPIRE_PASSWORD", "testpass")
-        monkeypatch.delenv("INSPIRE_TARGET_DIR", raising=False)
-
-        with pytest.raises(ConfigError, match="Missing INSPIRE_TARGET_DIR"):
-            Config.from_env(require_target_dir=True)
-
-    def test_from_env_with_target_dir(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test loading config with target dir."""
-        monkeypatch.setenv("INSPIRE_USERNAME", "testuser")
-        monkeypatch.setenv("INSPIRE_PASSWORD", "testpass")
-        monkeypatch.setenv("INSPIRE_TARGET_DIR", "/shared/train")
-
-        config = Config.from_env(require_target_dir=True)
-
-        assert config.target_dir == "/shared/train"
-
     def test_from_env_with_api_settings(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test loading config with custom API settings."""
         monkeypatch.setenv("INSPIRE_USERNAME", "testuser")

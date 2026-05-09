@@ -11,6 +11,8 @@ from inspire.cli.main import main as cli_main
 from inspire.cli.context import EXIT_VALIDATION_ERROR
 from inspire.cli.formatters.human_formatter import format_image_list, format_image_detail
 from inspire import config as config_module
+from inspire.cli.commands.image import image_commands as image_commands_module
+from inspire.cli.commands.notebook import notebook_lookup as notebook_lookup_module
 from inspire.platform.web import browser_api as browser_api_module
 from inspire.platform.web import session as web_session_module
 from inspire.platform.web.browser_api.images import (
@@ -35,7 +37,7 @@ def _make_config(tmp_path: Path) -> config_module.Config:
         username="user",
         password="pass",
         base_url="https://example.invalid",
-        target_dir=str(tmp_path / "logs"),
+        path_aliases={"me": str(tmp_path / "logs")},
         log_cache_dir=str(tmp_path / "log_cache"),
         timeout=5,
         max_retries=0,
@@ -50,7 +52,6 @@ def _patch_config_and_session(
 
     def fake_from_files_and_env(
         cls,
-        require_target_dir: bool = False,
         require_credentials: bool = True,
     ) -> tuple:
         return config, {}
@@ -65,7 +66,32 @@ def _patch_config_and_session(
         "get_web_session",
         lambda: FakeWebSession(),
     )
+    monkeypatch.setattr(
+        notebook_lookup_module,
+        "_resolve_notebook_id",
+        lambda *args, **kwargs: ("notebook-abc", None),
+    )
     return config
+
+
+def _patch_image_candidates(
+    monkeypatch: pytest.MonkeyPatch, *images: CustomImageInfo
+) -> None:
+    monkeypatch.setattr(
+        browser_api_module,
+        "list_images_by_source",
+        lambda source="official", session=None: list(images),
+    )
+
+
+def _patch_image_name_resolver(
+    monkeypatch: pytest.MonkeyPatch, mapping: dict[str, str]
+) -> None:
+    def _fake_resolve(ctx, name: str, *, pick: Optional[int] = None) -> str:  # noqa: ANN001
+        del ctx, pick
+        return mapping[name]
+
+    monkeypatch.setattr(image_commands_module, "_resolve_image_name", _fake_resolve)
 
 
 # ---------------------------------------------------------------------------
@@ -464,6 +490,7 @@ def test_image_list_all_sources_all_fail(monkeypatch: pytest.MonkeyPatch, tmp_pa
 
 def test_image_detail_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     _patch_config_and_session(monkeypatch, tmp_path)
+    _patch_image_name_resolver(monkeypatch, {"detail-img:2.0": "img-123"})
 
     monkeypatch.setattr(
         browser_api_module,
@@ -482,7 +509,7 @@ def test_image_detail_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> N
     )
 
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["--json", "image", "detail", "img-123"])
+    result = runner.invoke(cli_main, ["--json", "image", "detail", "detail-img:2.0"])
     assert result.exit_code == 0
 
     payload = json.loads(result.output)
@@ -492,6 +519,7 @@ def test_image_detail_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> N
 
 def test_image_detail_human(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     _patch_config_and_session(monkeypatch, tmp_path)
+    _patch_image_name_resolver(monkeypatch, {"detail-img:2.0": "img-123"})
 
     monkeypatch.setattr(
         browser_api_module,
@@ -510,10 +538,11 @@ def test_image_detail_human(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
     )
 
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["image", "detail", "img-123"])
+    result = runner.invoke(cli_main, ["image", "detail", "detail-img:2.0"])
     assert result.exit_code == 0
     assert "Image Detail" in result.output
     assert "detail-img" in result.output
+    assert "img-123" not in result.output
 
 
 # Removed in v2.0.0: partial-hex id resolution was replaced by name-only
@@ -570,7 +599,8 @@ def test_image_register_human_push(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     runner = CliRunner()
     result = runner.invoke(cli_main, ["image", "register", "-n", "test", "-v", "v0.1"])
     assert result.exit_code == 0
-    assert "Image registered: img-new-002" in result.output
+    assert "Image registered: test:v0.1" in result.output
+    assert "img-new-002" not in result.output
     assert "docker tag" in result.output
     assert "docker push" in result.output
     assert "registry.example/my-img:v0.1" in result.output
@@ -593,7 +623,7 @@ def test_image_save_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
     runner = CliRunner()
     result = runner.invoke(
         cli_main,
-        ["--json", "image", "save", "notebook-abc", "-n", "saved-img"],
+        ["--json", "image", "save", "demo-notebook", "-n", "saved-img"],
     )
     assert result.exit_code == 0
 
@@ -625,7 +655,7 @@ def test_image_save_public_flag_calls_update_image(
     runner = CliRunner()
     result = runner.invoke(
         cli_main,
-        ["image", "save", "notebook-abc", "-n", "shared-base", "--public"],
+        ["image", "save", "demo-notebook", "-n", "shared-base", "--public"],
     )
     assert result.exit_code == 0
     assert update_captured == {"image_id": "img-pub-001", "visibility": "VISIBILITY_PUBLIC"}
@@ -654,7 +684,7 @@ def test_image_save_private_flag_calls_update_image(
     runner = CliRunner()
     result = runner.invoke(
         cli_main,
-        ["image", "save", "notebook-abc", "-n", "my-img", "--private"],
+        ["image", "save", "demo-notebook", "-n", "my-img", "--private"],
     )
     assert result.exit_code == 0
     assert seen_visibility == {"visibility": "VISIBILITY_PRIVATE"}
@@ -665,6 +695,7 @@ def test_image_set_visibility_command(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     _patch_config_and_session(monkeypatch, tmp_path)
+    _patch_image_name_resolver(monkeypatch, {"my-image:v1": "image-abc-def"})
 
     captured: dict[str, Any] = {}
 
@@ -678,19 +709,21 @@ def test_image_set_visibility_command(
     runner = CliRunner()
     result = runner.invoke(
         cli_main,
-        ["image", "set-visibility", "image-abc-def", "--public"],
+        ["image", "set-visibility", "my-image:v1", "--public"],
     )
     assert result.exit_code == 0
     assert captured == {"image_id": "image-abc-def", "visibility": "VISIBILITY_PUBLIC"}
     assert "visibility set to public" in result.output
+    assert "image-abc-def" not in result.output
 
     result2 = runner.invoke(
         cli_main,
-        ["image", "set-visibility", "image-abc-def", "--private"],
+        ["image", "set-visibility", "my-image:v1", "--private"],
     )
     assert result2.exit_code == 0
     assert captured == {"image_id": "image-abc-def", "visibility": "VISIBILITY_PRIVATE"}
     assert "visibility set to private" in result2.output
+    assert "image-abc-def" not in result2.output
 
 
 def test_image_save_fallback_resolves_image_id_via_list(
@@ -744,10 +777,11 @@ def test_image_save_fallback_resolves_image_id_via_list(
     )
 
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["image", "save", "notebook-abc", "-n", "saved-img"])
+    result = runner.invoke(cli_main, ["image", "save", "demo-notebook", "-n", "saved-img"])
 
     assert result.exit_code == 0
-    assert "Notebook saved as image: img-newest" in result.output
+    assert "Notebook saved as image: saved-img:v1" in result.output
+    assert "img-newest" not in result.output
 
 
 def test_image_save_unknown_when_fallback_fails(
@@ -767,14 +801,16 @@ def test_image_save_unknown_when_fallback_fails(
     monkeypatch.setattr(browser_api_module, "list_images_by_source", _raise)
 
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["image", "save", "notebook-abc", "-n", "saved-img"])
+    result = runner.invoke(cli_main, ["image", "save", "demo-notebook", "-n", "saved-img"])
 
     assert result.exit_code == 0
-    assert "Notebook saved as image: unknown" in result.output
+    assert "Notebook saved as image: saved-img:v1" in result.output
+    assert "unknown" not in result.output
 
 
 def test_image_delete_with_force(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     _patch_config_and_session(monkeypatch, tmp_path)
+    _patch_image_name_resolver(monkeypatch, {"stale-image:v1": "img-del-001"})
 
     deleted_ids: list[str] = []
 
@@ -785,14 +821,16 @@ def test_image_delete_with_force(monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     monkeypatch.setattr(browser_api_module, "delete_image", fake_delete)
 
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["image", "delete", "img-del-001", "--force"])
+    result = runner.invoke(cli_main, ["image", "delete", "stale-image:v1", "--force"])
     assert result.exit_code == 0
-    assert "img-del-001" in result.output
+    assert "stale-image:v1" in result.output
+    assert "img-del-001" not in result.output
     assert deleted_ids == ["img-del-001"]
 
 
 def test_image_delete_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     _patch_config_and_session(monkeypatch, tmp_path)
+    _patch_image_name_resolver(monkeypatch, {"stale-image:v2": "img-del-002"})
 
     monkeypatch.setattr(
         browser_api_module,
@@ -801,12 +839,12 @@ def test_image_delete_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> N
     )
 
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["--json", "image", "delete", "img-del-002", "--force"])
+    result = runner.invoke(cli_main, ["--json", "image", "delete", "stale-image:v2", "--force"])
     assert result.exit_code == 0
 
     payload = json.loads(result.output)
     # v2: delete output carries the user-facing name, not the internal image_id.
-    assert payload["data"]["name"] == "img-del-002"
+    assert payload["data"]["name"] == "stale-image:v2"
     assert payload["data"]["status"] == "deleted"
 
 
@@ -814,6 +852,7 @@ def test_image_delete_prompts_without_force(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     _patch_config_and_session(monkeypatch, tmp_path)
+    _patch_image_name_resolver(monkeypatch, {"stale-image:v3": "img-del-003"})
 
     monkeypatch.setattr(
         browser_api_module,
@@ -823,9 +862,10 @@ def test_image_delete_prompts_without_force(
 
     runner = CliRunner()
     # Answer 'n' to the confirmation prompt
-    result = runner.invoke(cli_main, ["image", "delete", "img-del-003"], input="n\n")
+    result = runner.invoke(cli_main, ["image", "delete", "stale-image:v3"], input="n\n")
     assert result.exit_code == 0
     assert "Cancelled" in result.output
+    assert "img-del-003" not in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -1104,6 +1144,6 @@ def test_format_image_detail():
     result = format_image_detail(data)
     assert "Image Detail" in result
     assert "my-image" in result
-    assert "img-123" in result
+    assert "img-123" not in result
     assert "private" in result  # human-readable source label
     assert "READY" in result

@@ -3,7 +3,7 @@
 `inspire job logs <name>` cats / tails / follows the remote log file via
 the SSH tunnel of a cached notebook (any one with shared-FS access; pick
 explicitly with ``--notebook``). The log path uses the convention
-``<target_dir>/.inspire/training_master_<sanitized_name>_<timestamp>.log``;
+``<remote_cwd>/.inspire/training_master_<sanitized_name>_<timestamp>.log``;
 ``inspire job logs`` resolves the latest match via SSH ``ls -1t`` so a
 re-submitted name shows the most recent run, not a clobbered file. Pass
 ``--remote-log-path`` to override (e.g. for jobs created from the Web UI).
@@ -47,6 +47,7 @@ from inspire.cli.utils.auth import AuthManager
 from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.job_cli import resolve_job_id
 from inspire.cli.utils.job_submit import derive_remote_log_glob
+from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.config import Config, ConfigError
 from inspire.platform.web import browser_api as browser_api_module
 from inspire.platform.web.session import SessionExpiredError, get_web_session
@@ -119,8 +120,10 @@ def _format_web_logs(logs: list[dict]) -> str:
         timestamp = str(
             item.get("timestamp_str") or item.get("time") or item.get("timestamp_ms") or ""
         ).strip()
-        pod_name = str(item.get("pod_name") or "").strip()
-        message = str(item.get("message") or item.get("log") or item.get("content") or "")
+        pod_name = scrub_raw_ids(str(item.get("pod_name") or "").strip())
+        message = scrub_raw_ids(
+            str(item.get("message") or item.get("log") or item.get("content") or "")
+        )
         prefix = " ".join(part for part in (timestamp, pod_name) if part)
         lines.append(f"{prefix} {message}".rstrip() if prefix else message)
     return "\n".join(lines)
@@ -179,9 +182,9 @@ def _follow_logs_via_ssh(
 
     is_glob = "*" in remote_log_path
     if is_glob:
-        click.echo(f"Log file pattern: {remote_log_path}")
+        click.echo(f"Log file pattern: {scrub_raw_ids(remote_log_path)}")
     else:
-        click.echo(f"Log file: {remote_log_path}")
+        click.echo(f"Log file: {scrub_raw_ids(remote_log_path)}")
 
     start_time = time.time()
     concrete_log_path: Optional[str] = None
@@ -243,7 +246,7 @@ def _follow_logs_via_ssh(
         while True:
             if process.poll() is not None:
                 for line in stdout:
-                    click.echo(line, nl=False)
+                    click.echo(scrub_raw_ids(line), nl=False)
                 break
 
             ready, _, _ = select.select([stdout], [], [], 1.0)
@@ -251,7 +254,7 @@ def _follow_logs_via_ssh(
             if ready:
                 line = stdout.readline()
                 if line:
-                    click.echo(line, nl=False)
+                    click.echo(scrub_raw_ids(line), nl=False)
                 elif process.poll() is not None:
                     break
 
@@ -272,7 +275,7 @@ def _follow_logs_via_ssh(
                     pass
 
         if final_status:
-            click.echo(f"\n\nJob completed with status: {final_status}")
+            click.echo(f"\n\nJob completed with status: {scrub_raw_ids(final_status)}")
 
     except KeyboardInterrupt:
         click.echo("\n\nStopped following logs.")
@@ -376,7 +379,9 @@ def _run_job_logs_single_job(
     bridge_name: Optional[str] = None,
 ) -> None:
     try:
-        config = Config.from_env(require_target_dir=False)
+        config, _ = Config.from_files_and_env(
+            require_credentials=False
+        )
 
         effective_bridge_name, tunnel_config, bridge_configured = _resolve_tunnel_preflight_target(
             bridge_name
@@ -413,7 +418,7 @@ def _run_job_logs_single_job(
                     json_formatter.format_json({"job_id": job_id, "log_path": remote_log_path})
                 )
             else:
-                click.echo(remote_log_path)
+                click.echo(scrub_raw_ids(remote_log_path))
             sys.exit(EXIT_SUCCESS)
 
         if follow:
@@ -487,7 +492,7 @@ def _run_job_logs_single_job(
             click.echo(f"=== Last {tail} lines ===\n")
         elif head:
             click.echo(f"=== First {head} lines ===\n")
-        click.echo(content)
+        click.echo(scrub_raw_ids(content))
 
     except TunnelNotAvailableError:
         _emit_no_tunnel_error(ctx, bridge_name=bridge_name)
@@ -654,9 +659,8 @@ def _run_job_logs_web_single_job(
     "--remote-log-path",
     default=None,
     help=(
-        "Explicit remote log file path. Overrides the default convention "
-        "<target_dir>/.inspire/training_master_<name>.log. Useful for web-UI-created "
-        "jobs where the path was set by the platform."
+        "Explicit remote log file path. Overrides the default project log path. "
+        "Useful for web-UI-created jobs where the path was set by the platform."
     ),
 )
 @click.option(
@@ -677,7 +681,7 @@ def _run_job_logs_web_single_job(
     help="Resolve the job name across every visible workspace, not just the current one",
 )
 @click.option("--all-users", is_flag=True, help="Include jobs from all users in web mode")
-@click.option("--created-by", default=None, help="Filter web job name resolution by creator ID")
+@click.option("--created-by", default=None, help="Advanced creator filter for web job name resolution")
 @click.option(
     "--max-pages",
     type=int,
@@ -728,7 +732,8 @@ def logs(
 
     Requires a cached notebook tunnel (`inspire notebook ssh <name>`).
     The log path defaults to the convention written by `inspire run` /
-    `inspire job create` (``<target_dir>/.inspire/training_master_<name>.log``);
+    `inspire job create`
+    (``<me>/.inspire/training_master_<name>.log``);
     use ``--remote-log-path`` to override for jobs whose path differs.
 
     \b
@@ -811,7 +816,9 @@ def logs(
             return
     else:
         try:
-            config = Config.from_env(require_target_dir=False)
+            config, _ = Config.from_files_and_env(
+                require_credentials=False
+            )
         except ConfigError as e:
             _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
             return
@@ -820,12 +827,11 @@ def logs(
             _handle_error(
                 ctx,
                 "ConfigError",
-                "Cannot derive remote log path: [paths].target_dir is unset.",
+                "Cannot derive remote log path: no default path alias is configured.",
                 EXIT_CONFIG_ERROR,
                 hint=(
-                    "Set [paths].target_dir in your account config (run "
-                    "`inspire init --discover` to populate it), or pass "
-                    "--remote-log-path explicitly."
+                    "Run `inspire init --discover` to populate the `me` path alias, "
+                    "or pass --remote-log-path explicitly."
                 ),
             )
             return

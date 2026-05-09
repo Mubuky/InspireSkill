@@ -59,7 +59,7 @@ def _load_proxy_toml_values() -> tuple[str, dict[str, str]]:
     base_url = _normalize_proxy(os.environ.get("INSPIRE_BASE_URL"))
     values: dict[str, str] = {}
     try:
-        config, _ = Config.from_files_and_env(require_credentials=False, require_target_dir=False)
+        config, _ = Config.from_files_and_env(require_credentials=False)
     except Exception:
         return base_url, values
 

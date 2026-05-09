@@ -44,7 +44,6 @@ def patch_hpc_config_and_auth(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -
 
     def fake_from_files_and_env(
         cls,
-        require_target_dir: bool = False,
         require_credentials: bool = True,
     ) -> tuple[config_module.Config, dict[str, str]]:  # type: ignore[override]
         return config, {}

@@ -6,13 +6,14 @@ import click
 
 from inspire.cli.formatters import json_formatter
 from inspire.cli.formatters.human_formatter import format_epoch
+from inspire.cli.utils.raw_ids import scrub_raw_ids
 from .notebook_lookup import _format_notebook_resource
 
 
 def _print_notebook_detail(notebook: dict) -> None:
     """Print detailed notebook information."""
     click.echo(f"\n{'='*60}")
-    click.echo(f"Notebook: {notebook.get('name', 'N/A')}")
+    click.echo(f"Notebook: {scrub_raw_ids(notebook.get('name', 'N/A'))}")
     click.echo(f"{'='*60}")
 
     project = notebook.get("project") or {}
@@ -75,7 +76,7 @@ def _print_notebook_detail(notebook: dict) -> None:
 
     for label, value in fields:
         if value:
-            click.echo(f"  {label:<15}: {value}")
+            click.echo(f"  {label:<15}: {scrub_raw_ids(value)}")
 
     click.echo(f"{'='*60}\n")
 
@@ -96,10 +97,10 @@ def _print_notebook_list(items: list, json_output: bool) -> None:
         click.echo("No notebook instances found.")
         return
 
-    name_strings = [str(item.get("name") or "N/A") for item in items]
-    status_strings = [str(item.get("status") or "Unknown") for item in items]
-    resource_strings = [_format_notebook_resource(item) for item in items]
-    created_strings = [format_epoch(item.get("created_at")) for item in items]
+    name_strings = [scrub_raw_ids(item.get("name") or "N/A") for item in items]
+    status_strings = [scrub_raw_ids(item.get("status") or "Unknown") for item in items]
+    resource_strings = [scrub_raw_ids(_format_notebook_resource(item)) for item in items]
+    created_strings = [scrub_raw_ids(format_epoch(item.get("created_at"))) for item in items]
 
     name_w = max(len("Name"), *(len(s) for s in name_strings))
     status_w = max(len("Status"), *(len(s) for s in status_strings))
