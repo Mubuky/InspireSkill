@@ -1,6 +1,6 @@
 # 三阶段项目工作流
 
-> 本文档只保留阶段编排决策和监控闭环。具体命令参数以 CLI `--help` 为准；创建 notebook、提交 job / HPC 的完整示例分别见 [notebook.md](notebook.md) 和 [compute-workloads.md](compute-workloads.md)。
+本文负责跨阶段编排：什么时候用 notebook 准备环境，什么时候切到 HPC / Ray 做数据处理，什么时候进入 GPU job 训练，以及每个阶段的验收点。具体命令参数以 CLI `--help` 为准；单领域细节分别看 [notebook.md](notebook.md)、[compute-workloads.md](compute-workloads.md)、[image-management.md](image-management.md) 和 [resources-and-paths.md](resources-and-paths.md)。
 
 ## 1. 阶段 A：CPU 空间准备基底环境
 
@@ -10,7 +10,7 @@
 
 仓库远端路径默认从 `me` path alias 开始；多个 repo 并列时用 `me:<repo>`。如果需要更短名字，先用 `inspire notebook set-path ... as repo` 写入仓库级 alias。
 
-完整基底创建和固化流程参见 [notebook.md §5](notebook.md)。一次性临时任务可以跳过 `image save`。
+基底 notebook 准备看 [notebook.md](notebook.md)，镜像固化和默认镜像看 [image-management.md](image-management.md)。一次性临时任务可以跳过 `image save`。
 
 ```bash
 # 创建并配置基底 notebook -> 安装依赖 -> 保存为项目镜像
@@ -38,15 +38,15 @@ inspire image set-default --job <URL> --notebook <URL>
 
 正式放量前先跑接近生产规模的 probe。小规模通过不代表正式规模稳定。
 
-HPC 示例参见 [compute-workloads.md §3](compute-workloads.md)。Ray 示例参见 [compute-workloads.md §4](compute-workloads.md)。
+HPC 和 Ray 的资源模型、示例与异常排查看 [compute-workloads.md](compute-workloads.md)。
 
 ## 3. 阶段 C：分布式训练空间
 
 训练空间多数节点不可上网。依赖、权重和数据集先在可上网空间下载到共享盘，再进训练空间。
 
-单节点调试：先用 `inspire notebook create` 在训练空间起 notebook——完整流程同 [notebook.md §5](notebook.md)。
+单节点调试：先用 `inspire notebook create` 在训练空间起 notebook；连接、执行和事件诊断看 [notebook.md](notebook.md)。
 
-多节点训练命令参见 [compute-workloads.md §1](compute-workloads.md)。快速提交并跟日志用 `inspire run`：
+多节点训练命令和异常判断看 [compute-workloads.md](compute-workloads.md)。快速提交并跟日志用 `inspire run`：
 
 ```bash
 inspire run 'bash <repo>/train.sh' -q 8,160,1800 --nodes 2 \

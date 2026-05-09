@@ -1,5 +1,7 @@
 # Job、HPC 与 Ray
 
+本文负责非交互计算任务：GPU job、快捷 `run`、CPU HPC、Ray 和 serving 的运行模型、优先级、事件、指标与异常判断。它不负责资源目录、path alias 或项目配额的基础解释；这些看 [resources-and-paths.md](resources-and-paths.md)。镜像来源、保存、注册和默认值看 [image-management.md](image-management.md)。
+
 > 下述示例中的 `<GROUP>`、`<WORKSPACE>`、`<IMAGE_URL>` 仅为占位格式。实际值以 `inspire resources specs` 和 `inspire config context` 的实时输出为准。
 
 ## 1. GPU 多节点任务：`job`

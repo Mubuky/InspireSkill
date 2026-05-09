@@ -1,5 +1,7 @@
 # Notebook 工作流
 
+本文负责 notebook 的运行时操作：创建后的连接、`shell` / `exec` / `scp` 语义、SSH bootstrap、HTTPS proxy、事件与指标、大文件操作，以及在 notebook 内准备基底环境。它不维护镜像 registry 规则；保存、注册、默认镜像和可见性看 [image-management.md](image-management.md)。资源和路径概念看 [resources-and-paths.md](resources-and-paths.md)。
+
 ## 1. CLI help 查询
 
 notebook 子命令、参数和功能说明以 CLI help 为准，不在 Agent 文档里维护速查表。
@@ -209,7 +211,7 @@ du -sh --max-depth=1 <dir>
 
 ## 7. 基底 notebook 与镜像
 
-项目刚开始时，建议在可上网 CPU 空间用统一基底镜像起一个基底 notebook，把 Slurm、Ray、分布式训练依赖和项目依赖一次性装好，再保存成项目通用镜像。
+项目刚开始时，建议在可上网 CPU 空间用统一基底镜像起一个基底 notebook，把 Slurm、Ray、分布式训练依赖和项目依赖一次性装好。本文只描述 notebook 内部准备和验证；固化为镜像、设置默认镜像和可见性由 [image-management.md](image-management.md) 负责。
 
 > 下述示例中的 `<GROUP>`、`<WORKSPACE>`、`<IMAGE_URL>` 仅为占位格式。实际值以 `inspire resources specs` 和 `inspire config context` 的实时输出为准。
 
@@ -220,11 +222,9 @@ inspire notebook create --workspace <WORKSPACE> --group <GROUP> -q 0,20,256 \
 
 inspire notebook ssh cpu-box
 inspire notebook exec cpu-box "apt-get update && apt-get install -y <deps> && pip install <pkgs>"
-inspire image save cpu-box -n <img> -v v1 --public --wait
-inspire image set-default --job <URL> --notebook <URL>
 ```
 
-镜像管理语义（list / register / delete / visibility / default）参见 [references/image-management.md](references/image-management.md)。
+依赖验证通过后，转到 [image-management.md](image-management.md) 执行 `image save`、确认 `READY`，再按项目需要设置默认镜像。
 
 已有 Ubuntu 镜像需要补 Slurm/Ray 依赖时：
 

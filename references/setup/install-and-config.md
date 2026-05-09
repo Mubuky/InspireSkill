@@ -1,5 +1,7 @@
 # 安装、更新与初始化
 
+本文负责本机安装、更新、账号配置、项目初始化和代理 setup。它不解释平台任务怎么运行，也不维护 notebook、job、HPC 或镜像的命令细节。
+
 ## 1. 平台支持
 
 macOS + Linux 是一等公民。Windows 用户请用 WSL2；CLI 依赖 SSH、rsync、GPFS 目录约定和 POSIX 文件权限，Windows 原生不在 roadmap。
@@ -37,7 +39,7 @@ curl -fsSL .../install.sh | bash -s -- --no-schedule
 常见问题：
 
 - 装完后 `inspire: command not found`：运行 `exec $SHELL` 或开新终端。
-- `installer failed` / 镜像超时：中国大陆可临时用 `UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple curl ... | bash`。
+- `installer failed` / 包索引超时：先确认本机网络和代理；必要时在工具配置或 shell profile 中持久设置 Python 包索引，再重跑安装脚本。不要把一次性环境变量前缀写进任务命令示例。
 - 同一台机器已经装过：直接重跑安装脚本，脚本是幂等的。
 
 ## 3. 更新

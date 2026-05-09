@@ -1,5 +1,7 @@
 # 资源、规格与远端路径
 
+本文负责所有跨命令共享的选择题：workspace、compute group、`--quota` 三元组、项目 / 用户配额、存储池、path alias 和挂载隔离。它不负责 notebook、job、HPC、Ray 或 serving 的生命周期；那些只在对应业务 reference 中展开。
+
 ## 1. 资源查询入口
 
 资源、规格、项目和用户相关能力以 CLI help 为准，不在 Agent 文档里维护硬编码清单。
