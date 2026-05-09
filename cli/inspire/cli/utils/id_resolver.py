@@ -280,6 +280,7 @@ def _looks_like_platform_id(value: str) -> bool:
         "ws-",
         "lcg-",
         "quota-",
+        "ssh-",
         "spec-",
         "user-",
     )

@@ -1,10 +1,14 @@
-"""Closed Browser API endpoints for diffing captures.
+"""Closed or explicitly characterized Browser API endpoints for diffing captures.
 
 Update this list only when an endpoint is added to `references/dev/browser-api.md`
-or wrapped by the CLI. The diffing tool (`analyze.py`) compares freshly-captured
-traffic against this set to surface newly-appeared or newly-dead endpoints.
+or wrapped by the CLI. The diffing tool (`analyze.py`) compares freshly
+captured traffic against this set to surface newly appeared or newly dead
+endpoints.
+
 Observed-only paths stay out of this file until their request body, response
-shape, Referer, and destructive semantics are verified.
+shape, Referer, and destructive semantics are verified. Restricted endpoints
+may be listed only when their regular-user failure mode is also verified and
+documented.
 """
 
 from __future__ import annotations
@@ -19,14 +23,21 @@ KNOWN: set[tuple[str, str]] = {
     ("GET", "/api/v1/user/permissions/{id}"),
     ("GET", "/api/v1/user/my-api-key/list"),
     ("GET", "/api/v1/user/quota"),
+    ("POST", "/api/v1/user/list"),
+    ("POST", "/api/v1/ssh/list"),
+    ("POST", "/api/v1/ssh/create"),
+    ("DELETE", "/api/v1/ssh/{id}"),
 
     # --- Project ---
     ("POST", "/api/v1/project/list"),
+    ("POST", "/api/v1/project/list_v2"),
+    ("POST", "/api/v1/project/list_for_page"),
     ("GET", "/api/v1/project/{id}"),
     ("GET", "/api/v1/project/owners"),
 
     # --- Notebook ---
     ("POST", "/api/v1/notebook/create"),
+    ("POST", "/api/v1/notebook/users"),
     ("POST", "/api/v1/notebook/operate"),
     ("DELETE", "/api/v1/notebook/{id}"),
     ("POST", "/api/v1/notebook/list"),
@@ -62,6 +73,8 @@ KNOWN: set[tuple[str, str]] = {
     ("GET", "/api/v1/hpc_jobs/{id}"),
     ("DELETE", "/api/v1/hpc_jobs/{id}"),
     ("POST", "/api/v1/hpc_jobs/events/list"),
+    ("POST", "/api/v1/hpc_jobs/instances/list"),
+    ("POST", "/api/v1/logs/hpc"),
 
     # --- Ray Jobs ---
     ("POST", "/api/v1/ray_job/list"),
@@ -78,7 +91,10 @@ KNOWN: set[tuple[str, str]] = {
     ("POST", "/api/v1/cluster_metric/resource_metric_by_time"),
 
     # --- Resources / Compute groups ---
+    ("POST", "/api/v1/workspace/list"),
     ("POST", "/api/v1/logic_compute_groups/list"),
+    ("GET", "/api/v1/logic_compute_groups/{id}"),
+    ("POST", "/api/v1/compute_groups/list"),
     ("POST", "/api/v1/compute_resources/cluster_basic_info"),
     ("GET", "/api/v1/compute_resources/cluster_basic_info"),
     ("POST", "/api/v1/cluster_basic_info"),
@@ -87,6 +103,7 @@ KNOWN: set[tuple[str, str]] = {
     ("POST", "/api/v1/compute_resources/node_dimension/list"),
     ("GET", "/api/v1/compute_resources/node_specs/logic_compute_groups/{id}"),
     ("POST", "/api/v1/cluster_nodes/list"),
+    ("GET", "/api/v1/cluster_nodes/workspace/{id}"),
 
     # --- Model (registry) ---
     ("POST", "/api/v1/model/list"),
@@ -116,7 +133,7 @@ STALE_SINCE_2026_04: set[tuple[str, str]] = {
 
 
 _PREFIXED_ID = re.compile(
-    r"/(?:ws|job|hpc-job|sv|project|lcg|cg|image|img|nb|notebook|mdl|model|spec|tk|quota|usr|user|tag|team|org)"
+    r"/(?:ws|job|hpc-job|sv|project|lcg|cg|image|img|nb|notebook|mdl|model|spec|tk|quota|ssh|usr|user|tag|team|org)"
     r"-[0-9a-zA-Z_-]{4,}(?=/|$|\?)"
 )
 _UUID = re.compile(r"/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?=/|$|\?)")
@@ -142,6 +159,7 @@ if __name__ == "__main__":
     tests = [
         ("GET", "/api/v1/user/detail", True),
         ("GET", "/api/v1/user/routes/ws-1177d2a5-aef0-40d3-8777-fed9af13affc", True),
+        ("DELETE", "/api/v1/ssh/ssh-0e7e2c07-2d16-4148-bc07-6803371de7e8", True),
         ("GET", "/api/v1/notebook/facfdc82-b52d-414f-8a9f-cc918c26acbd", True),
         ("POST", "/api/v1/notebook/events", True),
         ("GET", "/api/v1/notebook/event/facfdc82-b52d-414f-8a9f-cc918c26acbd", False),

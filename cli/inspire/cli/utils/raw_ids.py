@@ -12,14 +12,14 @@ _UUID_RE = re.compile(
 
 _PREFIXED_ID_RE = re.compile(
     r"(?<![A-Za-z0-9_-])(?P<prefix>hpc-job|job|notebook|nb|ray|rj|sv|serving|image|img|ws|lcg|"
-    r"project|user|quota|spec|model|mirror)-"
+    r"project|user|ssh|quota|spec|model|mirror)-"
     r"(?P<body>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b",
     re.IGNORECASE,
 )
 
 _PREFIXED_ID_BROAD_RE = re.compile(
     r"(?<![A-Za-z0-9_-])(?P<prefix>hpc-job|job|notebook|nb|ray|rj|sv|serving|image|img|ws|lcg|"
-    r"project|user|quota|spec|model|mirror)-"
+    r"project|user|ssh|quota|spec|model|mirror)-"
     r"(?P<body>(?=[A-Za-z0-9-]*-)(?=[A-Za-z0-9-]*\d)[A-Za-z0-9][A-Za-z0-9-]{7,})\b",
     re.IGNORECASE,
 )
@@ -39,6 +39,7 @@ _PREFIX_LABELS = {
     "lcg": "compute-group",
     "project": "project",
     "user": "user",
+    "ssh": "ssh-key",
     "quota": "quota",
     "spec": "spec",
     "model": "model",
