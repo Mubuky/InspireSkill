@@ -1,14 +1,21 @@
 # 三阶段项目工作流
 
+> 本文档只保留阶段编排决策和监控闭环。具体命令参数以 CLI `--help` 为准；创建 notebook、提交 job / HPC 的完整示例分别见 [notebook.md](notebook.md) 和 [compute-workloads.md](compute-workloads.md)。
+
 ## 1. 阶段 A：CPU 空间准备基底环境
 
-默认先在 `CPU 资源空间` 起可上网 notebook，安装项目依赖、Slurm/Ray/训练依赖，并保存成项目镜像。这样后续 notebook、job、HPC、Ray 都复用同一基底，减少冷启动和重复安装。
+默认先在可上网 CPU 空间起可上网 notebook，安装项目依赖、Slurm/Ray/训练依赖，并保存成项目通用镜像。这样后续 notebook、job、HPC、Ray 都复用同一基底，减少冷启动和重复安装。
+
+> 下述示例中的 `<GROUP>`、`<WORKSPACE>`、`<IMAGE_URL>` 仅为占位格式。实际值以 `inspire resources specs` 和 `inspire config context` 的实时输出为准。
 
 仓库远端路径默认从 `me` path alias 开始；多个 repo 并列时用 `me:<repo>`。如果需要更短名字，先用 `inspire notebook set-path ... as repo` 写入仓库级 alias。
 
+完整基底创建和固化流程参见 [notebook.md §5](notebook.md)。一次性临时任务可以跳过 `image save`。
+
 ```bash
-inspire notebook create --workspace CPU资源空间 --group CPU资源-2 -q 0,20,256 \
-  --name <name>-base --image docker.sii.shaipower.online/inspire-studio/unified-base:v2 \
+# 创建并配置基底 notebook -> 安装依赖 -> 保存为项目镜像
+inspire notebook create --workspace <WORKSPACE> --group <GROUP> -q 0,20,256 \
+  --name <name>-base --image <IMAGE_URL> \
   --project <P> --wait
 
 inspire notebook ssh <name>-base --cwd me
@@ -17,8 +24,6 @@ inspire notebook install-deps <name>-base --slurm --ray
 inspire image save <name>-base -n <img> -v v1 --public --wait
 inspire image set-default --job <URL> --notebook <URL>
 ```
-
-一次性临时任务可以跳过 `image save`。
 
 ## 2. 阶段 B：CPU 空间跑数据处理
 
@@ -33,47 +38,19 @@ inspire image set-default --job <URL> --notebook <URL>
 
 正式放量前先跑接近生产规模的 probe。小规模通过不代表正式规模稳定。
 
-HPC 示例：
-
-```bash
-inspire hpc create -n <name>-preprocess \
-  -c 'srun bash -lc "python preprocess.py"' \
-  --compute-group HPC-可上网区资源-2 --workspace CPU资源空间 \
-  -q 0,20,256 --cpus-per-task 16 --memory-per-cpu 12 \
-  --number-of-tasks 1 --instance-count 1 \
-  --project <P> --image <URL> --image-type SOURCE_PRIVATE
-```
-
-Ray 示例见 [compute-workloads.md](compute-workloads.md)。
+HPC 示例参见 [compute-workloads.md §3](compute-workloads.md)。Ray 示例参见 [compute-workloads.md §4](compute-workloads.md)。
 
 ## 3. 阶段 C：分布式训练空间
 
 训练空间多数节点不可上网。依赖、权重和数据集先在可上网空间下载到共享盘，再进训练空间。
 
-单节点调试：
+单节点调试：先用 `inspire notebook create` 在训练空间起 notebook——完整流程同 [notebook.md §5](notebook.md)。
 
-```bash
-inspire notebook create --workspace 分布式训练空间 --group H100 -q 1,20,200 \
-  --name <name>-debug --image <ref> --project <P> --wait
-inspire notebook ssh <name>-debug --cwd me:<repo>
-inspire notebook exec <name>-debug --cwd me:<repo> "nvidia-smi"
-```
-
-多节点训练：
-
-```bash
-inspire job create -n <name>-train -q 8,160,1800 --nodes 2 \
-  -c 'bash <repo>/train.sh' --workspace 分布式训练空间 --group H100 \
-  --image <ref> --priority 5
-```
-
-`job create` / `run` 没有 `--cwd` 参数；配置了 `me` alias 时，CLI 会在远端先进入 `me` 根目录再执行命令。因此示例里的 `<repo>/train.sh` 是相对 `me` 的路径。
-
-快速提交并跟日志：
+多节点训练命令参见 [compute-workloads.md §1](compute-workloads.md)。快速提交并跟日志用 `inspire run`：
 
 ```bash
 inspire run 'bash <repo>/train.sh' -q 8,160,1800 --nodes 2 \
-  --workspace 分布式训练空间 --group H100 --image <ref> --watch
+  --workspace <WORKSPACE> --group <GROUP> --image <IMAGE_URL> --watch
 ```
 
 训练失败或长时间排队时，先查：
@@ -84,7 +61,7 @@ inspire job logs <name>-train --tail 100
 inspire job status <name>-train
 ```
 
-训练已进入 `RUNNING` 后，把 `metrics` 当成和日志同级的健康度观察面。日志回答程序说了什么；指标回答资源是否还在工作、worker 是否均衡、I/O 是否断流：
+训练已进入 `RUNNING` 后，把 `metrics` 当成和日志同级的健康度观察面：
 
 ```bash
 inspire job metrics <name>-train --window 30m

@@ -49,8 +49,12 @@ uv run inspire hpc create --help
 - Notebook 细节、镜像固化、远程命令语义和大文件操作：加载 [references/notebook.md](references/notebook.md)。
 - GPU job、HPC 两层资源模型、Ray 适用边界、事件和指标观察：加载 [references/compute-workloads.md](references/compute-workloads.md)。
 - Workspace、compute group、规格三元组、存储池和路径隔离：加载 [references/resources-and-paths.md](references/resources-and-paths.md)。
+- 镜像浏览、注册、保存、可见性与默认设置：加载 [references/image-management.md](references/image-management.md)。
+- 模型仓库浏览与 serving 关系：加载 [references/model.md](references/model.md)。
 
 ## 3. 按需加载索引
+
+### 场景索引
 
 | 什么时候加载 | 引用 |
 | --- | --- |
@@ -61,6 +65,27 @@ uv run inspire hpc create --help
 | SSH bootstrap、大规模文件操作或 notebook 远程命令排障 | [references/notebook.md](references/notebook.md) |
 | 安装、更新、账号初始化或代理 setup | [references/setup/install-and-config.md](references/setup/install-and-config.md)、[references/setup/proxy-setup.md](references/setup/proxy-setup.md) |
 | OpenAPI 合约或 Browser API 端点背景 | [references/dev/openapi.md](references/dev/openapi.md)、[references/dev/browser-api.md](references/dev/browser-api.md) |
+| 镜像浏览、注册、保存、可见性与默认设置 | [references/image-management.md](references/image-management.md) |
+| 模型仓库浏览与 serving 关系 | [references/model.md](references/model.md) |
+
+### 命令组速查
+
+| CLI 命令组 | 主要子命令 | 应加载的 reference |
+| --- | --- | --- |
+| `notebook` | create, ssh, shell, exec, scp, events, metrics, top, install-deps, lifecycle, set-path ... | [references/notebook.md](references/notebook.md) |
+| `job` | create, status, stop, logs, events, metrics, instances, wait, command ... | [references/compute-workloads.md](references/compute-workloads.md) §1, §6 |
+| `run` | 快捷提交 + watch（GPU job only） | [references/compute-workloads.md](references/compute-workloads.md) §1a |
+| `hpc` | create, status, stop, events, metrics, delete ... | [references/compute-workloads.md](references/compute-workloads.md) §3, §7 |
+| `ray` | create, status, stop, events, instances, delete ... | [references/compute-workloads.md](references/compute-workloads.md) §4 |
+| `serving` | list, status, configs, stop, metrics | [references/compute-workloads.md](references/compute-workloads.md) §8 |
+| `image` | list, save, register, set-default, set-visibility, delete, detail | [references/image-management.md](references/image-management.md) |
+| `model` | list, status, versions | [references/model.md](references/model.md) |
+| `resources` | list, specs, nodes | [references/resources-and-paths.md](references/resources-and-paths.md) |
+| `project` / `user` | info, quota, members, whoami | [references/resources-and-paths.md](references/resources-and-paths.md) §7 |
+| `account` | add, list, switch, remove, set-default | [references/setup/install-and-config.md](references/setup/install-and-config.md) |
+| `config` | show, check, context | [references/setup/install-and-config.md](references/setup/install-and-config.md) |
+| `init` | --discover, setup | [references/setup/install-and-config.md](references/setup/install-and-config.md) |
+| `update` | check, install | [references/setup/install-and-config.md](references/setup/install-and-config.md) |
 
 ## 4. 项目上下文
 

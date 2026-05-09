@@ -1,5 +1,7 @@
 # Job、HPC 与 Ray
 
+> 下述示例中的 `<GROUP>`、`<WORKSPACE>`、`<IMAGE_URL>` 仅为占位格式。实际值以 `inspire resources specs` 和 `inspire config context` 的实时输出为准。
+
 ## 1. GPU 多节点任务：`job`
 
 `inspire job` 覆盖 GPU 多节点工作负载，包括分布式训练、批量推理和并发单节点 worker pool。`job` 是 GPU 路径；`hpc` 是 CPU Slurm 路径。
@@ -12,11 +14,31 @@
 
 ```bash
 inspire job create -n <name>-train -q 8,160,1800 --nodes 2 \
-  -c 'bash <repo>/train.sh' --workspace 分布式训练空间 --group H100 \
-  --image <ref> --priority 5
+  -c 'bash <repo>/train.sh' --workspace <WORKSPACE> --group <GROUP> \
+  --image <IMAGE_URL> --priority 5
 ```
 
 `job create` / `run` 本身不解析 `me:<repo>`；alias 解析发生在 CLI 参数层，例如 `notebook exec --cwd me:<repo>` 和 `notebook scp ... me:<repo>/file`。
+
+### 1a. `run` 快捷入口
+
+`inspire run` 是 `inspire job create + --watch` 的快捷入口，只适用于 GPU job，不支持 HPC / Notebook / Ray。
+
+```bash
+inspire run 'bash <repo>/train.sh' -q 8,160,1800 --nodes 2 \
+  --workspace <WORKSPACE> --group <GROUP> --image <IMAGE_URL> --watch
+```
+
+`--watch` 在 job 终态后自动退出。等价于：
+
+```bash
+inspire job create -n <name>-train -q 8,160,1800 --nodes 2 \
+  -c 'bash <repo>/train.sh' --workspace <WORKSPACE> --group <GROUP> \
+  --image <IMAGE_URL> --priority 5 && \
+inspire job logs --watch <name>-train
+```
+
+不指定 `--name` 时 `run` 自动生成 job 名。
 
 ## 2. 优先级
 
@@ -52,21 +74,20 @@ HPC 关键约束：
 1. `-c` 只写 Slurm 正文，平台自动补 `#SBATCH` 头；程序必须显式 `srun` 启动。
 2. `--compute-group "<name>"` 按 name 传。
 3. Slurm 级参数超出节点规格时可能静默排队。
-4. `--image` 必须是完整 Docker 地址，并带可用 Slurm 环境；通用基底是 `docker.sii.shaipower.online/inspire-studio/unified-base:v2`。
+4. `--image` 必须是完整 Docker 地址，并带可用 Slurm 环境。
 5. 平台自身吃约 0.3 核 CPU 和 384 MB 内存，应用层并发压到 `cpus-per-task - 4` 或更低。
-
-CPU 空间里只有 `HPC-可上网区资源-2` 支持 `inspire hpc create`。该组的 `500GB` 规格可能静默排队；真需要大内存交互处理时，退化成在 `CPU资源-2` 开 notebook。
+6. 并非所有 CPU compute group 都支持 `inspire hpc create`。提交前用 `inspire resources specs --usage hpc` 确认目标组可用。某些组的大内存规格可能静默排队；真需要大内存交互处理时，退化成在可上网组开 notebook 做交互。
 
 示例：
 
 ```bash
 inspire hpc create -n <name>-preprocess \
   -c 'srun bash -lc "python preprocess.py"' \
-  --compute-group HPC-可上网区资源-2 --workspace CPU资源空间 \
+  --compute-group <GROUP> --workspace <WORKSPACE> \
   -q 0,20,256 \
   --cpus-per-task 16 --memory-per-cpu 12 \
   --number-of-tasks 1 --instance-count 1 \
-  --project <P> --image docker.sii.shaipower.online/inspire-studio/unified-base:v2 \
+  --project <P> --image <IMAGE_URL> \
   --image-type SOURCE_PRIVATE
 ```
 
@@ -87,7 +108,7 @@ inspire hpc create -n <name>-preprocess \
 
 默认不要使用 Ray，除非任务明确需要弹性 worker、长守护、流式处理或异构 worker。固定规模 GPU 走 `job`，固定规模 CPU 走 `hpc`。
 
-Ray 当前主要在 `CI-情境智能` workspace 和 `CPU资源-2` 计算组可用，整体仍偏试验性。使用前先查：
+Ray 当前只在部分 workspace 和 compute group 可用，整体仍偏试验性。使用前先查：
 
 ```bash
 inspire resources specs --usage ray
@@ -98,10 +119,10 @@ inspire resources specs --usage ray
 ```bash
 inspire ray create -n <name>-pipeline \
   -c 'python driver.py --mode run_and_exit' \
-  --head-image docker.sii.shaipower.online/inspire-studio/unified-base:v2 \
-  --head-group CPU资源-2 --head-quota 0,2,8 \
-  --worker 'name=w1;image=docker.sii.shaipower.online/inspire-studio/unified-base:v2;group=CPU资源-2;quota=0,4,16;min=1;max=8;shm=32' \
-  -p <P> --workspace CPU资源空间
+  --head-image <IMAGE_URL> \
+  --head-group <GROUP> --head-quota 0,2,8 \
+  --worker 'name=w1;image=<IMAGE_URL>;group=<GROUP>;quota=0,4,16;min=1;max=8;shm=32' \
+  -p <P> --workspace <WORKSPACE>
 ```
 
 Ray 特有坑：
@@ -142,7 +163,20 @@ Ray 目前有底层 Browser API 指标 helper，但 CLI 尚未暴露 `ray metric
 | `logs` | 程序自身报错、训练进度、业务输出 |
 | `status` | 平台状态、优先级、实例列表和基础摘要 |
 
-## 6. HPC 异常状态对照
+## 6. GPU Job 异常状态对照
+
+| 现象 | 优先怀疑 |
+| --- | --- |
+| `PENDING` 过久 | 优先级不足或配额实时不足，用 `job events` 确认 |
+| `CREATING` 卡死 | 镜像拉取失败（`ImagePullBackOff`）或节点初始化 |
+| `instances` 中部分 Pod `Pending` | 分布式节点调度不均 |
+| `events` 出现 `ImagePullBackOff` | `--image` 拼写错误或 registry 不可达 |
+| `logs` 为空但 `status=RUNNING` | 主进程未重定向 stdout |
+| `status=FAILED` 但无业务报错 | OOM / GPU 显存溢出 / 节点驱逐 / OOMKilled |
+| `quota match failed` / 0 候选 | `--quota gpu,cpu,mem` 在当前 workspace 找不到对应规格。用 `inspire resources specs` 重选；多组撞名时加 `--group <name>` 消歧 |
+| `429` | 已内置退避；持续失败就等几分钟 |
+
+## 7. HPC 异常状态对照
 
 | 现象 | 优先怀疑 |
 | --- | --- |
@@ -154,7 +188,7 @@ Ray 目前有底层 Browser API 指标 helper，但 CLI 尚未暴露 `ray metric
 | `image not found` | 镜像地址不完整；必须是 `host/namespace/name:tag` 全形式 |
 | `429` | 已内置退避；持续失败就等几分钟 |
 
-## 7. 模型部署：`serving`
+## 8. 模型部署：`serving`
 
 `inspire serving` 面向模型部署服务，普通训练 / 预处理任务不要走它。账号需有 `inference_serving.create` 或等价权限；普通账号在 Web UI 上点"部署服务"可能被静默踢回首页，CLI create 也不会可靠。
 

@@ -38,6 +38,18 @@ inspire notebook exec <name> --cwd repo "pwd"
 
 冷启动时间很贵时，可以 `image save` 派生镜像固化环境；一次性任务用完即弃即可。
 
+### 诊断入口
+
+首选自动化诊断：
+
+```bash
+inspire notebook test <name>
+```
+
+该命令检查 SSH bootstrap 全链路并输出各阶段耗时，是排查连接问题的首选入口。test 失败时，再查看下表对照。
+
+### Bootstrap 机制
+
 CLI 在容器内跑 bootstrap shell 做两件事：
 
 1. 起 sshd：如果 `/usr/sbin/sshd` 不在，先从 `/inspire/hdd/global_public/inspire-skill-bootstrap/v1/sshd-debs/` 安装离线 deb，再补 `sshd` 用户和最小 `/etc/ssh/sshd_config`。
@@ -50,7 +62,7 @@ CLI 在容器内跑 bootstrap shell 做两件事：
 - `/var/log/dpkg.log` 末尾
 - `ps -ef | grep -E '[s]shd -p 22222|[r]tunnel'`
 
-常见现象：
+`notebook test` 也失败时的常见原因：
 
 | 现象 | 处理 |
 | --- | --- |
@@ -150,11 +162,13 @@ du -sh --max-depth=1 <dir>
 
 ## 6. 基底 notebook 与镜像
 
-项目刚开始时，建议在可上网 CPU 空间用 `docker.sii.shaipower.online/inspire-studio/unified-base:v2` 起一个基底 notebook，把 Slurm、Ray、分布式训练依赖和项目依赖一次性装好，再保存成项目通用镜像。
+项目刚开始时，建议在可上网 CPU 空间用统一基底镜像起一个基底 notebook，把 Slurm、Ray、分布式训练依赖和项目依赖一次性装好，再保存成项目通用镜像。
+
+> 下述示例中的 `<GROUP>`、`<WORKSPACE>`、`<IMAGE_URL>` 仅为占位格式。实际值以 `inspire resources specs` 和 `inspire config context` 的实时输出为准。
 
 ```bash
-inspire notebook create --workspace CPU资源空间 --group CPU资源-2 -q 0,20,256 \
-  --name cpu-box --image docker.sii.shaipower.online/inspire-studio/unified-base:v2 \
+inspire notebook create --workspace <WORKSPACE> --group <GROUP> -q 0,20,256 \
+  --name cpu-box --image <IMAGE_URL> \
   --project <P> --wait
 
 inspire notebook ssh cpu-box
@@ -162,6 +176,8 @@ inspire notebook exec cpu-box "apt-get update && apt-get install -y <deps> && pi
 inspire image save cpu-box -n <img> -v v1 --public --wait
 inspire image set-default --job <URL> --notebook <URL>
 ```
+
+镜像管理语义（list / register / delete / visibility / default）参见 [references/image-management.md](references/image-management.md)。
 
 已有 Ubuntu 镜像需要补 Slurm/Ray 依赖时：
 
