@@ -1,11 +1,10 @@
-"""Known Browser API endpoints for diffing captures.
+"""Closed Browser API endpoints for diffing captures.
 
-Update this list whenever a new endpoint is added to `references/dev/browser-api.md`
+Update this list only when an endpoint is added to `references/dev/browser-api.md`
 or wrapped by the CLI. The diffing tool (`analyze.py`) compares freshly-captured
 traffic against this set to surface newly-appeared or newly-dead endpoints.
-This file is not an implementation contract: it may include observed but
-unwrapped endpoints whose body schema is not closed yet. Use
-`references/dev/browser-api.md` for the evidence state of each endpoint family.
+Observed-only paths stay out of this file until their request body, response
+shape, Referer, and destructive semantics are verified.
 """
 
 from __future__ import annotations
@@ -17,29 +16,21 @@ KNOWN: set[tuple[str, str]] = {
     # --- User / Permissions ---
     ("GET", "/api/v1/user/detail"),
     ("GET", "/api/v1/user/routes/{id}"),
-    ("GET", "/api/v1/user/{id}"),
-    ("GET", "/api/v1/user/list"),
     ("GET", "/api/v1/user/permissions/{id}"),
     ("GET", "/api/v1/user/my-api-key/list"),
     ("GET", "/api/v1/user/quota"),
 
     # --- Project ---
     ("POST", "/api/v1/project/list"),
-    ("POST", "/api/v1/project/list_v2"),
-    ("POST", "/api/v1/project/list_for_page"),
     ("GET", "/api/v1/project/{id}"),
     ("GET", "/api/v1/project/owners"),
-
-    # --- Workspace ---
-    ("POST", "/api/v1/workspace/list"),
 
     # --- Notebook ---
     ("POST", "/api/v1/notebook/create"),
     ("POST", "/api/v1/notebook/operate"),
+    ("DELETE", "/api/v1/notebook/{id}"),
     ("POST", "/api/v1/notebook/list"),
-    ("POST", "/api/v1/notebook/users"),
     ("GET", "/api/v1/notebook/{id}"),
-    ("GET", "/api/v1/notebook/status"),
     ("POST", "/api/v1/notebook/events"),
     ("POST", "/api/v1/lifecycle/list"),
     ("POST", "/api/v1/run_index/list"),
@@ -57,6 +48,7 @@ KNOWN: set[tuple[str, str]] = {
 
     # --- Train Job ---
     ("POST", "/api/v1/train_job/list"),
+    ("POST", "/api/v1/train_job/delete"),
     ("POST", "/api/v1/train_job/detail"),
     ("POST", "/api/v1/train_job/users"),
     ("POST", "/api/v1/train_job/workdir"),
@@ -68,17 +60,33 @@ KNOWN: set[tuple[str, str]] = {
     # --- HPC Jobs ---
     ("POST", "/api/v1/hpc_jobs/list"),
     ("GET", "/api/v1/hpc_jobs/{id}"),
+    ("DELETE", "/api/v1/hpc_jobs/{id}"),
     ("POST", "/api/v1/hpc_jobs/events/list"),
-    ("POST", "/api/v1/hpc_jobs/instances/list"),
-    ("POST", "/api/v1/logs/hpc"),
+
+    # --- Ray Jobs ---
+    ("POST", "/api/v1/ray_job/list"),
+    ("POST", "/api/v1/ray_job/users"),
+    ("POST", "/api/v1/ray_job/detail"),
+    ("POST", "/api/v1/ray_job/stop"),
+    ("POST", "/api/v1/ray_job/delete"),
+    ("POST", "/api/v1/ray_job/create"),
+    ("POST", "/api/v1/ray_job/events/list"),
+    ("POST", "/api/v1/ray_job/instances/list"),
+    ("POST", "/api/v1/ray_job/scaling_histories/list"),
+
+    # --- Metrics ---
+    ("POST", "/api/v1/cluster_metric/resource_metric_by_time"),
 
     # --- Resources / Compute groups ---
     ("POST", "/api/v1/logic_compute_groups/list"),
+    ("POST", "/api/v1/compute_resources/cluster_basic_info"),
+    ("GET", "/api/v1/compute_resources/cluster_basic_info"),
+    ("POST", "/api/v1/cluster_basic_info"),
     ("GET", "/api/v1/compute_resources/logic_compute_groups/{id}"),
-    ("GET", "/api/v1/logic_compute_groups/{id}"),
+    ("POST", "/api/v1/compute_resources/list_node_dimension"),
+    ("POST", "/api/v1/compute_resources/node_dimension/list"),
+    ("GET", "/api/v1/compute_resources/node_specs/logic_compute_groups/{id}"),
     ("POST", "/api/v1/cluster_nodes/list"),
-    ("GET", "/api/v1/cluster_nodes/workspace/{id}"),
-    ("POST", "/api/v1/compute_groups/list"),  # exists (400 on `{workspace_id}` body); body schema unknown
 
     # --- Model (registry) ---
     ("POST", "/api/v1/model/list"),
@@ -95,13 +103,6 @@ KNOWN: set[tuple[str, str]] = {
     ("POST", "/api/v1/inference_servings/create"),
     ("DELETE", "/api/v1/inference_servings/{id}"),
     ("POST", "/api/v2/inference_serving"),
-
-    # --- SSH keys ---
-    ("POST", "/api/v1/ssh/list"),
-    ("GET", "/api/v1/ssh/keys"),
-    ("GET", "/api/v1/ssh/my_keys"),
-    ("GET", "/api/v1/ssh/public_keys"),
-    ("POST", "/api/v1/ssh/create"),
 }
 
 # Endpoints that used to exist but were retired by the platform. Listed here
