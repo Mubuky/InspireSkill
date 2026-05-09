@@ -33,6 +33,7 @@ PACKAGE_NAME = "inspire-skill"
 GIT_REF = "main"
 RAW_PYPROJECT_URL = f"https://raw.githubusercontent.com/{REPO_SLUG}/{GIT_REF}/cli/pyproject.toml"
 TARBALL_URL = f"https://codeload.github.com/{REPO_SLUG}/tar.gz/refs/heads/{GIT_REF}"
+PYPI_JSON_URL = f"https://pypi.org/pypi/{PACKAGE_NAME}/json"
 
 CACHE_DIR = Path.home() / ".inspire"
 CACHE_FILE = CACHE_DIR / "update-status.json"
@@ -106,8 +107,26 @@ def _is_newer(latest: str, current: str) -> bool:
         return latest != current
 
 
-def fetch_latest_version() -> str | None:
-    """Hit the raw pyproject.toml on `main` and parse its version. Returns None on any failure."""
+def fetch_latest_version_info() -> tuple[str | None, str]:
+    """Return the latest published CLI version and the source used to determine it.
+
+    The global CLI updater installs from PyPI, so PyPI must be the primary
+    version source. GitHub `main` stays as a fallback so update notices still
+    work during transient package-index failures.
+    """
+    req = urllib.request.Request(
+        PYPI_JSON_URL,
+        headers={"User-Agent": f"inspire-skill/{__version__}"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=FETCH_TIMEOUT) as resp:
+            payload = json.loads(resp.read().decode("utf-8", errors="replace"))
+        version = payload.get("info", {}).get("version")
+        if isinstance(version, str) and version.strip():
+            return version.strip(), PYPI_JSON_URL
+    except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError):
+        pass
+
     req = urllib.request.Request(
         RAW_PYPROJECT_URL,
         headers={"User-Agent": f"inspire-skill/{__version__}"},
@@ -116,18 +135,24 @@ def fetch_latest_version() -> str | None:
         with urllib.request.urlopen(req, timeout=FETCH_TIMEOUT) as resp:
             body = resp.read().decode("utf-8", errors="replace")
     except (urllib.error.URLError, TimeoutError, OSError):
-        return None
-    return _parse_version(body)
+        return None, RAW_PYPROJECT_URL
+    return _parse_version(body), RAW_PYPROJECT_URL
 
 
-def run_check(write: bool = True) -> dict[str, Any]:
+def fetch_latest_version() -> str | None:
+    """Return the latest published CLI version, or None on any failure."""
+    latest, _source = fetch_latest_version_info()
+    return latest
+
+
+def run_check(write: bool = True, *, current_version: str | None = None) -> dict[str, Any]:
     """Perform a fresh version check and (by default) persist the result."""
-    latest = fetch_latest_version()
+    latest, source = fetch_latest_version_info()
     result: dict[str, Any] = {
-        "current": __version__,
+        "current": current_version or __version__,
         "latest": latest,
         "checked_at": _now_iso(),
-        "source": RAW_PYPROJECT_URL,
+        "source": source,
     }
     if write:
         _write_cache(result)

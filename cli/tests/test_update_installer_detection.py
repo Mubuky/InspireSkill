@@ -25,10 +25,17 @@ from __future__ import annotations
 import importlib
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
-from inspire.cli.commands.update import _detect_installer, _upgrade_cli
+from inspire.cli.commands.update import (
+    _detect_installer,
+    _is_local_requirement,
+    _parse_uv_tool_list,
+    _scan_stale_skill_patterns,
+    _upgrade_cli,
+)
 
 update_module = importlib.import_module("inspire.cli.commands.update")
 
@@ -91,9 +98,9 @@ def test_upgrade_cli_retries_pypi_network_errors_with_mirrors(
 
     assert _upgrade_cli(silent=True) is True
     assert calls == [
-        (["uv", "tool", "upgrade", "inspire-skill"], None),
+        (["uv", "tool", "install", "--force", "inspire-skill"], None),
         (
-            ["uv", "tool", "upgrade", "inspire-skill"],
+            ["uv", "tool", "install", "--force", "inspire-skill"],
             "https://pypi.tuna.tsinghua.edu.cn/simple",
         ),
     ]
@@ -118,3 +125,86 @@ def test_upgrade_cli_does_not_retry_non_network_errors(
 
     assert _upgrade_cli(silent=True) is False
     assert calls == [["pipx", "upgrade", "inspire-skill"]]
+
+
+def test_upgrade_cli_from_repo_venv_updates_global_uv_tool(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, check, env, text, stdout, stderr):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="installed\n", stderr="")
+
+    monkeypatch.setattr(sys, "prefix", "/Users/zillionx/InspireSkill/cli/.venv")
+    monkeypatch.setattr(
+        update_module,
+        "_uv_tool_info",
+        lambda: update_module.UvToolInfo(
+            version="4.1.0",
+            required="file:///Users/zillionx/InspireSkill/cli",
+            env_path="/Users/zillionx/.local/share/uv/tools/inspire-skill",
+            executable_path="/Users/zillionx/.local/bin/inspire",
+        ),
+    )
+    monkeypatch.setattr(update_module.subprocess, "run", fake_run)
+
+    assert _upgrade_cli(silent=True) is True
+    assert calls == [["uv", "tool", "install", "--force", "inspire-skill"]]
+
+
+def test_parse_uv_tool_list_captures_local_source_and_executable() -> None:
+    info = _parse_uv_tool_list(
+        "inspire-skill v4.1.1 [required: file:///Users/zillionx/InspireSkill/cli] "
+        "(/Users/zillionx/.local/share/uv/tools/inspire-skill)\n"
+        "- inspire (/Users/zillionx/.local/bin/inspire)\n"
+    )
+
+    assert info is not None
+    assert info.version == "4.1.1"
+    assert info.required == "file:///Users/zillionx/InspireSkill/cli"
+    assert info.env_path == "/Users/zillionx/.local/share/uv/tools/inspire-skill"
+    assert info.executable_path == "/Users/zillionx/.local/bin/inspire"
+    assert _is_local_requirement(info.required)
+
+
+def test_stale_skill_patterns_detect_legacy_target_dir(tmp_path: Path) -> None:
+    (tmp_path / "SKILL.md").write_text(
+        "Run INSPIRE_TARGET_DIR=/root/labwork inspire notebook exec ...\n",
+        encoding="utf-8",
+    )
+
+    errors = _scan_stale_skill_patterns(tmp_path)
+
+    assert errors
+    assert "INSPIRE_TARGET_DIR" in errors[0]
+
+
+def test_global_audit_prefers_uv_tool_executable_over_repo_venv_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[list[str]] = []
+
+    monkeypatch.setattr(
+        update_module,
+        "_uv_tool_info",
+        lambda: update_module.UvToolInfo(
+            version="4.1.1",
+            required=None,
+            env_path="/Users/zillionx/.local/share/uv/tools/inspire-skill",
+            executable_path="/Users/zillionx/.local/bin/inspire",
+        ),
+    )
+    monkeypatch.setattr(update_module.shutil, "which", lambda _name: "/repo/.venv/bin/inspire")
+
+    def fake_run(cmd, check, env, text, stdout, stderr):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="inspire, version 4.1.1\n", stderr="")
+
+    monkeypatch.setattr(update_module.subprocess, "run", fake_run)
+
+    ok, actual = update_module._audit_global_cli(expected_version="4.1.1", silent=True)
+
+    assert ok is True
+    assert actual == "4.1.1"
+    assert calls == [["/Users/zillionx/.local/bin/inspire", "--version"]]

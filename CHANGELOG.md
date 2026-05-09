@@ -6,6 +6,15 @@
 
 当前无未发布变更。
 
+## 4.1.2（2026-05-09）
+
+### Fixed
+
+- 强化 `inspire update` 的全局更新路径：从本地 checkout 或 repo venv 运行时，也会更新 `uv tool` / `pipx` 管理的全局 `inspire`。
+- `uv tool` 安装源如果残留为本地 `file://` 路径，`inspire update` 会重置为官方 PyPI 包，避免开发机路径污染全局安装。
+- `inspire update` 完成后会验证全局 executable、agent skill 目录和旧 `INSPIRE_TARGET_DIR` / 长环境前缀残留，避免 CLI 最新但 Agent 仍读取旧文档。
+- CLI 最新版本检查改为以 PyPI 发布版本为主，GitHub `main` 只作为网络或包索引失败时的 fallback。
+
 ## 4.1.0（2026-05-08）
 
 ### Added

@@ -20,7 +20,9 @@ Design notes:
 from __future__ import annotations
 
 import io
+import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -28,6 +30,7 @@ import tarfile
 import tempfile
 import urllib.error
 import urllib.request
+from dataclasses import dataclass
 from pathlib import Path
 
 import click
@@ -65,6 +68,15 @@ HARNESS_ROOTS = {
 }
 
 SKILL_ASSETS = ("SKILL.md", "references")
+INSTALL_STATE_FILE = ".inspire-skill-install.json"
+
+STALE_SKILL_PATTERNS = (
+    ("INSPIRE_TARGET_DIR", "legacy target-dir environment variable"),
+    ("env -u INSPIRE_PLAYWRIGHT_PROXY", "legacy proxy-unset command prefix"),
+    ("-u INSPIRE_RTUNNEL_PROXY", "legacy rtunnel proxy command prefix"),
+    ("[paths].target_dir", "legacy target_dir config path"),
+    ("Missing target directory configuration", "legacy target_dir error wording"),
+)
 
 PYPI_MIRROR_INDEX_URLS = (
     "https://pypi.tuna.tsinghua.edu.cn/simple",
@@ -91,6 +103,27 @@ NETWORK_OR_INDEX_ERROR_HINTS = (
     "pypi.org/simple",
 )
 
+_UV_TOOL_LINE_RE = re.compile(
+    rf"^{re.escape(PACKAGE_NAME)}\s+v(?P<version>\S+)"
+    r"(?:\s+\[required:\s*(?P<required>[^\]]+)\])?"
+    r"(?:\s+\((?P<env_path>[^)]+)\))?"
+)
+_UV_TOOL_EXEC_RE = re.compile(r"^-\s+inspire(?:\s+\((?P<path>[^)]+)\))?")
+_VERSION_OUTPUT_RE = re.compile(r"\bversion\s+([0-9][^\s]*)")
+
+
+@dataclass(frozen=True)
+class UvToolInfo:
+    version: str | None = None
+    required: str | None = None
+    env_path: str | None = None
+    executable_path: str | None = None
+
+
+@dataclass(frozen=True)
+class PipxToolInfo:
+    version: str | None = None
+
 
 def _detect_harnesses() -> list[str]:
     return [h for h, root in HARNESS_ROOTS.items() if root.is_dir()]
@@ -114,6 +147,92 @@ def _detect_installer() -> str | None:
     if "pipx" in parts and "venvs" in parts:
         return "pipx"
     return None
+
+
+def _parse_uv_tool_list(output: str) -> UvToolInfo | None:
+    lines = output.splitlines()
+    for index, line in enumerate(lines):
+        match = _UV_TOOL_LINE_RE.match(line.strip())
+        if not match:
+            continue
+        executable_path: str | None = None
+        for child in lines[index + 1 :]:
+            stripped = child.strip()
+            if not stripped.startswith("- "):
+                break
+            exec_match = _UV_TOOL_EXEC_RE.match(stripped)
+            if exec_match:
+                executable_path = exec_match.group("path")
+                break
+        return UvToolInfo(
+            version=match.group("version"),
+            required=match.group("required"),
+            env_path=match.group("env_path"),
+            executable_path=executable_path,
+        )
+    return None
+
+
+def _uv_tool_info() -> UvToolInfo | None:
+    try:
+        proc = subprocess.run(
+            ["uv", "tool", "list", "--show-version-specifiers", "--show-paths"],
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except FileNotFoundError:
+        return None
+    if proc.returncode != 0:
+        return None
+    return _parse_uv_tool_list(proc.stdout or "")
+
+
+def _pipx_tool_info() -> PipxToolInfo | None:
+    try:
+        proc = subprocess.run(
+            ["pipx", "list", "--json"],
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except FileNotFoundError:
+        return None
+    if proc.returncode != 0:
+        return None
+    try:
+        payload = json.loads(proc.stdout or "{}")
+    except json.JSONDecodeError:
+        return None
+    venvs = payload.get("venvs")
+    if not isinstance(venvs, dict) or PACKAGE_NAME not in venvs:
+        return None
+    meta = venvs.get(PACKAGE_NAME) or {}
+    metadata = meta.get("metadata") if isinstance(meta, dict) else {}
+    main_package = metadata.get("main_package") if isinstance(metadata, dict) else {}
+    version = main_package.get("package_version") if isinstance(main_package, dict) else None
+    return PipxToolInfo(version=version if isinstance(version, str) else None)
+
+
+def _is_local_requirement(spec: str | None) -> bool:
+    if not spec:
+        return False
+    value = spec.strip()
+    if value.startswith("file://"):
+        return True
+    if value.startswith(("/", "./", "../", "~")):
+        return True
+    return " @ file://" in value
+
+
+def _official_uv_install_cmd() -> list[str]:
+    # `uv tool upgrade` preserves the original install requirement. If the
+    # tool was installed from a local path, that keeps updating from the local
+    # checkout. For a global end-user update, force the canonical PyPI package
+    # requirement so `inspire update` can repair local-path installs in one run.
+    return ["uv", "tool", "install", "--force", PACKAGE_NAME]
 
 
 def _is_likely_network_or_index_error(output: str) -> bool:
@@ -156,14 +275,45 @@ def _run_upgrade_command(
 
 def _upgrade_cli(silent: bool) -> bool:
     installer = _detect_installer()
+    uv_info = None if silent and installer in {"uv", "pipx"} else _uv_tool_info()
     if installer == "uv":
-        cmd = ["uv", "tool", "upgrade", PACKAGE_NAME]
+        cmd = _official_uv_install_cmd()
+        if uv_info and _is_local_requirement(uv_info.required) and not silent:
+            click.secho(
+                f"! Existing uv tool install uses a local source ({uv_info.required}); "
+                "resetting the global tool to the official PyPI package.",
+                fg="yellow",
+                err=True,
+            )
     elif installer == "pipx":
         cmd = ["pipx", "upgrade", PACKAGE_NAME]
+    elif uv_info is not None:
+        cmd = _official_uv_install_cmd()
+        if not silent:
+            click.secho(
+                "› Current process is not the global uv tool install; "
+                "updating the global `inspire` executable managed by uv.",
+                fg="blue",
+            )
+            if _is_local_requirement(uv_info.required):
+                click.secho(
+                    f"! Existing uv tool install uses a local source ({uv_info.required}); "
+                    "resetting the global tool to the official PyPI package.",
+                    fg="yellow",
+                    err=True,
+                )
+    elif _pipx_tool_info() is not None:
+        cmd = ["pipx", "upgrade", PACKAGE_NAME]
+        if not silent:
+            click.secho(
+                "› Current process is not the global pipx install; "
+                "updating the global `inspire` executable managed by pipx.",
+                fg="blue",
+            )
     else:
         if not silent:
             click.secho(
-                "✗ Can't auto-upgrade in place: this build isn't managed by "
+                "✗ Can't find a global InspireSkill install managed by "
                 "`uv tool install` or `pipx install`.",
                 fg="red",
                 err=True,
@@ -309,7 +459,67 @@ def _extract_assets(tarball: bytes, dest: Path) -> Path | None:
         return None
 
 
-def _refresh_skill_files(silent: bool) -> bool:
+def _iter_skill_files(root: Path) -> list[Path]:
+    files: list[Path] = []
+    skill_file = root / "SKILL.md"
+    if skill_file.is_file():
+        files.append(skill_file)
+    refs = root / "references"
+    if refs.is_dir():
+        files.extend(path for path in refs.rglob("*") if path.is_file())
+    return sorted(files)
+
+
+def _scan_stale_skill_patterns(root: Path) -> list[str]:
+    errors: list[str] = []
+    for path in _iter_skill_files(root):
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError as e:
+            errors.append(f"{path}: unreadable ({e})")
+            continue
+        for pattern, description in STALE_SKILL_PATTERNS:
+            if pattern in text:
+                errors.append(f"{path}: found {description} (`{pattern}`)")
+    return errors
+
+
+def _verify_skill_target(source_root: Path, target: Path) -> list[str]:
+    errors: list[str] = []
+    for source_path in _iter_skill_files(source_root):
+        rel = source_path.relative_to(source_root)
+        target_path = target / rel
+        if not target_path.is_file():
+            errors.append(f"{target_path}: missing after refresh")
+            continue
+        try:
+            if target_path.read_bytes() != source_path.read_bytes():
+                errors.append(f"{target_path}: content differs from refreshed source")
+        except OSError as e:
+            errors.append(f"{target_path}: unreadable after refresh ({e})")
+    errors.extend(_scan_stale_skill_patterns(target))
+    return errors
+
+
+def _write_install_state(target: Path, *, latest_version: str | None = None) -> None:
+    payload = {
+        "package": PACKAGE_NAME,
+        "version": latest_version or __version__,
+        "source": TARBALL_URL,
+        "assets": list(SKILL_ASSETS),
+    }
+    try:
+        (target / INSTALL_STATE_FILE).write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+    except OSError:
+        # The copy verification below will catch serious write failures. The
+        # manifest is a diagnostic convenience, not the source of truth.
+        pass
+
+
+def _refresh_skill_files(silent: bool, *, latest_version: str | None = None) -> bool:
     harnesses = _detect_harnesses()
     if not harnesses:
         if not silent:
@@ -356,6 +566,17 @@ def _refresh_skill_files(silent: bool) -> bool:
             shutil.copy2(src_skill, target / "SKILL.md")
             if src_refs.is_dir():
                 shutil.copytree(src_refs, target / "references", dirs_exist_ok=True)
+            _write_install_state(target, latest_version=latest_version)
+
+            verify_errors = _verify_skill_target(extracted, target)
+            if verify_errors:
+                if not silent:
+                    click.secho(f"✗ refreshed skill verification failed for {target}:", fg="red")
+                    for error in verify_errors[:20]:
+                        click.echo(f"  - {error}", err=True)
+                    if len(verify_errors) > 20:
+                        click.echo(f"  ... {len(verify_errors) - 20} more", err=True)
+                return False
 
             if harness == "codex":
                 agents_dir = target / "agents"
@@ -372,6 +593,115 @@ def _refresh_skill_files(silent: bool) -> bool:
                 click.secho(f"✓ refreshed skill → {target}", fg="green")
 
     return True
+
+
+def _parse_version_output(output: str) -> str | None:
+    match = _VERSION_OUTPUT_RE.search(output)
+    return match.group(1) if match else None
+
+
+def _read_inspire_version(executable: str | None = None) -> tuple[str | None, str | None, str]:
+    executable = executable or shutil.which("inspire")
+    if not executable:
+        return None, None, "not found on PATH"
+    env = os.environ.copy()
+    env["INSPIRE_SKIP_UPDATE_CHECK"] = "1"
+    try:
+        proc = subprocess.run(
+            [executable, "--version"],
+            check=False,
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except OSError as e:
+        return executable, None, str(e)
+    output = (proc.stdout or "") + (proc.stderr or "")
+    if proc.returncode != 0:
+        return executable, None, output.strip() or f"exit {proc.returncode}"
+    return executable, _parse_version_output(output), output.strip()
+
+
+def _audit_global_cli(expected_version: str | None, silent: bool) -> tuple[bool, str | None]:
+    uv_info = _uv_tool_info()
+    executable_hint = uv_info.executable_path if uv_info and uv_info.executable_path else None
+    executable, actual_version, detail = _read_inspire_version(executable_hint)
+    ok = True
+    if executable is None:
+        ok = False
+        if not silent:
+            click.secho("✗ `inspire` is not on PATH after update.", fg="red", err=True)
+    elif actual_version is None:
+        ok = False
+        if not silent:
+            click.secho(
+                f"✗ couldn't parse `{executable} --version` after update: {detail}",
+                fg="red",
+                err=True,
+            )
+    elif expected_version and _is_newer(expected_version, actual_version):
+        ok = False
+        if not silent:
+            click.secho(
+                f"✗ PATH executable is still v{actual_version}; expected v{expected_version}.",
+                fg="red",
+                err=True,
+            )
+            click.echo(f"  executable: {executable}", err=True)
+    elif not silent:
+        click.secho(f"✓ PATH inspire → {executable} (v{actual_version})", fg="green")
+
+    if uv_info and _is_local_requirement(uv_info.required):
+        ok = False
+        if not silent:
+            click.secho(
+                f"✗ global uv tool install still points at local source: {uv_info.required}",
+                fg="red",
+                err=True,
+            )
+            click.echo("  Run `inspire update` again or reinstall with the official installer.", err=True)
+    return ok, actual_version
+
+
+def _audit_installed_skills(silent: bool) -> bool:
+    ok = True
+    for harness in _detect_harnesses():
+        target = HARNESS_SKILL_DIRS[harness]
+        if not (target / "SKILL.md").is_file():
+            ok = False
+            if not silent:
+                click.secho(f"✗ {harness} skill missing: {target / 'SKILL.md'}", fg="red", err=True)
+            continue
+        stale_errors = _scan_stale_skill_patterns(target)
+        if stale_errors:
+            ok = False
+            if not silent:
+                click.secho(f"✗ {harness} skill contains stale update patterns:", fg="red", err=True)
+                for error in stale_errors[:20]:
+                    click.echo(f"  - {error}", err=True)
+                if len(stale_errors) > 20:
+                    click.echo(f"  ... {len(stale_errors) - 20} more", err=True)
+        elif not silent:
+            click.secho(f"✓ {harness} skill verified → {target}", fg="green")
+    return ok
+
+
+def _audit_update_state(
+    *,
+    expected_version: str | None,
+    check_cli: bool,
+    check_skills: bool,
+    silent: bool,
+) -> tuple[bool, str | None]:
+    ok = True
+    actual_version: str | None = None
+    if check_cli:
+        cli_ok, actual_version = _audit_global_cli(expected_version, silent)
+        ok = cli_ok and ok
+    if check_skills:
+        ok = _audit_installed_skills(silent) and ok
+    return ok, actual_version
 
 
 def _print_status(check_result: dict, silent: bool) -> None:
@@ -393,6 +723,12 @@ def _print_status(check_result: dict, silent: bool) -> None:
             fg="yellow",
         )
         click.echo("  run `inspire update` (no flags) to upgrade CLI + SKILL files in one go.")
+    elif _is_newer(current, latest):
+        click.secho(
+            f"! Local InspireSkill v{current} is newer than published v{latest}.",
+            fg="yellow",
+        )
+        click.echo("  global `inspire update` will install the latest published PyPI package.")
     else:
         click.secho(f"✓ InspireSkill is up to date (v{current}).", fg="green")
 
@@ -411,7 +747,17 @@ def update(check_only: bool, silent: bool, cli_only: bool, skill_only: bool) -> 
     if check_only:
         result = run_check(write=True)
         _print_status(result, silent)
+        audit_ok, actual_version = _audit_update_state(
+            expected_version=result.get("latest"),
+            check_cli=True,
+            check_skills=True,
+            silent=silent,
+        )
+        if actual_version:
+            run_check(write=True, current_version=actual_version)
         if not result.get("latest"):
+            sys.exit(1)
+        if not audit_ok:
             sys.exit(1)
         return
 
@@ -426,10 +772,22 @@ def update(check_only: bool, silent: bool, cli_only: bool, skill_only: bool) -> 
     if not skill_only:
         ok = _upgrade_cli(silent) and ok
     if not cli_only:
-        ok = _refresh_skill_files(silent) and ok
+        ok = _refresh_skill_files(silent, latest_version=pre.get("latest")) and ok
 
-    # Re-check after upgrade so the cache reflects the new local version.
-    run_check(write=True)
+    # Verify the observable install state rather than trusting command exit
+    # codes. This catches PATH shadowing, stale agent skill files, and local
+    # uv-tool sources that would otherwise keep the global command outdated.
+    audit_ok, actual_version = _audit_update_state(
+        expected_version=pre.get("latest"),
+        check_cli=not skill_only,
+        check_skills=not cli_only,
+        silent=silent,
+    )
+    ok = audit_ok and ok
+
+    # Re-check after upgrade so the cache reflects the externally visible
+    # PATH version, not the already-imported module version from this process.
+    run_check(write=True, current_version=actual_version or __version__)
 
     if not ok:
         sys.exit(1)
