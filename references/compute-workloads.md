@@ -165,6 +165,8 @@ Ray 目前有底层 Browser API 指标 helper，但 CLI 尚未暴露 `ray metric
 | `logs` | 程序自身报错、训练进度、业务输出 |
 | `status` | 平台状态、优先级、实例列表和基础摘要 |
 
+终态且不再需要的 job、HPC、Ray 或 serving 要清理。running 资源先 stop，再 delete；不确定是否仍有人使用时跳过。不要为了“重试一下”直接重复提交同名或同资源任务，先看 events / logs / metrics 判断失败原因。
+
 ## 6. GPU Job 异常状态对照
 
 | 现象 | 优先怀疑 |

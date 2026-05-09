@@ -165,6 +165,8 @@ inspire notebook metrics <name> --metric gpu,gpu_mem,cpu,mem --sparkline --no-pl
 | `metrics` | 资源是否在工作、GPU / CPU / 内存是否打满、I/O 是否还有流量 |
 | `exec` / `ssh` | 进容器查进程、日志、文件、应用自身状态 |
 
+终态且不再需要的 notebook 要清理；running notebook 先 stop，再 delete。不确定是否仍有人使用时跳过。失败或卡住时先看 events 和 test 输出，不要凭猜测重复创建同规格实例。
+
 ## 6. 代码与文件流转
 
 | 文件流转类型 | 做法 |

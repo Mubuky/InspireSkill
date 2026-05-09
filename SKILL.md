@@ -9,23 +9,7 @@ description: "Execution-first Inspire platform playbook for agents driving the i
 
 本文是入口和路由层：它告诉 Agent 先查什么、加载哪份 reference、哪些事实必须实时验证。具体平台语义放在 reference 中；命令是否存在、参数叫什么、默认值是什么，永远以 CLI help 为准。
 
-## 1. 运维约束
-
-| 主题 | 约束 |
-| --- | --- |
-| 输出观察面 | Agent 默认使用人类格式。人类输出更短，隐藏低价值 raw ID，适合直接决策。`--json` 是脚本接口，只在写脚本、接 `jq` 或必须消费结构化字段时使用。 |
-| 代理配置 | 代理通过 `inspire account add`、账号级 config、`inspire config show` 和 `inspire config check` 管理。任务命令直接写 `inspire <cmd>`，CLI 会读取持久配置。 |
-| 项目路径 | 项目远端路径只通过仓库级 `[path_aliases]` 表达。`inspire init --discover` 会写入 `me`、`public`、`global-me` 和按存储池区分的 alias；`notebook exec` / `shell` 默认用 `me`，临时切目录用 `--cwd me:<subdir>`，新增持久 alias 用 `inspire notebook set-path ... as <alias>`。 |
-| 实时事实源 | `job list`、`notebook list`、`resources specs` / `list` / `nodes` 等状态查询以平台实时结果为准。本地 cache 只能存放 SSH 会话、事件副本等非权威辅助信息。 |
-| 资源申请 | 先查实时空余，再按真实需求申请。不要因为模型保守而主动缩小规模；只有调度语义、项目配额或实时空余明确不足时才降档。 |
-| 默认 workspace | 默认只主动使用 `CPU 资源空间` 和 `分布式训练空间`。其它 workspace 需要仓库级 `INSPIRE.md` 或用户明确指定。 |
-| 优先级 | `--priority` 接受 1 到 10。1 到 3 是低优先级，4 是普通优先级，5 到 10 是高优先级。需要稳定运行时传 5 或更高，并用 `inspire job status <name>` 核对人类输出中的优先级。 |
-| 排错入口 | 任务 PENDING、CREATING 过久或 FAILED 原因不明时，第一步查 `inspire <res> events <name>`。不要凭猜测重试或重提。 |
-| 健康度观察 | 任务已启动但吞吐、显存、CPU、内存或网络状态不明时，查 `inspire notebook|job|hpc|serving metrics <name>`。`events` 看调度和生命周期原因；`metrics` 看资源利用率和多 pod 是否均衡。 |
-| 清理 | 终态且不再需要的资源用 `<res> delete <name> --yes` 清理；running 先 stop。不确定是否仍有人使用时跳过。 |
-| 大操作 | 共享盘大规模 `mv`、`cp`、`rm` 前先看文件量和大小分布。超过 20 分钟的远程操作使用后台任务 + sentinel 文件，不要让 `notebook exec` 长时间同步挂住。 |
-
-## 2. CLI 命令查询入口
+## 1. 使用流程
 
 命令列表、子命令功能和参数说明以 CLI help 为准，不在 SKILL 或 references 中维护硬编码清单。需要确认某个操作时，先查 help，再执行实时查询或提交。不要把旧文档、记忆或历史示例当作命令存在性的事实来源。
 
@@ -46,14 +30,14 @@ uv run inspire hpc create --help
 
 `inspire --help` 的 `Commands` 区给出当前版本真实命令组；`inspire <command-group> --help` 给出该组所有子命令；`inspire <command-group> <subcommand> --help` 给出参数、默认值、必填项和注意事项。
 
-执行顺序：
+每次任务按这个顺序走：
 
 1. 用 help 确认命令和参数。
-2. 加载一份最相关的 reference，理解平台语义和坑位。
-3. 如果需要选择 workspace、compute group、quota 或远端路径，额外加载 [references/resources-and-paths.md](references/resources-and-paths.md)。
-4. 执行前查实时状态；失败或卡住先看 events；已运行但健康度不明时看 metrics。
+2. 加载一份最相关的 reference。
+3. 任务跨边界时，再加载第二份 reference。
+4. 执行前用 CLI 实时查询确认平台状态。
 
-## 3. 按需加载索引
+## 2. 按需加载索引
 
 每次优先只加载一份业务 reference；任务跨边界时再加载第二份。reference 之间按下表分工，不互相维护完整命令清单。
 
@@ -68,7 +52,7 @@ uv run inspire hpc create --help
 | 安装、更新、账号、项目初始化、代理 setup | [references/setup/install-and-config.md](references/setup/install-and-config.md)、[references/setup/proxy-setup.md](references/setup/proxy-setup.md) | 本机安装、账号 config、项目 `.inspire/config.toml`、代理配置 | 平台任务运行细节 |
 | 需要维护 CLI 封装或对照平台 API | [references/dev/openapi.md](references/dev/openapi.md)、[references/dev/browser-api.md](references/dev/browser-api.md) | API 认证、端点、Browser API / OpenAPI 边界 | 日常 Agent 执行工作流 |
 
-## 4. 项目上下文
+## 3. 项目上下文
 
 仓库根可用 `INSPIRE.md` 记录非配置性上下文，建议包含：
 
