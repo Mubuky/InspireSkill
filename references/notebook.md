@@ -1,10 +1,10 @@
 # Notebook 工作流
 
-本文负责 notebook 的运行时操作：创建后的连接、`shell` / `exec` / `scp` 语义、SSH bootstrap、HTTPS proxy、事件与指标、大文件操作，以及在 notebook 内准备基底环境。它不维护镜像 registry 规则；保存、注册、默认镜像和可见性看 [image-management.md](image-management.md)。资源和路径概念看 [resources-and-paths.md](resources-and-paths.md)。
+创建、连接、执行、传文件、诊断、暴露容器端口，或在 notebook 内准备基底环境时，先查本手册。镜像保存、注册、默认值和可见性看 [image-management.md](image-management.md)；workspace、compute group、quota 和 path alias 概念看 [resources-and-paths.md](resources-and-paths.md)。
 
 ## 1. CLI help 查询
 
-notebook 子命令、参数和功能说明以 CLI help 为准，不在 Agent 文档里维护速查表。
+notebook 子命令、参数和功能说明以 CLI help 为准，不在手册里维护速查表。
 
 ```bash
 inspire notebook --help

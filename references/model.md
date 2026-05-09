@@ -1,6 +1,6 @@
 # Model Registry
 
-本文负责模型仓库的只读浏览边界，以及 model registry 和 serving 的职责拆分。它不覆盖模型上传、模型注册、部署创建或 serving 运维；部署生命周期看 [compute-workloads.md](compute-workloads.md) 的 serving 部分。
+浏览模型仓库、查看模型版本，或判断 model registry 和 serving 的边界时，先查本手册。模型上传、模型注册、部署创建和 serving 运维不在这里展开；部署生命周期看 [compute-workloads.md](compute-workloads.md) 的 serving 部分。
 
 命令是否存在、参数名和默认值以 CLI help 为准：
 
@@ -46,4 +46,4 @@ inspire model versions <model-name>
 
 - CLI 不覆盖模型上传或注册；模型首次入库必须通过 Web UI `/modelLibrary`。
 - model registry 与 model deployment（`/jobs/modelDeployment`）是两个不同的平台模块；前者是仓库浏览，后者是生命周期管理。
-- 日常 Agent 默认看 human 输出；只有脚本消费字段或需要精确结构时才用 `--json`。
+- 日常默认看 human 输出；只有脚本消费字段或需要精确结构时才用 `--json`。

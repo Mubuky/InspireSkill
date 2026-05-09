@@ -1,6 +1,6 @@
 # 三阶段项目工作流
 
-本文负责跨阶段编排：什么时候用 notebook 准备环境，什么时候切到 HPC / Ray 做数据处理，什么时候进入 GPU job 训练，以及每个阶段的验收点。具体命令参数以 CLI `--help` 为准；单领域细节分别看 [notebook.md](notebook.md)、[compute-workloads.md](compute-workloads.md)、[image-management.md](image-management.md) 和 [resources-and-paths.md](resources-and-paths.md)。
+项目要从环境准备、数据处理推进到分布式训练时，先查本手册。这里只给跨阶段编排和验收点；具体命令参数以 CLI `--help` 为准，单领域细节分别看 [notebook.md](notebook.md)、[compute-workloads.md](compute-workloads.md)、[image-management.md](image-management.md) 和 [resources-and-paths.md](resources-and-paths.md)。
 
 ## 1. 阶段 A：CPU 空间准备基底环境
 

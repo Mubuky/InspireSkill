@@ -1,10 +1,10 @@
 # 资源、规格与远端路径
 
-本文负责所有跨命令共享的选择题：workspace、compute group、`--quota` 三元组、项目 / 用户配额、存储池、path alias 和挂载隔离。它不负责 notebook、job、HPC、Ray 或 serving 的生命周期；那些只在对应业务 reference 中展开。
+日常选择 workspace、compute group、`--quota` 三元组、项目 / 用户配额、存储池、path alias，或解释实例里的路径为什么不可见时，先查本手册。Notebook、job、HPC、Ray 和 serving 的生命周期操作看对应业务手册。
 
 ## 1. 资源查询入口
 
-资源、规格、项目和用户相关能力以 CLI help 为准，不在 Agent 文档里维护硬编码清单。
+资源、规格、项目和用户相关能力以 CLI help 为准，不在手册里维护硬编码命令清单。
 
 ```bash
 inspire resources --help
@@ -15,7 +15,7 @@ inspire user --help
 
 日常先看 resources 的 human 表格，再按需锁定 workload、workspace 或 compute group。看项目预算和配额时使用 project 入口；确认当前身份、workspace 权限码或 API Key 元数据时使用 user 入口。
 
-Agent 默认读取人类表格。结构化输出只用于脚本，不作为日常观察面。
+日常读取人类表格。结构化输出只用于脚本，不作为默认观察面。
 
 资源和可用量以平台实时查询为准。`resources specs`、`resources list`、`resources nodes`、`project` 和 `user` 的输出是当前决策依据；本地缓存、历史截图和旧文档不能当作资源事实。
 
@@ -98,7 +98,7 @@ inspire notebook set-path <name> /inspire/ssd/project/<topic>/<user>/<repo> as r
 inspire notebook exec <name> --cwd repo "pytest -q"
 ```
 
-不要把配置文件内容复制到 Agent 文档里；仓库级语义说明写在 `INSPIRE.md`。
+不要把配置文件内容复制到项目说明里；仓库级语义说明写在 `INSPIRE.md`。
 
 ## 7. 项目、负责人和用户元数据
 

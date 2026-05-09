@@ -1,13 +1,13 @@
 ---
 name: inspire
-description: "Execution-first Inspire platform playbook for agents driving the inspire CLI as a black-box tool, with on-demand references for platform workflows."
+description: "Execution-first Inspire platform CLI usage manual, with on-demand references for platform workflows."
 ---
 
 # Inspire Skill
 
-把 `inspire` CLI 当黑盒工具使用。不要读 CLI 源码来推断平台状态；状态、事件、日志、资源余量全部通过命令实时查询。
+`inspire` CLI 的日常资料只描述命令可观察行为：状态、事件、日志、资源余量和配置来源都通过 CLI 实时查询；命令是否存在、参数叫什么、默认值是什么，永远以 CLI help 为准。
 
-本文是入口和路由层：它告诉 Agent 先查什么、加载哪份 reference、哪些事实必须实时验证。具体平台语义放在 reference 中；命令是否存在、参数叫什么、默认值是什么，永远以 CLI help 为准。
+`references/dev/` 只放开发者手册。只有维护 CLI 封装、排查 API 合约或用户明确要求看平台接口时，才加载这些文件。
 
 ## 1. 使用流程
 
@@ -33,24 +33,29 @@ uv run inspire hpc create --help
 每次任务按这个顺序走：
 
 1. 用 help 确认命令和参数。
-2. 加载一份最相关的 reference。
-3. 任务跨边界时，再加载第二份 reference。
+2. 加载一份最相关的日常使用手册。
+3. 任务跨边界时，再加载第二份使用手册。
 4. 执行前用 CLI 实时查询确认平台状态。
 
 ## 2. 按需加载索引
 
-每次优先只加载一份业务 reference；任务跨边界时再加载第二份。reference 之间按下表分工，不互相维护完整命令清单。
+每次优先只加载一份日常使用手册；任务跨边界时再加载第二份。不要用开发者手册替代 CLI help 或日常使用手册。
 
-| 任务判断 | 首选 reference | 本文档负责 | 不负责，转交 |
-| --- | --- | --- | --- |
-| 选择 workspace、compute group、quota、项目配额、存储池、path alias 或解释路径不可见 | [references/resources-and-paths.md](references/resources-and-paths.md) | 资源和路径概念、`--quota` 三元组、挂载隔离、项目 / 用户元数据入口 | notebook / job 的生命周期操作 |
-| 创建、连接、执行、传文件、诊断、暴露 notebook 容器端口，或处理 SSH bootstrap | [references/notebook.md](references/notebook.md) | notebook 运行时语义、`shell` / `exec` / `scp`、HTTPS proxy、events / metrics、大文件操作、基底 notebook 准备 | 镜像 registry 语义转交 image；资源选择转交 resources |
-| 提交或排查 GPU job、HPC、Ray、serving | [references/compute-workloads.md](references/compute-workloads.md) | 训练 / 计算任务的运行模型、优先级、事件、指标、异常对照 | 远端路径基础转交 resources；镜像生命周期转交 image |
-| 一个项目要从环境准备、数据处理推进到训练 | [references/workflows.md](references/workflows.md) | 跨阶段编排、检查点、什么时候从 notebook 切到 HPC / Ray / job | 单命令参数和完整领域细节 |
-| 浏览、注册、保存、设置默认或清理镜像 | [references/image-management.md](references/image-management.md) | 镜像来源、可见性、READY 状态、默认镜像配置、save 与 register 的选择 | notebook 如何安装依赖转交 notebook |
-| 浏览模型仓库，判断 model registry 和 serving 的关系 | [references/model.md](references/model.md) | 模型仓库只读边界、版本浏览、和 serving 的职责拆分 | serving 生命周期转交 compute-workloads |
-| 安装、更新、账号、项目初始化、代理 setup | [references/setup/install-and-config.md](references/setup/install-and-config.md)、[references/setup/proxy-setup.md](references/setup/proxy-setup.md) | 本机安装、账号 config、项目 `.inspire/config.toml`、代理配置 | 平台任务运行细节 |
-| 需要维护 CLI 封装或对照平台 API | [references/dev/openapi.md](references/dev/openapi.md)、[references/dev/browser-api.md](references/dev/browser-api.md) | API 认证、端点、Browser API / OpenAPI 边界 | 日常 Agent 执行工作流 |
+| 场景 | 手册 |
+| --- | --- |
+| 选择 workspace、compute group、quota、项目配额、存储池、path alias，或解释路径不可见 | [references/resources-and-paths.md](references/resources-and-paths.md) |
+| 创建、连接、执行、传文件、诊断、暴露 notebook 容器端口，或处理 SSH bootstrap | [references/notebook.md](references/notebook.md) |
+| 提交或排查 GPU job、HPC、Ray、serving | [references/compute-workloads.md](references/compute-workloads.md) |
+| 一个项目要从环境准备、数据处理推进到训练 | [references/workflows.md](references/workflows.md) |
+| 浏览、注册、保存、设置默认或清理镜像 | [references/image-management.md](references/image-management.md) |
+| 浏览模型仓库，判断 model registry 和 serving 的关系 | [references/model.md](references/model.md) |
+| 安装、更新、账号、项目初始化、代理 setup | [references/setup/install-and-config.md](references/setup/install-and-config.md)、[references/setup/proxy-setup.md](references/setup/proxy-setup.md) |
+
+开发者手册：
+
+| 场景 | 手册 |
+| --- | --- |
+| 维护 CLI 封装、排查 API 合约或对照平台接口 | [references/dev/openapi.md](references/dev/openapi.md)、[references/dev/browser-api.md](references/dev/browser-api.md) |
 
 ## 3. 项目上下文
 

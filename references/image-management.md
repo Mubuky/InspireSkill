@@ -1,6 +1,6 @@
 # Image 管理
 
-本文负责镜像生命周期：选现有镜像、从 notebook 固化镜像、注册外部镜像、设置项目默认镜像、调整可见性和清理镜像。它不解释 notebook 里怎么安装依赖，也不解释 job / notebook 如何调度；那些分别看 [notebook.md](notebook.md) 和 [compute-workloads.md](compute-workloads.md)。
+选择现有镜像、从 notebook 固化镜像、注册外部镜像、设置项目默认镜像、调整可见性或清理镜像时，先查本手册。Notebook 内怎么安装依赖看 [notebook.md](notebook.md)；job / notebook 如何调度看对应业务手册。
 
 命令是否存在、参数名和默认值以 CLI help 为准：
 
