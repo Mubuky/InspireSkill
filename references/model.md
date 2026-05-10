@@ -14,7 +14,7 @@ inspire model <subcommand> --help
 `inspire model` 是启智平台模型仓库入口。
 
 - `list/status/versions` 是只读观察命令，默认只查当前用户的模型，并支持按 workspace、project 和 keyword 收窄。
-- `register` 用 Browser API 把平台可见目录注册成模型首版本；它不上传本地文件，也不修改已有模型。
+- `register` 把平台可见目录注册成模型首版本；它不上传本地文件，也不修改已有模型。
 - 删除、改元数据、追加版本和发布到模型广场仍以平台页面为准。
 
 网页端注册表单的实测规则：

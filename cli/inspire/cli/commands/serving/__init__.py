@@ -22,12 +22,16 @@ from .serving_metrics import serving_metrics
 def serving() -> None:
     """Manage inference servings (model deployment).
 
-    Covers model deployment services: create, list, status, available configs,
-    resource metrics, stop, and delete.
+    Deploy a registered model as an HTTP service, inspect the service list
+    and detail, check resource metrics, and stop or delete stale deployments.
+    Use `model list/status/versions` first when you need to pick a model and
+    version, then `serving create --dry-run` to verify the deployment plan.
 
     \b
     Examples:
-        inspire serving create --name demo --model my-model --workspace 分布式训练空间 --group H200-2号机房 --quota 1,18,200 --image sandbox-base:ubuntu24.04-py3.12-1.0.0 --command 'python serve.py' --port 8000 --priority 1
+        inspire model versions my-model --workspace 分布式训练空间
+        inspire serving configs --workspace 分布式训练空间
+        inspire serving create --name demo --model my-model --workspace 分布式训练空间 --project CI-情境智能 --group H200-2号机房 --quota 1,18,200 --image serve-base:v1 --command "python serve.py" --port 8000 --dry-run
         inspire serving list
         inspire serving status <serving-name>
         inspire serving delete <serving-name>

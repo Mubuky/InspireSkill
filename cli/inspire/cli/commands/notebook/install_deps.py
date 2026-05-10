@@ -267,7 +267,10 @@ def install_deps_cmd(
 ) -> None:
     """One-shot install of hpc/ray runtime deps on a cached notebook.
 
-    NOTEBOOK is the cached notebook name.
+    NOTEBOOK is the notebook name and must already have a cached connection.
+    Run this on an internet-enabled CPU notebook when you need a reusable
+    base image for CPU HPC, Ray, or offline GPU training spaces. After the
+    checks pass, save the notebook as an image with `inspire image save`.
 
     \b
     Examples:

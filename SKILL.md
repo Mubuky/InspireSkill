@@ -5,13 +5,39 @@ description: "Execution-first Inspire platform CLI usage manual, with on-demand 
 
 # Inspire Skill
 
-`inspire` CLI 的日常资料只描述命令可观察行为：状态、事件、指标、日志、资源余量和配置来源都通过 CLI 实时查询；命令是否存在、参数叫什么、默认值是什么，永远以 CLI help 为准。
+`inspire` 是启智平台的本地命令入口。本文档只描述可观察、可执行的黑盒用法：命令是否存在、参数叫什么、默认值是什么，以 CLI help 为准；资源、项目、事件、日志和指标，以实时查询为准；不把内部接口、实现结构或历史行为当作使用事实。
 
-`references/dev/` 只放开发者手册。只有维护 CLI 封装、排查 API 合约或用户明确要求看平台接口时，才加载这些文件。
+同一份手册同时服务人类和模型。适合人类快速判断的表达，也应该适合模型稳定执行；不区分两套原则。
 
-## 1. 使用流程
+## 1. 平台使用模型
 
-命令列表、子命令功能和参数说明以 CLI help 为准，不在 SKILL 或 references 中维护硬编码清单。需要确认某个操作时，先查 help，再执行实时查询或提交。不要把旧文档、记忆或历史示例当作命令存在性的事实来源。
+启智上的一次任务可以拆成四个黑盒层面：
+
+| 层面 | 决策问题 | 主要入口 |
+| --- | --- | --- |
+| 调度条件 | 在哪个 workspace、project、compute group 上，用多少 GPU / CPU / 内存，跑哪个镜像 | `config context`、`project list`、`resources specs`、`<workload> profile` |
+| 远端文件 | 代码、数据、权重、产物放在哪个项目共享盘路径 | `init`、`notebook path`、`notebook exec --cwd`、`notebook scp` |
+| 工作负载 | 交互调试、GPU job、CPU HPC、Ray、serving 选哪一个入口 | `notebook`、`job`、`hpc`、`ray`、`serving` |
+| 观察与收尾 | 为什么排队 / 失败、是否真的在工作、日志在哪里、何时清理 | `events`、`logs`、`metrics`、`status`、`instances`、`stop`、`delete` |
+
+`workspace`、`project`、`group`、`quota` 和 `image` 是调度条件。它们没有隐式默认值；必须在 create 命令里显式传入，或用 workload profile 显式填入。Path alias 只表示远端路径，不能替代调度条件。
+
+联网能力属于 workspace / compute group 的实际环境，而不是命令本身。训练 GPU 空间常见为不可上网；下载数据、拉 Git、装依赖、取 Hugging Face / PyPI / apt 包时，优先在同项目共享盘可见的可上网 CPU notebook 中完成，然后把结果留在 `me` / `public` 等 path alias 指向的共享路径，或保存成镜像，再去目标训练空间创建 notebook / job。
+
+## 2. 执行闭环
+
+日常任务按这个顺序推进：
+
+1. 用 help 确认可用命令和参数。
+2. 用 `inspire config context`、`inspire project list` 和 `inspire resources specs --usage <kind>` 确认名字、项目额度和可用规格。
+3. 如果目标空间不可上网，先在可上网 CPU notebook 准备代码、依赖、数据和镜像。
+4. 用 notebook / job / hpc / ray / serving 的 create 命令提交，必要时先 `--dry-run`。
+5. 用 events 看调度和启动原因，用 logs 看程序输出，用 metrics 看资源是否真的在工作，用 status / instances 看对象和实例状态。
+6. 终态且不再需要的 notebook、job、HPC、Ray、serving 和临时镜像要清理；运行中的对象先 stop，再 delete。
+
+## 3. CLI Help 是命令事实来源
+
+先查 help，再执行命令：
 
 ```bash
 inspire --help
@@ -28,39 +54,42 @@ uv run inspire notebook --help
 uv run inspire hpc create --help
 ```
 
-`inspire --help` 的 `Commands` 区给出当前版本真实命令组；`inspire <command-group> --help` 给出该组所有子命令；`inspire <command-group> <subcommand> --help` 给出参数、默认值、必填项和注意事项。
+`inspire --help` 给出当前版本真实命令组；`inspire <command-group> --help` 给出该组子命令和工作流说明；`inspire <command-group> <subcommand> --help` 给出参数、默认值、必填项和示例。
 
-`workspace`、`project`、`group`、`quota` 和 `image` 没有隐式默认值。需要复用条件组时，先查 `inspire <command-group> profile --help`，用 `inspire notebook/job/hpc/ray/serving profile set <name> ...` 保存 workload profile；创建命令显式传 `--profile <name>`，batch 条目写 `profile = "<name>"`。Path alias 只表示远端路径，用 `inspire notebook path --help` 管理，不能当作 workload profile。
+需要复用调度条件时，先查：
 
-每次任务按这个顺序走：
+```bash
+inspire notebook profile --help
+inspire job profile --help
+inspire hpc profile --help
+inspire ray profile --help
+inspire serving profile --help
+```
 
-1. 用 help 确认命令和参数。
-2. 加载一份最相关的日常使用手册。
-3. 任务跨边界时，再加载第二份使用手册。
-4. 执行前用 CLI 实时查询确认平台状态。
+用 `profile set` 保存 `workspace`、`project`、`group`、`quota`、`image` 五个条件；create 命令显式传 `--profile <name>`；batch 条目写 `profile = "<name>"`。
 
-## 2. 按需加载索引
+## 4. 按需加载索引
 
-每次优先只加载一份日常使用手册；任务跨边界时再加载第二份。不要用开发者手册替代 CLI help 或日常使用手册。
+每次优先只读一份最相关手册；跨边界时再读第二份。日常手册不维护完整命令清单，命令表面始终回到 CLI help。
 
 | 场景 | 手册 |
 | --- | --- |
-| 选择 workspace、compute group、quota、项目配额、存储池、path alias，或解释路径不可见 | [references/resources-and-paths.md](references/resources-and-paths.md) |
+| 选择 workspace、compute group、`--quota`、项目配额、存储池、path alias，或解释路径不可见 | [references/resources-and-paths.md](references/resources-and-paths.md) |
 | 创建、连接、执行、传文件，或准备 notebook 基底环境 | [references/notebook.md](references/notebook.md) |
 | 把 notebook 容器内 HTTP 服务暴露给浏览器、SDK 或小组成员 | [references/notebook-service-proxy.md](references/notebook-service-proxy.md) |
-| 提交 GPU job、HPC、Ray、serving，或观察事件、日志和指标 | [references/compute-workloads.md](references/compute-workloads.md) |
-| 一个项目要从环境准备、数据处理推进到训练 | [references/workflows.md](references/workflows.md) |
+| 提交 GPU job、CPU HPC、Ray、serving，或观察事件、日志和指标 | [references/compute-workloads.md](references/compute-workloads.md) |
+| 一个项目从环境准备、数据处理推进到训练 | [references/workflows.md](references/workflows.md) |
 | 浏览、注册、保存、调整可见性或清理镜像 | [references/image-management.md](references/image-management.md) |
 | 浏览或注册模型仓库条目，判断 model registry 和 serving 的关系 | [references/model.md](references/model.md) |
 | 安装、更新、账号、项目初始化、代理 setup | [references/setup/install-and-config.md](references/setup/install-and-config.md)、[references/setup/proxy-setup.md](references/setup/proxy-setup.md) |
 
-开发者手册：
+开发者手册只在维护 CLI 封装、排查平台接口合约，或用户明确要求看接口时读取：
 
 | 场景 | 手册 |
 | --- | --- |
-| 维护 CLI 封装、排查 API 合约或对照平台接口 | [references/dev/openapi.md](references/dev/openapi.md)、[references/dev/browser-api.md](references/dev/browser-api.md) |
+| 对照平台接口 | [references/dev/openapi.md](references/dev/openapi.md)、[references/dev/browser-api.md](references/dev/browser-api.md) |
 
-## 3. 项目上下文
+## 5. 项目上下文
 
 仓库根可用 `INSPIRE.md` 记录非配置性上下文，建议包含：
 

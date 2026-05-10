@@ -490,7 +490,7 @@ def _parse_worker_spec(raw: str) -> dict[str, Any]:
 @click.option(
     "--command",
     "-c",
-    help="Driver entrypoint command (maps to `entrypoint` on the wire)",
+    help="Driver startup command. The Ray job stays alive while this command keeps running.",
 )
 @click.option("--description", default="", help="Free-form description")
 @click.option(
@@ -561,7 +561,7 @@ def _parse_worker_spec(raw: str) -> dict[str, Any]:
 @click.option(
     "--dry-run",
     is_flag=True,
-    help="Preview the create plan and exit without submitting.",
+    help="Resolve names, images, quotas, and worker groups, then print the plan without submitting.",
 )
 @pass_context
 def create_ray(
@@ -581,24 +581,24 @@ def create_ray(
     workers: tuple[str, ...],
     dry_run: bool,
 ) -> None:
-    """Create a Ray (弹性计算) job with one head + one or more worker groups.
+    """Create a Ray (弹性计算) job with one head and one or more worker groups.
 
     Resource sizing uses the same ``--quota gpu,cpu,mem`` triple as
-    notebook / job. For each (head + worker) entry the CLI looks
-    up the matching Ray quota under the chosen workspace and compute
-    group; pass ``--workspace`` and head/worker ``group=`` names if
-    auto-resolution would be ambiguous.
+    notebook / job. Choose valid triples with
+    ``inspire resources specs --usage ray``. The driver command should exit
+    when the Ray work is done; otherwise the cluster continues to occupy
+    quota until stopped.
 
     \b
     Example:
         inspire ray create \\
           -n av-pipeline \\
           -c 'python driver.py --mode run_and_exit' \\
-          --head-image docker.sii.shaipower.online/inspire-studio/unified-base:v2 \\
+          --workspace CPU资源空间 \\
+          --project CI-情境智能 \\
+          --head-image ray-base:v1 \\
           --head-group HPC-可上网区资源-2 --head-quota 0,4,16 \\
-          --worker 'name=decode;image=docker.../cpu-decode:v1;group=HPC-可上网区资源-2;quota=0,20,80;min=1;max=8;shm=32' \\
-          --worker 'name=infer;image=docker.../gpu-infer:v1;group=分布式训练空间;quota=1,20,200;min=1;max=2;image_type=SOURCE_PRIVATE' \\
-          -p my-project
+          --worker 'name=decode;image=ray-base:v1;group=HPC-可上网区资源-2;quota=0,20,80;min=1;max=8;shm=32'
 
     """
     try:
@@ -713,7 +713,7 @@ def _assemble_create_body(
         raise click.UsageError("--name is required.")
     if not command:
         raise click.UsageError(
-            "--command is required (the Ray driver entrypoint; wire field `entrypoint`)."
+            "--command is required; it is the Ray driver startup command."
         )
     for field_name, value in (
         ("image", head_image),

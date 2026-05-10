@@ -15,7 +15,11 @@ from .project_commands import detail_project_cmd, list_projects_cmd, owners_proj
 
 @click.group()
 def project():
-    """View project information, quota, members, and owners.
+    """View project quota, budget, priority, and owner metadata.
+
+    Use this before creating GPU or CPU workloads to choose the project that
+    still has usable budget / GPU quota and to confirm the maximum priority
+    the selected project can request.
 
     \b
     Examples:

@@ -22,11 +22,17 @@ from .hpc_metrics import hpc_metrics
 
 @click.group()
 def hpc() -> None:
-    """Manage high-performance computing (HPC) jobs.
+    """Manage CPU Slurm / HPC batch jobs.
+
+    Use `hpc create` for fixed-size CPU preprocessing, evaluation, and data
+    pipelines. Choose a CPU-capable spec with `resources specs --usage hpc`,
+    write only the Slurm script body in `-c`, and launch your program with
+    `srun`.
 
     \b
     Examples:
-        inspire hpc create --name prep-a --quota 0,16,64 --command "srun python prep.py"
+        inspire resources specs --usage hpc --workspace CPU资源空间
+        inspire hpc create --name prep-a --workspace CPU资源空间 --project CI-情境智能 --group HPC-可上网区资源-2 -q 0,16,64 --image hpc-base:v1 -c "srun python prep.py"
         inspire hpc instances prep-a --workspace CPU资源空间
         inspire hpc metrics prep-a --metric cpu,mem,disk_read,disk_write --window 2h
         inspire hpc events prep-a --tail 50

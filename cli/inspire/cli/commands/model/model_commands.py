@@ -180,7 +180,7 @@ def _resolve_model_name(
 
 
 @click.command("list")
-@click.option("--workspace", default=None, help="Workspace name")
+@click.option("--workspace", default=None, help="Workspace name; omitted means the current workspace")
 @click.option("--project", default=None, help="Project name filter")
 @click.option("--keyword", default=None, help="Server-side model name/description search")
 @click.option("--page", type=int, default=1, show_default=True)
@@ -194,7 +194,12 @@ def list_model(
     page: int,
     page_size: int,
 ) -> None:
-    """List models in the current (or given) workspace."""
+    """List registered models owned by the current user.
+
+    Use filters to narrow by workspace, project, or keyword. After finding a
+    candidate model, use `model status` for metadata and `model versions` to
+    choose the version for serving or reproducibility.
+    """
     try:
         config, _ = Config.from_files_and_env(require_credentials=False)
         resolved_workspace = _resolve_workspace_id(config, workspace)
@@ -255,7 +260,11 @@ def status_model(
     project: Optional[str],
     pick: Optional[int],
 ) -> None:
-    """Show detail of a specific model by name."""
+    """Show detail of one registered model by name.
+
+    Includes latest version status, tags, model type, storage path, vLLM
+    readiness, publication flag, owner, project, and timestamps when present.
+    """
     try:
         config, _ = Config.from_files_and_env(require_credentials=False)
         session = get_web_session()
@@ -355,7 +364,12 @@ def versions_model(
     project: Optional[str],
     pick: Optional[int],
 ) -> None:
-    """List all versions of a model by name."""
+    """List all versions of one registered model by name.
+
+    Use this before `serving create` when you need a specific
+    `--model-version`; omit the version on serving create to use the latest
+    version shown by model listing.
+    """
     try:
         config, _ = Config.from_files_and_env(require_credentials=False)
         session = get_web_session()
@@ -429,7 +443,7 @@ def versions_model(
 
 @click.command("register")
 @click.option("--name", "-n", required=True, help="Model name")
-@click.option("--source-path", required=True, help="Platform-visible model directory")
+@click.option("--source-path", required=True, help="Platform-visible model directory on shared storage")
 @click.option("--workspace", required=True, help="Workspace name.")
 @click.option(
     "--project",
@@ -458,7 +472,12 @@ def register_model(
     description: str,
     source_type: int,
 ) -> None:
-    """Register a platform-visible model directory in the model repository."""
+    """Register a platform-visible model directory in the model repository.
+
+    This creates the model entry from an existing shared-storage directory.
+    It does not upload local files; copy or generate model files on the
+    platform first, then pass that remote directory as `--source-path`.
+    """
     try:
         config, _ = Config.from_files_and_env(require_credentials=False)
         session = get_web_session()

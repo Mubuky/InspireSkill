@@ -253,8 +253,8 @@ def _format_hpc_instances(instances: list[dict[str, Any]]) -> str:
 
 
 @click.command("list")
-@click.option("--workspace", default=None, help="Workspace name")
-@click.option("--status", "status_filter", default=None, help="Filter by job status")
+@click.option("--workspace", default=None, help="Workspace name; omitted means the current workspace")
+@click.option("--status", "status_filter", default=None, help="Filter by HPC job status")
 @click.option("--page-num", type=int, default=1, show_default=True, help="Page number")
 @click.option("--page-size", type=int, default=50, show_default=True, help="Page size")
 @pass_context
@@ -265,7 +265,13 @@ def list_hpc(
     page_num: int,
     page_size: int,
 ) -> None:
-    """List HPC jobs."""
+    """List the current user's HPC jobs.
+
+    \b
+    Examples:
+        inspire hpc list
+        inspire hpc list --workspace CPU资源空间 --status RUNNING
+    """
     try:
         config, _ = Config.from_files_and_env(require_credentials=False)
         session = get_web_session()
@@ -334,13 +340,11 @@ def list_hpc(
     "--quota",
     "-q",
     help=(
-        "Node-level resource spec as 'gpu,cpu,mem' (mem in GiB). The triple "
-        "selects the platform compute spec (平台字段：计算资源规格), which "
-        "determines per-node CPU/memory/GPU totals. Use 'inspire resources "
-        "specs --usage hpc' to see available triples. Slurm-level knobs "
-        "below (--cpus-per-task / --memory-per-cpu / --number-of-tasks / "
-        "--instance-count) are independent — they describe how the slurm "
-        "scheduler subdivides the node, not what the node looks like."
+        "Node resource as 'gpu,cpu,mem' (mem in GiB). The triple chooses "
+        "CPU/memory/GPU available per node. Use 'inspire resources specs "
+        "--usage hpc' to see valid triples. Slurm options below "
+        "(--cpus-per-task / --memory-per-cpu / --number-of-tasks) describe "
+        "how your program uses each selected node."
     ),
 )
 @click.option(
@@ -365,7 +369,7 @@ def list_hpc(
     type=int,
     default=1,
     show_default=True,
-    help="Number of nodes (平台字段：节点数)",
+    help="Number of selected nodes to allocate.",
 )
 @click.option(
     "--priority",
@@ -382,21 +386,19 @@ def list_hpc(
     type=int,
     default=1,
     show_default=True,
-    help="Slurm --ntasks (平台字段：子任务数量)",
+    help="Slurm --ntasks value.",
 )
 @click.option(
     "--cpus-per-task",
     type=int,
     default=None,
-    help="Slurm --cpus-per-task (平台字段：单个任务 CPU 核数). "
-    "Default: derive from --quota cpu count",
+    help="Slurm --cpus-per-task value. Default: derive from --quota CPU count.",
 )
 @click.option(
     "--memory-per-cpu",
     type=int,
     default=None,
-    help="Slurm --mem-per-cpu in GiB (平台字段：每 CPU 使用内存 GB). "
-    "Default: derive from --quota mem / --quota cpu",
+    help="Slurm --mem-per-cpu in GiB. Default: derive from --quota memory / CPU.",
 )
 @click.option(
     "--enable-hyper-threading/--disable-hyper-threading",
@@ -409,7 +411,7 @@ def list_hpc(
     is_flag=True,
     help=(
         "Resolve workspace, project, quota, compute group, image, and Slurm fields, "
-        "then print the plan without calling the create API."
+        "then print the plan without submitting the HPC job."
     ),
 )
 @pass_context
@@ -432,16 +434,23 @@ def create_hpc(
     enable_hyper_threading: bool,
     dry_run: bool,
 ) -> None:
-    """Create a Slurm-backed HPC job.
+    """Create a CPU Slurm / HPC batch job.
 
     Two independent layers:
-      * Node-level: --quota gpu,cpu,mem picks a 计算资源规格 (which 'spec'
-        to allocate per node) + --instance-count says how many such nodes.
+      * Node-level: --quota gpu,cpu,mem chooses the resources available per
+        node; --instance-count chooses how many nodes.
       * Slurm-level: --number-of-tasks / --cpus-per-task / --memory-per-cpu
-        tell slurm how to subdivide each node.
+        describe how your program runs inside those nodes.
 
     ``-c/--entrypoint`` must be the Slurm script body. Do not include
     ``#SBATCH`` headers; use ``srun`` to launch the program.
+
+    \b
+    Examples:
+        inspire hpc create -n preprocess --workspace CPU资源空间 --project CI-情境智能 \
+          --group HPC-可上网区资源-2 -q 0,20,256 --image hpc-base:v1 \
+          -c 'srun bash -lc "python preprocess.py"'
+        inspire hpc create -n probe --profile cpu-hpc -c 'srun hostname' --dry-run
     """
     try:
         from inspire.cli.utils.quota_resolver import (
@@ -584,7 +593,7 @@ def create_hpc(
             if final_priority is not None:
                 click.echo(f"Requested Priority: {final_priority}")
             click.echo(f"Entry:     {scrub_raw_ids(entrypoint)}")
-            click.echo("No create API call was made.")
+            click.echo("No HPC job was submitted.")
             return
 
         assert api is not None

@@ -54,15 +54,28 @@ from inspire.cli.utils.update_notice import maybe_notify_update, maybe_spawn_che
 def main(ctx: Context, json_output: bool, debug: bool) -> None:
     """Inspire Training Platform CLI.
 
-    Interact with the Inspire HPC platform to manage notebooks, submit and
-    monitor training / HPC / Ray jobs, and inspect compute resources.
+    Use Inspire from the local terminal: configure accounts, inspect live
+    resources, create notebooks, submit GPU jobs / CPU HPC / Ray workloads,
+    manage images and models, deploy servings, and observe events, logs,
+    metrics, and status.
+
+    \b
+    Normal workflow:
+        1. `inspire config context` lists usable names for workspaces,
+           projects, and compute groups.
+        2. `inspire resources specs --usage <kind>` shows valid
+           `--quota gpu,cpu,mem` triples for the workload family.
+        3. `inspire <kind> create ...` submits the workload using visible
+           names, or `inspire <kind> profile set ...` stores reusable
+           workspace/project/group/quota/image conditions.
+        4. `events`, `logs`, `metrics`, `status`, and `instances` diagnose
+           scheduling, startup, runtime progress, and cleanup decisions.
 
     \b
     Output:
         Default output is name-first.
         Default human output is the interactive observation surface.
-        JSON is for scripts and structured automation.
-        Use JSON only for scripts or structured automation.
+        JSON output is for scripts and structured automation.
 
     \b
     Global options:

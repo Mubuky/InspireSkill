@@ -395,7 +395,7 @@ def _format_configs(data: dict[str, Any]) -> str:
 
 
 @click.command("list")
-@click.option("--workspace", default=None, help="Workspace name")
+@click.option("--workspace", default=None, help="Workspace name; omitted means the current workspace")
 @click.option("--project", default=None, help="Project name filter")
 @click.option("--status", "status_filter", default=None, help="Serving status filter")
 @click.option("--keyword", default=None, help="Server-side name/model search")
@@ -411,7 +411,14 @@ def list_serving(
     page: int,
     page_size: int,
 ) -> None:
-    """List inference servings in the current (or given) workspace."""
+    """List the current user's inference servings.
+
+    \b
+    Examples:
+        inspire serving list
+        inspire serving list --workspace 分布式训练空间 --project CI-情境智能
+        inspire serving list --keyword qwen --status RUNNING
+    """
     try:
         config, _ = Config.from_files_and_env(require_credentials=False)
         resolved_workspace = _resolve_workspace_id(config, workspace)
@@ -485,7 +492,11 @@ def status_serving(
     workspace: Optional[str],
     pick: Optional[int],
 ) -> None:
-    """Get detail of an inference serving (pass the serving name)."""
+    """Show detail for one inference serving by name.
+
+    Detail includes status, project, model, image, resource, startup command,
+    port, replicas, and timestamps when the platform returns them.
+    """
     try:
         config, _ = Config.from_files_and_env(require_credentials=False)
         workspace_id = _resolve_workspace_id(config, workspace)
@@ -649,7 +660,12 @@ def configs_serving(
     ctx: Context,
     workspace: Optional[str],
 ) -> None:
-    """Show available inference-serving configs (images / specs) for a workspace."""
+    """Show available inference-serving choices for a workspace.
+
+    Use this before `serving create` to inspect deployment settings exposed
+    by the platform. Use `resources specs --usage serving` to choose the
+    concrete `--quota gpu,cpu,mem` triple.
+    """
     try:
         config, _ = Config.from_files_and_env(require_credentials=False)
         resolved_workspace = _resolve_workspace_id(config, workspace)
@@ -689,8 +705,15 @@ def configs_serving(
     help="Project name. Required unless supplied by --profile.",
 )
 @click.option("--group", help="Compute group name. Required unless supplied by --profile.")
-@click.option("--quota", "-q", help="Serving spec as gpu,cpu,mem. Required unless supplied by --profile.")
-@click.option("--image", help="Visible image name or name:tag. Required unless supplied by --profile.")
+@click.option(
+    "--quota",
+    "-q",
+    help="Serving resource as gpu,cpu,mem. Required unless supplied by --profile.",
+)
+@click.option(
+    "--image",
+    help="Visible image name or name:tag. Required unless supplied by --profile.",
+)
 @click.option(
     "--profile",
     "profile_name",
@@ -715,7 +738,7 @@ def configs_serving(
     help="Optional domain prefix: lowercase letters, digits, and hyphens",
 )
 @click.option("--description", default="", help="Serving description")
-@click.option("--dry-run", is_flag=True, default=False, help="Print payload without creating")
+@click.option("--dry-run", is_flag=True, default=False, help="Print the resolved plan without creating")
 @pass_context
 def create_serving(
     ctx: Context,
@@ -738,7 +761,20 @@ def create_serving(
     description: str,
     dry_run: bool,
 ) -> None:
-    """Create an inference serving from a registered model."""
+    """Create an inference serving from a registered model.
+
+    Pick the model with `model list/status/versions`, choose a serving spec
+    with `resources specs --usage serving`, then submit the service with a
+    visible image, startup command, and container port. Omit
+    `--model-version` to use the latest version reported by the model list.
+
+    \b
+    Examples:
+        inspire serving create --name qwen-demo --model qwen-demo --workspace 分布式训练空间 \
+          --project CI-情境智能 --group H200-2号机房 --quota 1,18,200 \
+          --image serve-base:v1 --command "python serve.py" --port 8000 --dry-run
+        inspire serving metrics qwen-demo --window 30m
+    """
     try:
         from inspire.cli.utils.quota_resolver import (
             QuotaMatchError,
@@ -888,7 +924,7 @@ def create_serving(
                 click.echo(f"Priority:  {final_priority}")
                 if custom_domain:
                     click.echo(f"Domain:    {scrub_raw_ids(custom_domain)}")
-                click.echo("No create API call was made.")
+                click.echo("No serving was created.")
             return
 
         data = browser_api_module.create_serving(

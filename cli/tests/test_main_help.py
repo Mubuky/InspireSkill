@@ -10,7 +10,7 @@ def test_root_help_keeps_json_as_script_interface() -> None:
 
     assert result.exit_code == 0
     assert "Default output is name-first." in result.output
-    assert "JSON is for scripts and structured automation." in result.output
+    assert "JSON output is for scripts and structured automation." in result.output
 
 
 def test_job_status_formatter_shows_platform_priority_fields() -> None:

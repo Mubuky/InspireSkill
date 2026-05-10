@@ -238,7 +238,7 @@ def run_job_create(
             click.echo(f"Command: {scrub_raw_ids(plan.wrapped_command)}")
             if plan.log_path:
                 click.echo(f"Log file: {scrub_raw_ids(plan.log_path)}")
-            click.echo("No create API call was made.")
+            click.echo("No job was submitted.")
             return
 
         assert api is not None
@@ -327,9 +327,9 @@ def run_job_create(
     "--framework",
     default="pytorch",
     help=(
-        "Platform training-framework label sent to the create API "
-        "(default: pytorch). This does not choose the Docker image; use "
-        "--image for that. Most users should keep the default."
+        "Training framework label shown by the platform (default: pytorch). "
+        "This does not choose the Docker image; use --image for that. "
+        "Most users should keep the default."
     ),
 )
 @click.option(
@@ -404,7 +404,7 @@ def run_job_create(
     is_flag=True,
     help=(
         "Resolve workspace, project, quota, compute group, image, and final command, "
-        "then print the plan without calling the create API."
+        "then print the plan without submitting the job."
     ),
 )
 @pass_context
@@ -426,10 +426,13 @@ def create(
     nodes: Optional[int],
     dry_run: bool,
 ) -> None:
-    """Create a new training job.
+    """Create a GPU batch job.
 
-    If the ``me`` path alias is configured, stdout/stderr are captured there for
-    later ``inspire job logs`` retrieval.
+    Use this for fixed-size GPU work: single-node training, multi-node
+    distributed training, batch inference, or a fixed GPU worker pool.
+    If the ``me`` path alias is configured, stdout/stderr are captured under
+    ``me/.inspire`` so ``inspire job logs`` can read them later through a
+    notebook connection with access to the same shared storage.
 
     \b
     Examples:

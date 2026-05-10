@@ -52,7 +52,7 @@ def test_dry_run_help_says_resolve_not_submit() -> None:
         output = _one_line(result.output)
 
         assert result.exit_code == 0
-        assert "without calling the create API" in output
+        assert "without submitting" in output
         assert "Resolve workspace, project, quota" in output
 
 
@@ -61,7 +61,7 @@ def test_job_create_help_explains_framework_and_fault_tolerance() -> None:
     output = _one_line(result.output)
 
     assert result.exit_code == 0
-    assert "Platform training-framework label sent to the create API" in output
+    assert "Training framework label shown by the platform" in output
     assert "does not choose the Docker image" in output
     assert "auto-restart the training job after failures" in output
     assert "Max platform restart attempts" in output

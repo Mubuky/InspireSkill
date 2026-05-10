@@ -9,7 +9,13 @@ inspire image --help
 inspire image <subcommand> --help
 ```
 
-## 1. 选择哪条镜像路径
+## 1. 镜像在工作流中的位置
+
+镜像是把“已经装好的运行环境”带到其它 workspace / compute group 的方式。目标训练空间不可上网时，常见做法是在可上网 CPU notebook 里安装依赖和运行 smoke test，然后 `image save` 成项目镜像，再用于 GPU notebook、job、HPC、Ray 或 serving。
+
+镜像不负责保存数据集、权重和 checkpoint；这些应放在共享盘路径里，用 path alias 管理。
+
+## 2. 选择哪条镜像路径
 
 | 目标 | 镜像路径 | 判断依据 |
 | --- | --- | --- |
@@ -21,7 +27,7 @@ inspire image <subcommand> --help
 
 镜像能被调度的最低要求：状态为 `READY`，地址或名称能被对应命令接受，并且目标 workspace / project 有权限读取它。
 
-## 2. 浏览和选择镜像
+## 3. 浏览和选择镜像
 
 ```bash
 inspire image list
@@ -32,7 +38,7 @@ inspire image detail <name>:<version>
 
 选择镜像时先看状态、版本、来源和可见性。提交 notebook、job 或 HPC 前，如果镜像刚保存或刚注册，必须确认已经 `READY`；不要只看创建命令成功。
 
-## 3. 从 notebook 固化：`image save`
+## 4. 从 notebook 固化：`image save`
 
 适用于“在 notebook 里装好环境，再保存成项目通用基底”。创建 notebook、安装依赖和远程验证属于 [notebook.md](notebook.md)；本文只覆盖固化动作和后续镜像状态。
 
@@ -42,12 +48,12 @@ inspire image save <notebook-name> -n <img-name> -v v1 --public --wait
 
 使用要点：
 
-- `NOTEBOOK` 是 notebook 名称，不是平台 handle。
+- `NOTEBOOK` 是 notebook 名称。
 - 用 `--wait` 等到镜像进入 `READY`，否则后续任务可能拉不到镜像。
 - `--public` / `--private` 控制平台可见性；敏感依赖、内部数据或个人实验镜像默认保持私有。
 - 固化后再用 `image list` 或 `image detail` 确认名称、版本和状态。
 
-## 4. 注册外部镜像：`image register`
+## 5. 注册外部镜像：`image register`
 
 适用于镜像已在本地、CI 或外部 registry 构建完成，需要让平台能调度它。不要用 `register` 保存运行中的 notebook；那是 `image save` 的职责。
 
@@ -73,7 +79,7 @@ inspire image register -n my-img -v v1.0 --method address
 
 注册后同样要等 `READY`。如果平台一直无法拉取镜像，优先怀疑 registry 权限、镜像地址不完整、tag 不存在或目标 workspace 无法访问该 registry。
 
-## 5. 可见性
+## 6. 可见性
 
 可见性翻转用于已经存在的自定义镜像：
 
@@ -84,7 +90,7 @@ inspire image set-visibility <name>:<version> --private
 
 公开前确认镜像内没有账号 token、私有 wheel、内部数据或临时调试文件。
 
-## 6. 清理原则
+## 7. 清理原则
 
 只删除确认不再使用的自定义镜像。清理前至少确认：
 

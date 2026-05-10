@@ -26,7 +26,20 @@ from .ray_commands import (
 
 @click.group()
 def ray() -> None:
-    """Manage Ray (弹性计算) jobs — elastic clusters with auto-scaling workers."""
+    """Manage Ray (弹性计算) jobs with one head and elastic workers.
+
+    Use Ray only when the workload needs a long-running driver, elastic
+    worker groups, streaming processing, or heterogeneous CPU/GPU workers.
+    Fixed GPU training normally belongs in `job`; fixed CPU batch work
+    normally belongs in `hpc`.
+
+    \b
+    Examples:
+        inspire resources specs --usage ray --workspace CPU资源空间
+        inspire ray create -n pipeline -c "python driver.py" --workspace CPU资源空间 --project CI-情境智能 --head-image ray-base:v1 --head-group HPC-可上网区资源-2 --head-quota 0,4,16 --worker "name=workers;image=ray-base:v1;group=HPC-可上网区资源-2;quota=0,20,80;min=1;max=4"
+        inspire ray events pipeline --tail 50
+        inspire ray instances pipeline --workspace CPU资源空间
+    """
 
 
 ray.add_command(list_ray)

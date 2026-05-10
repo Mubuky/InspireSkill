@@ -1,33 +1,59 @@
-# 三阶段项目工作流
+# 项目工作流
 
-项目要从环境准备、数据处理推进到分布式训练时，先查本手册。这里只给跨阶段编排和验收点；具体命令参数以 CLI `--help` 为准，单领域细节分别看 [notebook.md](notebook.md)、[compute-workloads.md](compute-workloads.md)、[image-management.md](image-management.md) 和 [resources-and-paths.md](resources-and-paths.md)。
+项目从环境准备、数据处理推进到训练时，先查本手册。这里给跨阶段编排和验收点；具体命令参数以 CLI `--help` 为准，单领域细节分别看 [resources-and-paths.md](resources-and-paths.md)、[notebook.md](notebook.md)、[image-management.md](image-management.md) 和 [compute-workloads.md](compute-workloads.md)。
 
-## 1. 阶段 A：CPU 空间准备基底环境
+## 1. 总体框架
 
-先选定一个可上网 CPU 空间起基底 notebook，安装项目依赖、Slurm/Ray/训练依赖，并保存成项目通用镜像。这样后续 notebook、job、HPC、Ray 都复用同一基底，减少冷启动和重复安装。资源条件通过显式参数或 workload profile 传入，不依赖隐式默认值。
+把项目推进拆成三段：
 
-> 下述示例中的 `<GROUP>`、`<WORKSPACE>`、`<IMAGE_URL>` 仅为占位格式。实际值以 `inspire resources specs` 和 `inspire config context` 的实时输出为准。
+| 阶段 | 目标 | 典型入口 | 验收 |
+| --- | --- | --- | --- |
+| A. 联网准备 | 下载代码、依赖、数据、权重，形成可复用镜像或共享盘布局 | 可上网 CPU notebook、`image save` | 远端 repo 可更新，依赖可导入，数据 / 权重路径可读，镜像 `READY` |
+| B. CPU 处理 | 预处理、清洗、评测、打包、索引构建 | HPC，必要时 Ray | 小规模 probe 通过，正式规模产物完整，有 fingerprint |
+| C. GPU 训练 / 部署 | 单节点调试、多节点训练、serving | GPU notebook、job、serving | 日志推进，metrics 有负载，产物 / 服务 smoke 通过 |
 
-仓库远端路径默认从 `me` path alias 开始；多个 repo 并列时用 `me:<repo>`。如果需要更短名字，先用 `inspire notebook path set repo <remote-path>` 写入项目级 alias。
+核心原则：联网和依赖准备尽量前置到可上网 CPU notebook；训练空间只负责读共享盘、拉已准备镜像、运行目标程序。
 
-基底 notebook 准备看 [notebook.md](notebook.md)，镜像固化和可见性看 [image-management.md](image-management.md)。一次性临时任务可以跳过 `image save`。
+## 2. 阶段 A：可上网 CPU Notebook 准备
+
+先确认可上网 CPU 规格：
 
 ```bash
-# 创建并配置基底 notebook -> 安装依赖 -> 保存为项目镜像
-inspire notebook create --workspace <WORKSPACE> --group <GROUP> -q 0,20,256 \
-  --name <name>-base --image <IMAGE_URL> \
-  --project <P> --wait
+inspire resources specs --usage notebook --workspace CPU资源空间 --include-empty
+inspire resources specs --usage notebook --workspace <CPU_WORKSPACE> --group <INTERNET_CPU_GROUP>
+```
 
+创建准备盒：
+
+```bash
+inspire notebook create --workspace <CPU_WORKSPACE> --group <INTERNET_CPU_GROUP> -q 0,20,256 \
+  --name <name>-base --image <BASE_IMAGE> --project <PROJECT> --wait
 inspire notebook ssh connect <name>-base
-inspire notebook shell <name>-base --cwd me
-inspire notebook exec <name>-base --cwd me:<repo> "python --version && nvidia-smi || true"
+```
+
+准备共享盘内容：
+
+```bash
+inspire notebook exec <name>-base --cwd me:<repo> "git pull && pip install -r requirements.txt"
+inspire notebook exec <name>-base --cwd public "mkdir -p models data outputs"
+```
+
+如果依赖要复用于 job、HPC、Ray 或 serving，保存镜像：
+
+```bash
 inspire notebook install-deps <name>-base --slurm --ray
 inspire image save <name>-base -n <img> -v v1 --public --wait
 ```
 
-## 2. 阶段 B：CPU 空间跑数据处理
+验收点：
 
-固定规模批处理用 HPC；流式、长守护或异构 worker 才考虑 Ray。
+- `inspire notebook exec <name>-base --cwd me:<repo> "python -c 'import <pkg>'"` 通过。
+- 数据、权重、checkpoint 路径在 `me` 或 `public` 下可读。
+- 需要复用的镜像在 `image detail <img>:v1` 中为 `READY`。
+
+## 3. 阶段 B：CPU 数据处理
+
+固定规模 CPU 批处理优先用 HPC；流式、长守护或异构 worker 才考虑 Ray。
 
 | 形态 | HPC | Ray |
 | --- | --- | --- |
@@ -36,22 +62,48 @@ inspire image save <name>-base -n <img> -v v1 --public --wait
 | 数据流 | GPFS 到处理再到 GPFS | worker 间走 Ray 对象存储 |
 | 结束条件 | `srun` 退出自动结束 | driver 退出才结束 |
 
-正式放量前先跑接近生产规模的 probe。小规模通过不代表正式规模稳定。
+正式放量前先跑接近生产形状的 probe。小规模通过不代表正式规模稳定。
 
-HPC 和 Ray 的资源模型、示例与状态判断看 [compute-workloads.md](compute-workloads.md)。
+HPC 示例：
 
-## 3. 阶段 C：分布式训练空间
+```bash
+inspire resources specs --usage hpc --workspace <CPU_WORKSPACE>
+inspire hpc create -n <name>-preprocess \
+  -c 'srun bash -lc "python <repo>/preprocess.py --out public:dataset-v1"' \
+  --workspace <CPU_WORKSPACE> --project <PROJECT> --group <GROUP> \
+  -q 0,20,256 --image <IMAGE> --priority 5
+```
 
-训练空间多数节点不可上网。依赖、权重和数据集先在可上网空间下载到共享盘，再进训练空间。
+验收点：
 
-单节点调试：先用 `inspire notebook create` 在训练空间起 notebook；连接、执行和事件观察看 [notebook.md](notebook.md)。
+- `inspire hpc events <name>-preprocess --tail 50` 没有持续调度拒绝。
+- `inspire hpc metrics <name>-preprocess --metric cpu,mem,disk_read,disk_write --window 2h` 显示资源在工作。
+- 同项目 notebook 回读产物目录，能看到预期文件、大小和 fingerprint。
 
-多节点训练命令和异常判断看 [compute-workloads.md](compute-workloads.md)。提交后用 `job logs --follow` 跟日志：
+## 4. 阶段 C：GPU 训练空间
+
+训练空间多数节点不可上网。进入训练阶段前，应已经具备：
+
+- 代码在共享盘 repo 中，或镜像内已包含固定代码。
+- 数据和权重在目标项目共享路径可见。
+- 依赖在镜像中，或目标环境无需联网安装。
+- `resources specs --usage job` 能找到目标 `--quota`。
+
+单节点调试：
+
+```bash
+inspire notebook create --workspace <GPU_WORKSPACE> --group <GPU_GROUP> -q 1,20,200 \
+  --name <name>-probe --image <IMAGE> --project <PROJECT> --wait
+inspire notebook ssh connect <name>-probe
+inspire notebook exec <name>-probe --cwd me:<repo> "bash scripts/probe.sh"
+```
+
+多节点训练：
 
 ```bash
 inspire job create -n <name>-train -q 8,160,1800 --nodes 2 \
-  -c 'bash <repo>/train.sh' --workspace <WORKSPACE> --group <GROUP> \
-  --image <IMAGE_URL> --priority 5
+  -c 'bash <repo>/train.sh' --workspace <GPU_WORKSPACE> --group <GPU_GROUP> \
+  --project <PROJECT> --image <IMAGE> --priority 5
 inspire job logs --follow <name>-train
 ```
 
@@ -71,3 +123,18 @@ inspire job metrics <name>-train --metric gpu,gpu_mem,cpu,mem,net_read,net_write
 ```
 
 多节点训练里，某个 pod 长期低 GPU / 低网络通常意味着数据加载、通信或进程状态异常；所有 pod GPU 接近零且 CPU / I/O 也安静时，不要只盯 `RUNNING`，回到日志和产出文件确认训练是否真的推进。
+
+## 5. 部署或交付
+
+模型服务需要先把模型目录注册到 model registry，再创建 serving：
+
+```bash
+inspire model register --name <model> --source-path <REMOTE_MODEL_DIR> \
+  --workspace <WORKSPACE> --project <PROJECT>
+inspire model versions <model> --workspace <WORKSPACE>
+inspire serving create --name <service> --model <model> --workspace <WORKSPACE> \
+  --project <PROJECT> --group <GROUP> --quota 1,18,200 --image <IMAGE> \
+  --command "python serve.py" --port 8000 --dry-run
+```
+
+确认计划后去掉 `--dry-run`，再用 `serving status`、`serving metrics` 和业务 smoke test 验收。

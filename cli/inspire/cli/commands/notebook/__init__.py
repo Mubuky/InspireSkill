@@ -43,11 +43,19 @@ from .remote_shell import bridge_ssh as _remote_shell
 def notebook():
     """Manage notebook/interactive instances.
 
+    Notebooks are the interactive workbench: use them to prepare project
+    environments, download data or weights into shared storage, run quick
+    probes, expose temporary HTTP services, and open SSH / exec / scp access
+    by notebook name. For offline GPU training spaces, prepare dependencies
+    in an internet-enabled CPU notebook first, then reuse the shared paths or
+    save the notebook as an image.
+
     \b
     Examples:
-        inspire notebook list                          # List all instances
-        inspire notebook ssh connect <notebook>        # Establish cached connection
-        inspire notebook exec <notebook> "nvidia-smi"  # Run a remote command
+        inspire notebook create --workspace CPU资源空间 --group CPU资源-2 -q 0,20,256 --project CI-情境智能 --image unified-base:v2 --name prep-box --wait
+        inspire notebook ssh connect prep-box
+        inspire notebook exec prep-box --cwd me:repo "git pull && pip install -r requirements.txt"
+        inspire notebook scp prep-box ./config.yaml me:repo/config.yaml
         inspire notebook metrics <notebook> --window 30m
     """
     pass

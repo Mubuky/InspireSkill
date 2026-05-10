@@ -15,7 +15,13 @@ from .user_commands import (
 
 @click.group()
 def user() -> None:
-    """Inspect the current user's identity, quota, permissions, and keys."""
+    """Inspect the current user's identity, permissions, quota, and keys.
+
+    Use `whoami` to verify the active login, `permissions --workspace` to
+    check whether the account can create a workload in a workspace,
+    `api-keys` to list key metadata, and `ssh-keys` to manage public keys
+    used by notebook SSH access.
+    """
 
 
 user.add_command(whoami_user)

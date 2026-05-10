@@ -26,11 +26,17 @@ from .job_metrics import job_metrics
 
 @click.group()
 def job() -> None:
-    """Manage distributed training jobs.
+    """Manage GPU batch jobs and distributed-training workloads.
+
+    Use `job create` for non-interactive GPU work: distributed training,
+    multi-node training, batch inference, or a fixed pool of GPU workers.
+    Prepare code, data, and dependencies on shared storage before submitting,
+    especially when the target training workspace has no internet egress.
 
     \b
     Examples:
-        inspire job create --name train-a --quota 8,160,1800 --command "bash train.sh"
+        inspire resources specs --usage job --workspace 分布式训练空间 --group H200
+        inspire job create --name train-a --workspace 分布式训练空间 --project CI-情境智能 --group H200 -q 8,160,1800 --image train-base:v1 --nodes 2 --command "bash repo/train.sh" --priority 5
         inspire job logs train-a --follow
         inspire job metrics train-a --window 30m
         inspire job events train-a --tail 50

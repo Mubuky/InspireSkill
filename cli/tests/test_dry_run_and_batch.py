@@ -210,7 +210,7 @@ def test_hpc_dry_run_human_scrubs_raw_ids(
     )
 
     assert result.exit_code == 0, result.output
-    assert "No create API call was made." in result.output
+    assert "No HPC job was submitted." in result.output
     assert "lcg-12345678-1234-1234-1234-123456789abc" not in result.output
     assert "<compute-group-id>" in result.output
     assert api.hpc_calls == []

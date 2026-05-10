@@ -1,4 +1,4 @@
-"""``inspire config context`` — agent-facing view of the active account.
+"""``inspire config context`` — name-first view of the active account.
 
 Structured pieces of the loaded config (active account, projects,
 workspaces, compute groups) aren't reachable through ``inspire config

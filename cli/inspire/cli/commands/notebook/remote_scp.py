@@ -73,11 +73,13 @@ def bridge_scp(
 ) -> None:
     """Transfer files to/from a cached notebook via SCP.
 
-    NOTEBOOK is the cached notebook name (omit to use the default).
+    Requires `inspire notebook ssh connect <notebook>` first. NOTEBOOK is
+    the notebook name.
     By default, uploads SOURCE (local) to DESTINATION (remote).
     Use --download to download SOURCE (remote) to DESTINATION (local).
-    Remote paths are literal and do not inherit path aliases; relative
-    remote paths trigger a warning. Use alias:sub/path to expand [path_aliases].
+    Remote paths may be absolute paths, aliases, or alias:sub/path values
+    from [path_aliases]. Relative remote paths are allowed but trigger a
+    warning because their meaning depends on the remote shell.
 
     \b
     Examples:

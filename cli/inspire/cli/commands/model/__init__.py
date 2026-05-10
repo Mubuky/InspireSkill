@@ -11,8 +11,17 @@ from .model_commands import list_model, register_model, status_model, versions_m
 def model() -> None:
     """Use the platform model repository.
 
-    Inspect registered models, inspect versions, and register platform-visible
-    model directories. Use `serving` for deployed service lifecycle commands.
+    Inspect registered models, inspect versions, and register an existing
+    platform-visible model directory as a model entry. This command group
+    does not upload local files; put model files on shared storage first.
+    Use `serving` for deployed service lifecycle commands.
+
+    \b
+    Examples:
+        inspire model list --workspace 分布式训练空间
+        inspire model status qwen-demo --project CI-情境智能
+        inspire model versions qwen-demo
+        inspire model register --name qwen-demo --source-path /inspire/hdd/project/<topic>/public/models/qwen-demo --workspace 分布式训练空间 --project CI-情境智能
     """
 
 

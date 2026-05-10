@@ -25,7 +25,13 @@ from .image_commands import (
 
 @click.group()
 def image():
-    """Manage Docker images for notebooks and jobs.
+    """Manage Docker images for notebook, job, HPC, Ray, and serving.
+
+    Use `image list/detail` to choose a ready image, `image save` after
+    preparing a notebook environment, `image register` for images built
+    outside the platform, `set-visibility` to share or privatize a custom
+    image, and `delete` only after confirming no active workload depends on
+    that image.
 
     \b
     Examples:

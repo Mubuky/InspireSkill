@@ -679,12 +679,14 @@ def exec_command(
 ) -> None:
     """Execute a command on a cached notebook.
 
-    Uses the cached notebook connection for command execution. Workflow
-    transport is only used when artifact options are requested.
+    Requires `inspire notebook ssh connect <notebook>` first. NOTEBOOK is
+    the notebook name. Each call runs an independent remote shell command;
+    use one quoted command string when cwd, environment variables, or shell
+    state must stay together.
 
-    NOTEBOOK is the cached notebook name (omit to use the default).
     COMMAND is the shell command to run remotely (in --cwd, the `me` path alias, or $HOME).
     Command output (stdout/stderr) is automatically displayed after completion.
+    Artifact options can fetch generated paths after the command finishes.
 
     \b
     Examples:

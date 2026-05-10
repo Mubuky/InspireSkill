@@ -209,10 +209,10 @@ def _build_base_url_resolution(
 )
 @pass_context
 def check_config(ctx: Context, json_output_local: bool) -> None:
-    """Check environment configuration and API authentication.
+    """Check configuration files and platform authentication.
 
-    Verifies configuration (from files and environment) and attempts to
-    authenticate with the Inspire API.
+    Verifies required account settings, validates host-shaped values, and
+    confirms the active account can authenticate to the platform.
     """
     ctx.json_output = bool(ctx.json_output or json_output_local)
     effective_json = ctx.json_output

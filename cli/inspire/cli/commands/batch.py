@@ -771,7 +771,7 @@ def _emit_batch_result(
         kind = item.get("kind") or command_name
         click.echo(f"{index}. {kind}: {scrub_raw_ids(str(name))}")
     if dry_run:
-        click.echo("No create API calls were made.")
+        click.echo("No workloads were submitted.")
 
 
 def _handle_batch_exception(ctx: Context, error: Exception) -> None:
@@ -793,7 +793,7 @@ def _handle_batch_exception(ctx: Context, error: Exception) -> None:
 @click.option(
     "--dry-run",
     is_flag=True,
-    help="Expand the matrix, resolve each job, and print plans without calling create APIs.",
+    help="Expand the matrix, resolve each job, and print plans without submitting anything.",
 )
 @pass_context
 def job_batch(ctx: Context, config_path: Path, dry_run: bool) -> None:
@@ -857,7 +857,7 @@ def job_batch(ctx: Context, config_path: Path, dry_run: bool) -> None:
 @click.option(
     "--dry-run",
     is_flag=True,
-    help="Expand the matrix, resolve each HPC job, and print plans without calling create APIs.",
+    help="Expand the matrix, resolve each HPC job, and print plans without submitting anything.",
 )
 @pass_context
 def hpc_batch(ctx: Context, config_path: Path, dry_run: bool) -> None:
@@ -918,7 +918,7 @@ def hpc_batch(ctx: Context, config_path: Path, dry_run: bool) -> None:
 @click.option(
     "--dry-run",
     is_flag=True,
-    help="Expand the matrix, resolve each notebook, and print plans without calling create APIs.",
+    help="Expand the matrix, resolve each notebook, and print plans without creating anything.",
 )
 @pass_context
 def notebook_batch(ctx: Context, config_path: Path, dry_run: bool) -> None:
@@ -987,7 +987,7 @@ def notebook_batch(ctx: Context, config_path: Path, dry_run: bool) -> None:
 @click.option(
     "--dry-run",
     is_flag=True,
-    help="Expand the matrix, resolve each Ray job, and print plans without calling create APIs.",
+    help="Expand the matrix, resolve each Ray job, and print plans without submitting anything.",
 )
 @pass_context
 def ray_batch(ctx: Context, config_path: Path, dry_run: bool) -> None:
@@ -1055,7 +1055,7 @@ def ray_batch(ctx: Context, config_path: Path, dry_run: bool) -> None:
     is_flag=True,
     help=(
         "Expand the matrix, resolve each inference serving, and print plans "
-        "without calling create APIs."
+        "without creating anything."
     ),
 )
 @pass_context
