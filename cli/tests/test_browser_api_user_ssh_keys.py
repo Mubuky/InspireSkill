@@ -10,6 +10,7 @@ from inspire.platform.web.browser_api import users as users_module
 from inspire.platform.web.browser_api.users import (
     create_user_ssh_key,
     delete_user_ssh_key,
+    get_user_detail,
     list_user_ssh_keys,
 )
 
@@ -61,6 +62,31 @@ def test_list_user_ssh_keys_posts_expected_body(monkeypatch: pytest.MonkeyPatch)
     assert record["url"].endswith("/ssh/list")
     assert record["referer"].endswith("/userCenter?tab=sshkey")
     assert record["body"] == {"page": 2, "page_size": 20}
+
+
+def test_get_user_detail_uses_rest_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    record: dict[str, Any] = {}
+    _install_fake_request(
+        monkeypatch,
+        {
+            "code": 0,
+            "data": {
+                "id": "user-12345678-1234-1234-1234-123456789abc",
+                "name": "Alice",
+            },
+        },
+        record,
+    )
+
+    user = get_user_detail(
+        "user-12345678-1234-1234-1234-123456789abc",
+        session=_FakeSession(),
+    )
+
+    assert user["name"] == "Alice"
+    assert record["method"] == "GET"
+    assert record["url"].endswith("/user/user-12345678-1234-1234-1234-123456789abc")
+    assert record["body"] is None
 
 
 def test_create_user_ssh_key_uses_content_field(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -11,8 +11,10 @@ from inspire.platform.web.session import DEFAULT_WORKSPACE_ID, WebSession, get_w
 __all__ = [
     "HPCJobInfo",
     "delete_hpc_job",
+    "list_hpc_job_instances",
     "list_hpc_jobs",
     "list_hpc_job_events",
+    "list_hpc_job_logs",
 ]
 
 
@@ -151,6 +153,94 @@ def list_hpc_job_events(
         return []
     except Exception:
         return []
+
+
+def list_hpc_job_instances(
+    job_id: str,
+    *,
+    page_num: int = 1,
+    page_size: int = 50,
+    session: Optional[WebSession] = None,
+) -> tuple[list[dict[str, Any]], int]:
+    """List pod/component instances for an HPC job.
+
+    Endpoint: ``POST /api/v1/hpc_jobs/instances/list`` with body
+    ``{jobId, page_num, page_size}``.
+    """
+    if session is None:
+        session = get_web_session()
+    data = _request_json(
+        session,
+        "POST",
+        _browser_api_path("/hpc_jobs/instances/list"),
+        referer=f"{_get_base_url()}/jobs/hpcDetail/{job_id}",
+        body={"jobId": job_id, "page_num": page_num, "page_size": page_size},
+        timeout=30,
+    )
+    if data.get("code") != 0:
+        raise ValueError(f"API error: {data.get('message')}")
+
+    payload = data.get("data") or {}
+    items = payload.get("items")
+    if not isinstance(items, list):
+        items = payload.get("list")
+    if not isinstance(items, list):
+        items = []
+    total_raw = payload.get("total")
+    try:
+        total = int(str(total_raw)) if total_raw is not None else len(items)
+    except ValueError:
+        total = len(items)
+    return [item for item in items if isinstance(item, dict)], total
+
+
+def list_hpc_job_logs(
+    *,
+    pod_names: list[str],
+    start_timestamp_ms: int | str,
+    end_timestamp_ms: int | str,
+    page_size: int = 200,
+    job_id: str | None = None,
+    session: Optional[WebSession] = None,
+) -> tuple[list[dict[str, Any]], int]:
+    """Fetch aggregated HPC logs via ``POST /api/v1/logs/hpc``.
+
+    The platform rejects explicit sorter fields on this endpoint, including
+    ``@timestamp``. Send no sorter and sort client-side if needed.
+    """
+    if session is None:
+        session = get_web_session()
+    detail = f"/jobs/hpcDetail/{job_id}" if job_id else "/jobs/highPerformanceComputing"
+    data = _request_json(
+        session,
+        "POST",
+        _browser_api_path("/logs/hpc"),
+        referer=f"{_get_base_url()}{detail}",
+        body={
+            "page_size": page_size,
+            "filter": {
+                "podNames": pod_names,
+                "start_timestamp_ms": str(start_timestamp_ms),
+                "end_timestamp_ms": str(end_timestamp_ms),
+            },
+        },
+        timeout=30,
+    )
+    if data.get("code") != 0:
+        raise ValueError(f"API error: {data.get('message')}")
+
+    payload = data.get("data") or {}
+    logs = payload.get("logs")
+    if not isinstance(logs, list):
+        logs = payload.get("items")
+    if not isinstance(logs, list):
+        logs = []
+    total_raw = payload.get("total")
+    try:
+        total = int(str(total_raw)) if total_raw is not None else len(logs)
+    except ValueError:
+        total = len(logs)
+    return [item for item in logs if isinstance(item, dict)], total
 
 
 def delete_hpc_job(

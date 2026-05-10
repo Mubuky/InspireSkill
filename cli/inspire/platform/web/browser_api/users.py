@@ -20,6 +20,7 @@ from inspire.platform.web.session import DEFAULT_WORKSPACE_ID, WebSession, get_w
 __all__ = [
     "create_user_ssh_key",
     "delete_user_ssh_key",
+    "get_user_detail",
     "get_user_quota",
     "list_user_api_keys",
     "list_user_ssh_keys",
@@ -45,6 +46,29 @@ def get_user_quota(session: Optional[WebSession] = None) -> dict[str, Any]:
     if data.get("code") != 0:
         raise ValueError(f"API error: {data.get('message')}")
     return data.get("data") or {}
+
+
+def get_user_detail(
+    user_id: str,
+    session: Optional[WebSession] = None,
+) -> dict[str, Any]:
+    """Return a user detail payload by user id (GET /api/v1/user/{user_id})."""
+    if session is None:
+        session = get_web_session()
+    raw_id = user_id.strip()
+    if not raw_id:
+        raise ValueError("user_id is required")
+    data = _request_json(
+        session,
+        "GET",
+        _browser_api_path(f"/user/{raw_id}"),
+        referer=_referer("/userCenter"),
+        timeout=15,
+    )
+    if data.get("code") != 0:
+        raise ValueError(f"API error: {data.get('message')}")
+    payload = data.get("data")
+    return payload if isinstance(payload, dict) else {}
 
 
 def list_user_api_keys(session: Optional[WebSession] = None) -> list[dict[str, Any]]:

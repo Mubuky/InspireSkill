@@ -319,6 +319,36 @@ def list_notebook_compute_groups(
     return []
 
 
+def list_notebook_users(
+    workspace_id: Optional[str] = None,
+    *,
+    session: Optional[WebSession] = None,
+) -> tuple[list[dict[str, Any]], int]:
+    """List users for the notebook page filter (POST /api/v1/notebook/users)."""
+    session, workspace_id = _get_session_and_workspace_id(
+        workspace_id=workspace_id, session=session
+    )
+    data = _request_notebooks_data(
+        session,
+        "POST",
+        "/notebook/users",
+        body={"workspace_id": workspace_id},
+        timeout=15,
+        default_data={},
+    )
+    if not isinstance(data, dict):
+        return [], 0
+    items = data.get("list")
+    if not isinstance(items, list):
+        items = []
+    total_raw = data.get("total")
+    try:
+        total = int(str(total_raw)) if total_raw is not None else len(items)
+    except ValueError:
+        total = len(items)
+    return [item for item in items if isinstance(item, dict)], total
+
+
 def _config_compute_groups_fallback(workspace_id: str | None = None) -> list[dict]:
     """Build synthetic compute group list from InspireSkill config."""
     try:
@@ -706,17 +736,20 @@ def list_notebook_lifecycle(
     """
     if session is None:
         session = get_web_session()
+    body: dict[str, Any] = {
+        "notebook_id": notebook_id,
+        "page": page,
+        "page_size": page_size,
+    }
+    if start_time != "":
+        body["start_time"] = start_time
+    if end_time != "":
+        body["end_time"] = end_time
     data = _request_notebooks_data(
         session,
         "POST",
         "/lifecycle/list",
-        body={
-            "notebook_id": notebook_id,
-            "page": page,
-            "page_size": page_size,
-            "start_time": start_time,
-            "end_time": end_time,
-        },
+        body=body,
         timeout=15,
         default_data={},
     )
@@ -774,6 +807,7 @@ __all__ = [
     "list_notebook_events",
     "list_notebook_lifecycle",
     "list_notebook_runs",
+    "list_notebook_users",
     "start_notebook",
     "stop_notebook",
     "wait_for_notebook_running",

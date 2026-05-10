@@ -22,7 +22,13 @@ from inspire.platform.web.browser_api.servings import (
     delete_serving,
     get_serving_configs,
     get_serving_detail,
+    get_serving_terms,
+    list_serving_events,
+    list_serving_instances,
+    list_serving_logs,
+    list_serving_scale_history,
     list_serving_user_project,
+    list_serving_versions,
     list_servings,
     start_serving,
     stop_serving,
@@ -157,6 +163,7 @@ def test_list_servings_supports_current_filter_fields(monkeypatch) -> None:
         keyword="qwen",
         project_ids=["project-1"],
         statuses=["RUNNING"],
+        serving_types=["CUSTOM"],
         session=_FakeSession(),
     )
 
@@ -165,6 +172,7 @@ def test_list_servings_supports_current_filter_fields(monkeypatch) -> None:
         "keyword": "qwen",
         "project_id": ["project-1"],
         "status": ["RUNNING"],
+        "inference_serving_type": ["CUSTOM"],
     }
 
 
@@ -230,6 +238,133 @@ def test_get_serving_detail_raises_on_error(monkeypatch) -> None:
     _install_fake_request(monkeypatch, {"code": 404, "message": "not found"}, {})
     with pytest.raises(ValueError, match="API error: not found"):
         get_serving_detail("sv-missing", session=_FakeSession())
+
+
+def test_serving_detail_tab_helpers_use_current_paths(monkeypatch) -> None:
+    record: dict[str, Any] = {}
+    _install_fake_request(
+        monkeypatch,
+        {
+            "code": 0,
+            "data": {
+                "inference_servings": [{"version": 1}],
+                "total": "1",
+            },
+        },
+        record,
+    )
+
+    items, total = list_serving_versions("sv-1", session=_FakeSession())
+    assert total == 1
+    assert items == [{"version": 1}]
+    assert record["method"] == "GET"
+    assert record["url"].endswith("/inference_servings/sv-1/versions")
+
+    _install_fake_request(
+        monkeypatch,
+        {"code": 0, "data": {"items": [{"name": "pod-1"}], "total": "1"}},
+        record,
+    )
+    items, total = list_serving_instances(
+        "sv-1", page=2, page_size=25, session=_FakeSession()
+    )
+    assert total == 1
+    assert items == [{"name": "pod-1"}]
+    assert record["method"] == "POST"
+    assert record["url"].endswith("/inference_servings/instances/list")
+    assert record["body"] == {
+        "inference_serving_id": "sv-1",
+        "page": 2,
+        "page_size": 25,
+    }
+
+    _install_fake_request(
+        monkeypatch,
+        {"code": 0, "data": {"events": [{"reason": "Scheduled"}]}},
+        record,
+    )
+    events = list_serving_events(
+        "sv-1",
+        object_type="INFERENCE_SERVERLESS",
+        page=3,
+        page_size=50,
+        session=_FakeSession(),
+    )
+    assert events == [{"reason": "Scheduled"}]
+    assert record["method"] == "POST"
+    assert record["url"].endswith("/inference_servings/events/list")
+    assert record["body"] == {
+        "page": 3,
+        "page_size": 50,
+        "filter": {
+            "object_type": "INFERENCE_SERVERLESS",
+            "object_ids": ["sv-1"],
+        },
+    }
+
+
+def test_serving_logs_and_scale_history_omit_sorter(monkeypatch) -> None:
+    record: dict[str, Any] = {}
+    _install_fake_request(
+        monkeypatch,
+        {"code": 0, "data": {"logs": [{"message": "ready"}], "total": "1"}},
+        record,
+    )
+
+    logs, total = list_serving_logs(
+        pod_names=["pod-1"],
+        start_timestamp_ms=123,
+        end_timestamp_ms=456,
+        page_size=20,
+        inference_serving_id="sv-1",
+        session=_FakeSession(),
+    )
+    assert total == 1
+    assert logs == [{"message": "ready"}]
+    assert record["method"] == "POST"
+    assert record["url"].endswith("/logs/inference_serving")
+    assert record["body"] == {
+        "page_size": 20,
+        "filter": {
+            "podNames": ["pod-1"],
+            "start_timestamp_ms": "123",
+            "end_timestamp_ms": "456",
+        },
+    }
+    assert "sorter" not in record["body"]
+
+    _install_fake_request(
+        monkeypatch,
+        {"code": 0, "data": {"list": [{"replicas": 2}], "total": 1}},
+        record,
+    )
+    items, total = list_serving_scale_history(
+        "sv-1", page=2, page_size=10, session=_FakeSession()
+    )
+    assert total == 1
+    assert items == [{"replicas": 2}]
+    assert record["method"] == "POST"
+    assert record["url"].endswith("/inference_servings/scale_history/list")
+    assert record["body"] == {
+        "inference_serving_id": "sv-1",
+        "page": 2,
+        "page_size": 10,
+    }
+
+
+def test_get_serving_terms_uses_terms_path(monkeypatch) -> None:
+    record: dict[str, Any] = {}
+    _install_fake_request(
+        monkeypatch,
+        {"code": 0, "data": {"endpoint": "https://example.invalid"}},
+        record,
+    )
+
+    data = get_serving_terms("sv-1", session=_FakeSession())
+
+    assert data == {"endpoint": "https://example.invalid"}
+    assert record["method"] == "GET"
+    assert record["url"].endswith("/inference_servings/sv-1/terms")
 
 
 def test_create_serving_posts_current_web_ui_payload(monkeypatch) -> None:

@@ -27,8 +27,18 @@ from inspire.platform.web.session import DEFAULT_WORKSPACE_ID, WebSession, get_w
 
 __all__ = [
     "ModelInfo",
+    "check_model_inference_serving_pending",
     "create_model",
+    "get_model_plaza_deploy_serving_config",
+    "get_model_plaza_detail",
+    "get_model_plaza_filters",
     "get_model_detail",
+    "get_model_publish_prefill",
+    "get_model_publish_status",
+    "list_model_inference_servings",
+    "list_model_plaza",
+    "list_model_plaza_related_workspaces",
+    "list_model_users",
     "list_model_version_records",
     "list_model_versions",
     "list_models",
@@ -43,6 +53,17 @@ def _referer(workspace_id: str | None = None) -> str:
     if workspace_id:
         return f"{url}?spaceId={workspace_id}"
     return url
+
+
+def _plaza_referer() -> str:
+    return f"{_get_base_url()}/modelPlaza"
+
+
+def _check_response(data: dict[str, Any]) -> dict[str, Any]:
+    if data.get("code") != 0:
+        raise ValueError(f"API error: {data.get('message')}")
+    payload = data.get("data")
+    return payload if isinstance(payload, dict) else {}
 
 
 def _resolve_workspace(
@@ -262,6 +283,265 @@ def list_model_version_records(
     if data.get("code") != 0:
         raise ValueError(f"API error: {data.get('message')}")
     return data.get("data") or {}
+
+
+def check_model_inference_serving_pending(
+    *,
+    model_id: str,
+    version: int | str,
+    session: Optional[WebSession] = None,
+    workspace_id: Optional[str] = None,
+) -> dict[str, Any]:
+    """Check whether a model version has pending servings before edit/delete."""
+    if session is None:
+        session = get_web_session()
+    data = _request_json(
+        session,
+        "POST",
+        _browser_api_path("/model/inference_serving/pending"),
+        referer=_referer(workspace_id),
+        body={"model_id": model_id, "version": int(version)},
+        timeout=30,
+    )
+    return _check_response(data)
+
+
+def list_model_inference_servings(
+    *,
+    model_id: str,
+    version: int | str,
+    page: int = 1,
+    page_size: int = 10,
+    session: Optional[WebSession] = None,
+    workspace_id: Optional[str] = None,
+) -> tuple[list[dict[str, Any]], int]:
+    """List servings using one model version (POST /model/inference_servings)."""
+    if session is None:
+        session = get_web_session()
+    data = _request_json(
+        session,
+        "POST",
+        _browser_api_path("/model/inference_servings"),
+        referer=_referer(workspace_id),
+        body={
+            "model_id": model_id,
+            "version": int(version),
+            "page": page,
+            "page_size": page_size,
+        },
+        timeout=30,
+    )
+    payload = _check_response(data)
+    items = payload.get("serving")
+    if not isinstance(items, list):
+        items = payload.get("inference_servings")
+    if not isinstance(items, list):
+        items = payload.get("list")
+    if not isinstance(items, list):
+        items = []
+    total_raw = payload.get("total")
+    try:
+        total = int(str(total_raw)) if total_raw is not None else len(items)
+    except ValueError:
+        total = len(items)
+    return [item for item in items if isinstance(item, dict)], total
+
+
+def get_model_publish_prefill(
+    model_id: str,
+    version: int | str,
+    *,
+    session: Optional[WebSession] = None,
+    workspace_id: Optional[str] = None,
+) -> dict[str, Any]:
+    """Get publish-form prefill data for one model version."""
+    if session is None:
+        session = get_web_session()
+    data = _request_json(
+        session,
+        "GET",
+        _browser_api_path(f"/model/{model_id}/version/{int(version)}/publish/prefill"),
+        referer=_referer(workspace_id),
+        timeout=30,
+    )
+    return _check_response(data)
+
+
+def get_model_publish_status(
+    model_id: str,
+    version: int | str,
+    *,
+    session: Optional[WebSession] = None,
+    workspace_id: Optional[str] = None,
+) -> dict[str, Any]:
+    """Get model-plaza publish status for one model version."""
+    if session is None:
+        session = get_web_session()
+    data = _request_json(
+        session,
+        "GET",
+        _browser_api_path(f"/model/{model_id}/version/{int(version)}/publish/status"),
+        referer=_referer(workspace_id),
+        timeout=30,
+    )
+    return _check_response(data)
+
+
+def list_model_users(
+    project_id: str,
+    *,
+    session: Optional[WebSession] = None,
+    workspace_id: Optional[str] = None,
+) -> tuple[list[dict[str, Any]], int]:
+    """List model users for a project filter (POST /model/users)."""
+    if session is None:
+        session = get_web_session()
+    data = _request_json(
+        session,
+        "POST",
+        _browser_api_path("/model/users"),
+        referer=_referer(workspace_id),
+        body={"project_id": project_id},
+        timeout=30,
+    )
+    payload = _check_response(data)
+    items = payload.get("list")
+    if not isinstance(items, list):
+        items = payload.get("items")
+    if not isinstance(items, list):
+        items = []
+    total_raw = payload.get("total")
+    try:
+        total = int(str(total_raw)) if total_raw is not None else len(items)
+    except ValueError:
+        total = len(items)
+    return [item for item in items if isinstance(item, dict)], total
+
+
+def get_model_plaza_filters(
+    *,
+    session: Optional[WebSession] = None,
+) -> dict[str, Any]:
+    """Return model-plaza filter metadata."""
+    if session is None:
+        session = get_web_session()
+    data = _request_json(
+        session,
+        "GET",
+        _browser_api_path("/model_plaza/filters"),
+        referer=_plaza_referer(),
+        timeout=30,
+    )
+    return _check_response(data)
+
+
+def list_model_plaza(
+    workspace_id: Optional[str] = None,
+    *,
+    page: int = 1,
+    page_size: int = 10,
+    filter_body: Optional[dict[str, Any]] = None,
+    keyword: Optional[str] = None,
+    source: Optional[str] = None,
+    model_type: Optional[str] = None,
+    region: Optional[str] = None,
+    min_param_size_b: Optional[int] = None,
+    max_context_len: Optional[int] = None,
+    session: Optional[WebSession] = None,
+) -> tuple[list[dict[str, Any]], int]:
+    """List public model-plaza records."""
+    session, workspace_id = _resolve_workspace(workspace_id, session)
+    merged_filter: dict[str, Any] = dict(filter_body or {})
+    merged_filter.setdefault("workspace_id", workspace_id)
+    optional = {
+        "keyword": keyword,
+        "source": source,
+        "model_type": model_type,
+        "region": region,
+        "min_param_size_b": min_param_size_b,
+        "max_context_len": max_context_len,
+    }
+    for key, value in optional.items():
+        if value not in (None, ""):
+            merged_filter[key] = value
+    data = _request_json(
+        session,
+        "POST",
+        _browser_api_path("/model_plaza/list"),
+        referer=_plaza_referer(),
+        body={"page": page, "page_size": page_size, "filter": merged_filter},
+        timeout=30,
+    )
+    payload = _check_response(data)
+    items = payload.get("items")
+    if not isinstance(items, list):
+        items = []
+    total_raw = payload.get("total_count", payload.get("total"))
+    try:
+        total = int(str(total_raw)) if total_raw is not None else len(items)
+    except ValueError:
+        total = len(items)
+    return [item for item in items if isinstance(item, dict)], total
+
+
+def get_model_plaza_detail(
+    model_plaza_id: str,
+    *,
+    session: Optional[WebSession] = None,
+) -> dict[str, Any]:
+    """Get model-plaza detail by id."""
+    if session is None:
+        session = get_web_session()
+    data = _request_json(
+        session,
+        "GET",
+        _browser_api_path(f"/model_plaza/detail/{model_plaza_id}"),
+        referer=_plaza_referer(),
+        timeout=30,
+    )
+    return _check_response(data)
+
+
+def list_model_plaza_related_workspaces(
+    model_plaza_id: str,
+    *,
+    session: Optional[WebSession] = None,
+) -> tuple[list[dict[str, Any]], int]:
+    """List workspaces related to one model-plaza record."""
+    if session is None:
+        session = get_web_session()
+    data = _request_json(
+        session,
+        "GET",
+        _browser_api_path(f"/model_plaza/related_workspace/{model_plaza_id}"),
+        referer=_plaza_referer(),
+        timeout=30,
+    )
+    payload = _check_response(data)
+    items = payload.get("items")
+    if not isinstance(items, list):
+        items = payload.get("list")
+    if not isinstance(items, list):
+        items = []
+    return [item for item in items if isinstance(item, dict)], len(items)
+
+
+def get_model_plaza_deploy_serving_config(
+    model_plaza_id: str,
+    *,
+    session: Optional[WebSession] = None,
+) -> dict[str, Any]:
+    """Get the serving-create prefill config for a model-plaza record."""
+    if session is None:
+        session = get_web_session()
+    data = _request_json(
+        session,
+        "GET",
+        _browser_api_path(f"/model_plaza/deploy_serving_config/{model_plaza_id}"),
+        referer=_plaza_referer(),
+        timeout=30,
+    )
+    return _check_response(data)
 
 
 def create_model(

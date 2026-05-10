@@ -9,8 +9,18 @@ import pytest
 from inspire.platform.web.browser_api import models as models_module
 from inspire.platform.web.browser_api.models import (
     ModelInfo,
+    check_model_inference_serving_pending,
     create_model,
+    get_model_plaza_deploy_serving_config,
+    get_model_plaza_detail,
+    get_model_plaza_filters,
     get_model_detail,
+    get_model_publish_prefill,
+    get_model_publish_status,
+    list_model_inference_servings,
+    list_model_plaza,
+    list_model_plaza_related_workspaces,
+    list_model_users,
     list_model_version_records,
     list_model_versions,
     list_models,
@@ -133,6 +143,151 @@ def test_model_detail_and_version_endpoints(monkeypatch) -> None:
     assert list_model_version_records("model-1", session=_FakeSession()) == {"ok": True}
     assert record["method"] == "GET"
     assert record["url"].endswith("/model/model-1")
+
+
+def test_model_version_serving_helpers_use_current_body_shapes(monkeypatch) -> None:
+    record: dict[str, Any] = {}
+    _install_fake_request(
+        monkeypatch,
+        {"code": 0, "data": {"serving": [{"name": "svc"}], "total": "1"}},
+        record,
+    )
+
+    pending = check_model_inference_serving_pending(
+        model_id="model-1",
+        version=2,
+        session=_FakeSession(),
+        workspace_id="ws-1",
+    )
+    assert pending == {"serving": [{"name": "svc"}], "total": "1"}
+    assert record["method"] == "POST"
+    assert record["url"].endswith("/model/inference_serving/pending")
+    assert record["body"] == {"model_id": "model-1", "version": 2}
+
+    items, total = list_model_inference_servings(
+        model_id="model-1",
+        version="2",
+        page=3,
+        page_size=5,
+        session=_FakeSession(),
+        workspace_id="ws-1",
+    )
+    assert total == 1
+    assert items == [{"name": "svc"}]
+    assert record["method"] == "POST"
+    assert record["url"].endswith("/model/inference_servings")
+    assert record["body"] == {
+        "model_id": "model-1",
+        "version": 2,
+        "page": 3,
+        "page_size": 5,
+    }
+
+
+def test_model_publish_helpers_use_version_path(monkeypatch) -> None:
+    record: dict[str, Any] = {}
+    _install_fake_request(monkeypatch, {"code": 0, "data": {"ok": True}}, record)
+
+    assert get_model_publish_prefill(
+        "model-1", "4", session=_FakeSession(), workspace_id="ws-1"
+    ) == {"ok": True}
+    assert record["method"] == "GET"
+    assert record["url"].endswith("/model/model-1/version/4/publish/prefill")
+
+    assert get_model_publish_status(
+        "model-1", 4, session=_FakeSession(), workspace_id="ws-1"
+    ) == {"ok": True}
+    assert record["method"] == "GET"
+    assert record["url"].endswith("/model/model-1/version/4/publish/status")
+
+
+def test_list_model_users_posts_project_id(monkeypatch) -> None:
+    record: dict[str, Any] = {}
+    _install_fake_request(
+        monkeypatch,
+        {"code": 0, "data": {"list": [{"user_name": "Alice"}], "total": "1"}},
+        record,
+    )
+
+    items, total = list_model_users(
+        "project-1", session=_FakeSession(), workspace_id="ws-1"
+    )
+
+    assert total == 1
+    assert items == [{"user_name": "Alice"}]
+    assert record["method"] == "POST"
+    assert record["url"].endswith("/model/users")
+    assert record["body"] == {"project_id": "project-1"}
+
+
+def test_model_plaza_list_filters_and_total_count(monkeypatch) -> None:
+    record: dict[str, Any] = {}
+    _install_fake_request(
+        monkeypatch,
+        {"code": 0, "data": {"items": [{"name": "Qwen"}], "total_count": "12"}},
+        record,
+    )
+
+    items, total = list_model_plaza(
+        workspace_id="ws-1",
+        page=2,
+        page_size=6,
+        keyword="qwen",
+        source="MODEL_SOURCE_OPEN",
+        model_type="TextGeneration",
+        region="domestic",
+        min_param_size_b=7,
+        max_context_len=32768,
+        session=_FakeSession(),
+    )
+
+    assert total == 12
+    assert items == [{"name": "Qwen"}]
+    assert record["method"] == "POST"
+    assert record["url"].endswith("/model_plaza/list")
+    assert record["body"] == {
+        "page": 2,
+        "page_size": 6,
+        "filter": {
+            "workspace_id": "ws-1",
+            "keyword": "qwen",
+            "source": "MODEL_SOURCE_OPEN",
+            "model_type": "TextGeneration",
+            "region": "domestic",
+            "min_param_size_b": 7,
+            "max_context_len": 32768,
+        },
+    }
+
+
+def test_model_plaza_get_helpers_use_read_only_paths(monkeypatch) -> None:
+    record: dict[str, Any] = {}
+    _install_fake_request(
+        monkeypatch,
+        {"code": 0, "data": {"items": [{"workspace_id": "ws-1"}]}},
+        record,
+    )
+
+    assert get_model_plaza_filters(session=_FakeSession()) == {
+        "items": [{"workspace_id": "ws-1"}]
+    }
+    assert record["method"] == "GET"
+    assert record["url"].endswith("/model_plaza/filters")
+
+    assert get_model_plaza_detail("mp-1", session=_FakeSession()) == {
+        "items": [{"workspace_id": "ws-1"}]
+    }
+    assert record["url"].endswith("/model_plaza/detail/mp-1")
+
+    items, total = list_model_plaza_related_workspaces("mp-1", session=_FakeSession())
+    assert total == 1
+    assert items == [{"workspace_id": "ws-1"}]
+    assert record["url"].endswith("/model_plaza/related_workspace/mp-1")
+
+    assert get_model_plaza_deploy_serving_config("mp-1", session=_FakeSession()) == {
+        "items": [{"workspace_id": "ws-1"}]
+    }
+    assert record["url"].endswith("/model_plaza/deploy_serving_config/mp-1")
 
 
 def test_create_model_posts_registration_body(monkeypatch) -> None:

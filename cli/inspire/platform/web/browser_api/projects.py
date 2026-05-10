@@ -8,7 +8,7 @@ surface; this module contains the SSO-only implementation.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 from inspire.platform.web.browser_api.core import _browser_api_path, _get_base_url, _request_json
 from inspire.platform.web.browser_api.jobs import list_job_events, list_jobs
@@ -19,7 +19,9 @@ __all__ = [
     "check_scheduling_health",
     "get_project_detail",
     "list_project_owners",
+    "list_project_page_records",
     "list_projects",
+    "list_projects_v2",
     "select_project",
 ]
 
@@ -131,6 +133,86 @@ def list_projects(
         )
         for item in items
     ]
+
+
+def list_projects_v2(
+    workspace_id: Optional[str] = None,
+    *,
+    check_admin: bool | None = True,
+    page: int = 1,
+    page_size: int = -1,
+    session: Optional[WebSession] = None,
+) -> tuple[list[dict[str, Any]], int]:
+    """List projects from the current frontend selector endpoint.
+
+    Endpoint: ``POST /api/v1/project/list_v2``. The UI uses this endpoint for
+    project drop-downs in notebook / train / model / serving forms.
+    """
+    if session is None:
+        session = get_web_session()
+    if workspace_id is None:
+        workspace_id = session.workspace_id or DEFAULT_WORKSPACE_ID
+
+    filter_body: dict[str, Any] = {"workspace_id": workspace_id}
+    if check_admin is not None:
+        filter_body["check_admin"] = check_admin
+    body = {"filter": filter_body, "page": page, "page_size": page_size}
+
+    data = _request_json(
+        session,
+        "POST",
+        _browser_api_path("/project/list_v2"),
+        referer=f"{_get_base_url()}/jobs/interactiveModeling",
+        body=body,
+        timeout=30,
+    )
+    if data.get("code") != 0:
+        raise ValueError(f"API error: {data.get('message')}")
+
+    payload = data.get("data") or {}
+    items = payload.get("items")
+    if not isinstance(items, list):
+        items = []
+    total_raw = payload.get("total")
+    try:
+        total = int(str(total_raw)) if total_raw is not None else len(items)
+    except ValueError:
+        total = len(items)
+    return [item for item in items if isinstance(item, dict)], total
+
+
+def list_project_page_records(
+    *,
+    page: int = 1,
+    page_size: int = 10,
+    filter_body: Optional[dict[str, Any]] = None,
+    session: Optional[WebSession] = None,
+) -> tuple[list[dict[str, Any]], int]:
+    """List project-management page records via ``POST /api/v1/project/list_for_page``."""
+    if session is None:
+        session = get_web_session()
+    body = {"page": page, "page_size": page_size, "filter": dict(filter_body or {})}
+    data = _request_json(
+        session,
+        "POST",
+        _browser_api_path("/project/list_for_page"),
+        referer=f"{_get_base_url()}/projects",
+        body=body,
+        timeout=30,
+    )
+    if data.get("code") != 0:
+        raise ValueError(f"API error: {data.get('message')}")
+
+    payload = data.get("data") or {}
+    items = payload.get("items")
+    if not isinstance(items, list):
+        items = []
+    total_raw = payload.get("total")
+    try:
+        total = int(str(total_raw)) if total_raw is not None else len(items)
+    except ValueError:
+        total = len(items)
+    return [item for item in items if isinstance(item, dict)], total
 
 
 def check_scheduling_health(

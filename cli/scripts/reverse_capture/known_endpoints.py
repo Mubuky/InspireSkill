@@ -19,6 +19,7 @@ import re
 KNOWN: set[tuple[str, str]] = {
     # --- User / Permissions ---
     ("GET", "/api/v1/user/detail"),
+    ("GET", "/api/v1/user/{id}"),
     ("GET", "/api/v1/user/routes/{id}"),
     ("GET", "/api/v1/user/permissions/{id}"),
     ("GET", "/api/v1/user/my-api-key/list"),
@@ -111,12 +112,35 @@ KNOWN: set[tuple[str, str]] = {
     ("GET", "/api/v1/model/{id}"),
     ("GET", "/api/v1/model/{id}/versions"),
     ("POST", "/api/v1/model/create"),
+    ("POST", "/api/v1/model/inference_serving/pending"),
+    ("POST", "/api/v1/model/inference_servings"),
+    ("GET", "/api/v1/model/{id}/version/{id}/publish/prefill"),
+    ("GET", "/api/v1/model/{id}/version/{id}/publish/status"),
+    ("POST", "/api/v1/model/users"),
+    ("POST", "/api/v1/model/{id}/versions"),
+    ("PUT", "/api/v1/model/edit/{id}"),
+    ("POST", "/api/v1/model/delete"),
+    ("PUT", "/api/v1/model/tryAgain/{id}"),
+    ("POST", "/api/v1/model/{id}/version/{id}/publish"),
+
+    # --- Model plaza ---
+    ("POST", "/api/v1/model_plaza/list"),
+    ("GET", "/api/v1/model_plaza/filters"),
+    ("GET", "/api/v1/model_plaza/detail/{id}"),
+    ("GET", "/api/v1/model_plaza/related_workspace/{id}"),
+    ("GET", "/api/v1/model_plaza/deploy_serving_config/{id}"),
 
     # --- Inference servings ---
     ("POST", "/api/v1/inference_servings/list"),
     ("POST", "/api/v1/inference_servings/user_project/list"),
     ("GET", "/api/v1/inference_servings/configs/workspace/{id}"),
     ("GET", "/api/v1/inference_servings/{id}"),
+    ("GET", "/api/v1/inference_servings/{id}/versions"),
+    ("POST", "/api/v1/inference_servings/instances/list"),
+    ("POST", "/api/v1/inference_servings/events/list"),
+    ("POST", "/api/v1/logs/inference_serving"),
+    ("POST", "/api/v1/inference_servings/scale_history/list"),
+    ("GET", "/api/v1/inference_servings/{id}/terms"),
     ("POST", "/api/v1/inference_servings/create"),
     ("DELETE", "/api/v1/inference_servings/{id}"),
     ("POST", "/api/v2/inference_serving"),
@@ -133,12 +157,13 @@ STALE_SINCE_2026_04: set[tuple[str, str]] = {
 
 
 _PREFIXED_ID = re.compile(
-    r"/(?:ws|job|hpc-job|sv|project|lcg|cg|image|img|nb|notebook|mdl|model|spec|tk|quota|ssh|usr|user|tag|team|org)"
+    r"/(?:ws|job|hpc-job|sv|project|lcg|cg|image|img|nb|notebook|mdl|model|mp|spec|tk|quota|ssh|usr|user|tag|team|org)"
     r"-[0-9a-zA-Z_-]{4,}(?=/|$|\?)"
 )
 _UUID = re.compile(r"/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?=/|$|\?)")
 _NUM = re.compile(r"/\d{4,}(?=/|$|\?)")
 _HEX = re.compile(r"/[0-9a-f]{16,}(?=/|$|\?)")
+_VERSION_NUM = re.compile(r"(?<=/version)/\d+(?=/|$|\?)")
 
 
 def normalize_path(path: str) -> str:
@@ -146,6 +171,7 @@ def normalize_path(path: str) -> str:
     p = path.split("?")[0]
     p = _PREFIXED_ID.sub("/{id}", p)
     p = _UUID.sub("/{id}", p)
+    p = _VERSION_NUM.sub("/{id}", p)
     p = _NUM.sub("/{id}", p)
     p = _HEX.sub("/{id}", p)
     return p
