@@ -114,6 +114,16 @@ def test_top_level_batch_command_is_removed() -> None:
     assert "No such command 'batch'" in result.output
 
 
+def test_notebook_top_command_is_removed() -> None:
+    help_result = CliRunner().invoke(cli_main, ["notebook", "--help"])
+    result = CliRunner().invoke(cli_main, ["notebook", "top"])
+
+    assert help_result.exit_code == 0
+    assert "\n  top " not in help_result.output
+    assert result.exit_code != 0
+    assert "No such command 'top'" in result.output
+
+
 def test_job_batch_help_keeps_scope_small() -> None:
     result = CliRunner().invoke(cli_main, ["job", "batch", "--help"])
     output = _one_line(result.output)

@@ -3,7 +3,6 @@
 Usage:
     inspire notebook list
     inspire notebook status <name>
-    inspire notebook top
     inspire notebook create --quota 1,20,200
     inspire notebook stop <name>
     inspire notebook ssh <notebook>             # establish cached connection
@@ -32,7 +31,6 @@ from .notebook_commands import (
     stop_notebook_cmd,
 )
 from .path_aliases import path_aliases_cmd
-from .top import notebook_top
 from .notebook_events import events as notebook_events
 from .notebook_lifecycle import lifecycle as notebook_lifecycle
 from .notebook_metrics import notebook_metrics
@@ -75,7 +73,6 @@ notebook.add_command(stop_notebook_cmd)         # stop
 notebook.add_command(start_notebook_cmd)        # start
 notebook.add_command(delete_notebook_cmd)       # delete
 notebook.add_command(ssh_notebook_cmd)          # ssh
-notebook.add_command(notebook_top)              # top
 notebook.add_command(notebook_events)           # events (K8s scheduling / pod lifecycle)
 notebook.add_command(notebook_lifecycle)        # lifecycle (run-cycle timeline; /run_index/list)
 notebook.add_command(notebook_metrics)          # metrics (资源视图 time-series, no SSH needed)
