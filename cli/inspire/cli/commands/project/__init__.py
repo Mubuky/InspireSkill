@@ -15,15 +15,16 @@ from .project_commands import detail_project_cmd, list_projects_cmd, owners_proj
 
 @click.group()
 def project():
-    """View project quota, budget, priority, and owner metadata.
+    """View project-level metadata, owners, budget, and priority fields.
 
-    Use this before creating GPU or CPU workloads to choose the project that
-    still has usable budget / GPU quota and to confirm the maximum priority
-    the selected project can request.
+    `project` is mostly for group-level project context: ownership, displayed
+    budget / points, and platform priority fields. For ordinary personal
+    compute decisions, start with `resources specs` and live availability;
+    project budget is usually not the first constraint.
 
     \b
     Examples:
-        inspire project list                # quota table
+        inspire project list                # project metadata table
         inspire project list --json         # JSON with all fields
         inspire project detail <project-name> # single-project detail
         inspire project owners              # "负责人" dropdown contents

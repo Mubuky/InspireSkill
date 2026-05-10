@@ -1,6 +1,6 @@
 # Job、HPC、Ray 与 Serving
 
-提交 GPU job、CPU HPC、Ray 和 serving，或观察事件、日志和指标时，先查本手册。资源目录、workload profile、path alias、项目配额看 [resources-and-paths.md](resources-and-paths.md)，镜像来源和可见性看 [image-management.md](image-management.md)。
+提交 GPU job、CPU HPC、Ray 和 serving，或观察事件、日志和指标时，先查本手册。资源目录、workload profile、path alias 和项目元数据边界看 [resources-and-paths.md](resources-and-paths.md)，镜像来源和可见性看 [image-management.md](image-management.md)。
 
 ## 1. 先选工作负载类型
 
@@ -16,10 +16,10 @@
 ## 2. 通用提交流程
 
 1. `inspire resources specs --usage <job|hpc|ray|serving>` 选择合法 `--quota gpu,cpu,mem`。
-2. `inspire project list` 确认项目预算、GPU quota 和优先级上限。
-3. `inspire image list` / `image detail` 确认镜像 `READY`。
-4. 用 create 命令提交；复杂条件先 `--dry-run`。
-5. 卡住或失败先看 events；已启动但健康度不明看 metrics；程序行为看 logs 或产出文件。
+2. `inspire image list` / `image detail` 确认镜像 `READY`。
+3. 用 create 命令提交；复杂条件先 `--dry-run`。
+4. 卡住或失败先看 events；已启动但健康度不明看 metrics；程序行为看 logs 或产出文件。
+5. 只有需要确认项目归属、负责人或平台返回项目级限制提示时，再查 `inspire project list/detail`。
 
 ## 3. GPU Job
 
@@ -56,7 +56,7 @@ inspire job logs --follow <name>-train
 | 4 | 普通优先级 |
 | 5 到 10 | 高优先级，适合稳定训练 |
 
-项目配额可能限制可请求优先级。提交后用默认文本输出核对：
+平台可能按所选项目策略裁剪可请求优先级。提交后用默认文本输出核对：
 
 ```bash
 inspire job status <name>

@@ -15,7 +15,7 @@ description: "Execution-first Inspire platform CLI usage manual, with on-demand 
 
 | 层面 | 决策问题 | 主要入口 |
 | --- | --- | --- |
-| 调度条件 | 在哪个 workspace、project、compute group 上，用多少 GPU / CPU / 内存，跑哪个镜像 | `config context`、`project list`、`resources specs`、`<workload> profile` |
+| 调度条件 | 在哪个 workspace、project、compute group 上，用多少 GPU / CPU / 内存，跑哪个镜像 | `config context`、`resources specs`、`<workload> profile` |
 | 远端文件 | 代码、数据、权重、产物放在哪个项目共享盘路径 | `init`、`notebook path`、`notebook exec --cwd`、`notebook scp` |
 | 工作负载 | 交互调试、GPU job、CPU HPC、Ray、serving 选哪一个入口 | `notebook`、`job`、`hpc`、`ray`、`serving` |
 | 观察与收尾 | 为什么排队 / 失败、是否真的在工作、日志在哪里、何时清理 | `events`、`logs`、`metrics`、`status`、`instances`、`stop`、`delete` |
@@ -29,7 +29,7 @@ description: "Execution-first Inspire platform CLI usage manual, with on-demand 
 日常任务按这个顺序推进：
 
 1. 用 help 确认可用命令和参数。
-2. 用 `inspire config context`、`inspire project list` 和 `inspire resources specs --usage <kind>` 确认名字、项目额度和可用规格。
+2. 用 `inspire config context` 和 `inspire resources specs --usage <kind>` 确认名字和可用规格；只有需要查看项目组级元数据时再用 `inspire project`。
 3. 如果目标空间不可上网，先在可上网 CPU notebook 准备代码、依赖、数据和镜像。
 4. 用 notebook / job / hpc / ray / serving 的 create 命令提交，必要时先 `--dry-run`。
 5. 用 events 看调度和启动原因，用 logs 看程序输出，用 metrics 看资源是否真的在工作，用 status / instances 看对象和实例状态。
@@ -56,17 +56,7 @@ uv run inspire hpc create --help
 
 `inspire --help` 给出当前版本真实命令组；`inspire <command-group> --help` 给出该组子命令和工作流说明；`inspire <command-group> <subcommand> --help` 给出参数、默认值、必填项和示例。
 
-需要复用调度条件时，先查：
-
-```bash
-inspire notebook profile --help
-inspire job profile --help
-inspire hpc profile --help
-inspire ray profile --help
-inspire serving profile --help
-```
-
-用 `profile set` 保存 `workspace`、`project`、`group`、`quota`、`image` 五个条件；create 命令显式传 `--profile <name>`；batch 条目写 `profile = "<name>"`。
+需要复用调度条件时，用对应 workload 的 `profile set/list/show/delete` 管理条件组；具体参数以 `inspire <workload> profile --help` 为准。`profile set` 保存 `workspace`、`project`、`group`、`quota`、`image` 五个条件；create 命令显式传 `--profile <name>`；batch 条目写 `profile = "<name>"`。
 
 ## 4. 按需加载索引
 
@@ -74,7 +64,7 @@ inspire serving profile --help
 
 | 场景 | 手册 |
 | --- | --- |
-| 选择 workspace、compute group、`--quota`、项目配额、存储池、path alias，或解释路径不可见 | [references/resources-and-paths.md](references/resources-and-paths.md) |
+| 选择 workspace、compute group、`--quota`、存储池、path alias，或解释路径不可见 | [references/resources-and-paths.md](references/resources-and-paths.md) |
 | 创建、连接、执行、传文件，或准备 notebook 基底环境 | [references/notebook.md](references/notebook.md) |
 | 把 notebook 容器内 HTTP 服务暴露给浏览器、SDK 或小组成员 | [references/notebook-service-proxy.md](references/notebook-service-proxy.md) |
 | 提交 GPU job、CPU HPC、Ray、serving，或观察事件、日志和指标 | [references/compute-workloads.md](references/compute-workloads.md) |

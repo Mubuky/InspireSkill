@@ -1,6 +1,6 @@
 # 资源、规格与远端路径
 
-选择 workspace、compute group、`--quota`、项目配额、存储池、path alias，或解释实例里的路径为什么不可见时，先查本手册。具体 notebook、job、HPC、Ray 和 serving 生命周期看对应业务手册。
+选择 workspace、compute group、`--quota`、存储池、path alias，或解释实例里的路径为什么不可见时，先查本手册。具体 notebook、job、HPC、Ray 和 serving 生命周期看对应业务手册。
 
 ## 1. 三类名字
 
@@ -16,24 +16,23 @@
 
 ## 2. 资源查询入口
 
-资源、规格、项目和用户相关能力以 CLI help 为准：
+资源、规格和用户相关能力以 CLI help 为准：
 
 ```bash
 inspire resources --help
 inspire resources specs --help
 inspire resources list --help
 inspire resources nodes --help
-inspire project --help
 inspire user --help
 ```
 
 常用判断顺序：
 
 1. `inspire config context` 看可传入命令的 workspace / project / compute group 名字。
-2. `inspire project list` 看项目预算、GPU quota 和可请求优先级。
-3. `inspire resources specs --usage <kind>` 选合法的 `--quota gpu,cpu,mem` 三元组。
-4. `inspire resources list --all --include-cpu` 看实时空余。
-5. 多节点 GPU 任务再用 `inspire resources nodes --min-nodes <n>` 看整节点空闲。
+2. `inspire resources specs --usage <kind>` 选合法的 `--quota gpu,cpu,mem` 三元组。
+3. `inspire resources list --all --include-cpu` 看实时空余。
+4. 多节点 GPU 任务再用 `inspire resources nodes --min-nodes <n>` 看整节点空闲。
+5. 只有需要确认项目归属、负责人、组级预算或平台返回的项目级提示时，再查 `inspire project --help`。
 
 资源和可用量以平台实时查询为准。本地缓存、历史截图和旧文档不能当作资源事实。
 
@@ -49,7 +48,7 @@ inspire user --help
 
 GPU 型号由 workspace 和 compute group 决定，不写进三元组。三元组必须在当前可见规格里唯一匹配；如果多组撞上同一三元组，加 `--group <name>` 消歧。
 
-申请资源前先查实时空余，再按真实需求申请。不要因为保守猜测主动缩小规模；只有调度语义、项目配额或实时空余明确不足时才降档。
+申请资源前先查实时空余，再按真实需求申请。不要因为保守猜测主动缩小规模；只有调度语义或实时空余明确不足时才降档。项目点券通常是项目组级整体限制，个人日常调用算力一般不把它作为首要瓶颈。
 
 ## 4. 联网边界
 
@@ -144,6 +143,6 @@ inspire notebook exec <name> --cwd repo "pytest -q"
 
 ## 9. 项目和用户元数据
 
-日常看配额、预算和优先级时先查 `inspire project --help`，普通任务决策默认以项目配额为准。当前登录身份、workspace 权限码、API Key 元数据和 SSH key 用 `inspire user --help` 选择对应子命令。
+`inspire project` 是项目组级元数据入口，用来看项目归属、负责人、组级预算 / 点券和平台展示的优先级字段。它不在日常个人算力决策主路径里；普通创建任务优先看 workspace、compute group、`resources specs` 和实时空余。当前登录身份、workspace 权限码、API Key 元数据和 SSH key 用 `inspire user --help` 选择对应子命令。
 
 API Key 值只在创建时一次性下发；创建 / 删除走平台用户中心页面。

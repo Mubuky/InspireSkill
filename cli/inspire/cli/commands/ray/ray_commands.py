@@ -512,7 +512,7 @@ def _parse_worker_spec(raw: str) -> dict[str, Any]:
     show_default=True,
     help=(
         "Task priority 1-10 (1-3=LOW preemptible, 4=NORMAL, 5-10=HIGH stable). "
-        "Project quota may cap the requested value."
+        "The selected project's platform policy may cap the requested value."
     ),
 )
 @click.option(

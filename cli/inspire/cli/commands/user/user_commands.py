@@ -187,8 +187,9 @@ def quota_user(ctx: Context) -> None:
 
     \b
     Note: user-level quota is admin-only on qz.sii.edu.cn. Regular users may
-    see `用户不存在`; use `inspire project list` for per-project remaining
-    budget and GPU caps instead.
+    see `用户不存在`; use `resources specs` and live availability for ordinary
+    compute decisions, and `inspire project list` only for project-level
+    metadata.
     """
     try:
         session = get_web_session()
@@ -211,8 +212,9 @@ def quota_user(ctx: Context) -> None:
             msg = (
                 f"{msg}\n\n"
                 "Hint: user-level quota is admin-only on qz.sii.edu.cn; regular "
-                "users may see this error. Use `inspire project list` for "
-                "per-project remaining budget and GPU caps."
+                "users may see this error. Use `resources specs` and live "
+                "availability for ordinary compute decisions; `inspire project "
+                "list` is project-level metadata."
             )
         _handle_error(ctx, "APIError", msg, EXIT_API_ERROR)
 

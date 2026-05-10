@@ -198,7 +198,7 @@ def test_hpc_create_help_highlights_slurm_body() -> None:
     # Priority help must surface the three-band convention.
     assert "1-3=LOW" in result.output
     assert "5-10=HIGH" in result.output
-    assert "Project quota" in result.output
+    assert "platform policy" in result.output
 
 
 def test_hpc_create_human_output_includes_priority(

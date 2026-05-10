@@ -32,7 +32,7 @@ inspire notebook install-deps --help
 创建 notebook 前先确认三件事：
 
 1. 用 `inspire resources specs --usage notebook --workspace <WORKSPACE>` 选 `--quota gpu,cpu,mem`。
-2. 用 `inspire project list` 确认项目额度和优先级上限。
+2. 确认 `--project <PROJECT>` 是目标项目名；需要看归属或负责人时再查 `inspire project list/detail`。
 3. 用 `inspire image list` / `image detail` 选状态可用的镜像。
 
 联网准备盒通常选择 `CPU资源空间` 或其他 CPU workspace 的可上网 compute group 和 CPU-only quota，例如 `0,20,256`。GPU 调试盒选择目标训练 workspace / compute group 和小规模 GPU quota，例如 `1,20,200`。

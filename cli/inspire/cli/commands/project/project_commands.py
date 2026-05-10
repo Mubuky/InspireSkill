@@ -214,11 +214,11 @@ def list_projects_cmd(
     json_output: bool,
     all_workspaces: bool,
 ) -> None:
-    """List projects and their GPU quota.
+    """List project-level metadata.
 
     \b
     Examples:
-        inspire project list          # Show project quota table
+        inspire project list          # Show project metadata table
         inspire project list --json   # JSON output with all fields
     """
     json_output = resolve_json_output(ctx, json_output)

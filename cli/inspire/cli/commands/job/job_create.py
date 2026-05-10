@@ -339,8 +339,8 @@ def run_job_create(
     show_default=True,
     help=(
         "Task priority 1-10 (1-3=LOW preemptible, 4=NORMAL, 5-10=HIGH stable). "
-        "Project quota may cap the requested value. Check `inspire job status` "
-        "for the resolved priority_level."
+        "The selected project's platform policy may cap the requested value. "
+        "Check `inspire job status` for the resolved priority_level."
     ),
 )
 @click.option(
@@ -445,8 +445,8 @@ def create(
 
     \b
     Priority:
-        Requested priority is capped by the selected project quota. Use
-        `inspire job status <name>` to inspect the platform-assigned
+        The selected project's platform policy may cap the requested priority.
+        Use `inspire job status <name>` to inspect the platform-assigned
         priority_level.
     """
     run_job_create(
