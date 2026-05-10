@@ -34,12 +34,9 @@ def patch_hpc_config_and_auth(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -
         username="user",
         password="pass",
         base_url="https://example.invalid",
-        job_project_id="project-default",
-        job_image="registry.local/hpc:latest",
         log_cache_dir=str(tmp_path / "logs"),
     )
     config.projects = {"alias-project": "project-alias"}
-    config.workspaces = {"cpu-room": "ws-00000000-0000-0000-0000-000000000002"}
     config.compute_groups = [{"id": "lcg-123", "name": "CG-123"}]
 
     def fake_from_files_and_env(
@@ -77,8 +74,15 @@ def patch_hpc_config_and_auth(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -
         # Use the alias-mapped id we set above so resolve_workspace_id /
         # quota lookup find a real value.
         workspace_id = "ws-00000000-0000-0000-0000-000000000002"
+        all_workspace_names = {workspace_id: "cpu-room"}
+        all_workspace_ids = [workspace_id]
 
     monkeypatch.setattr(hpc_mod, "get_web_session", lambda: _FakeWebSession())
+    monkeypatch.setattr(
+        hpc_mod.browser_api_module,
+        "get_current_user",
+        lambda session=None: {"id": "user-1"},
+    )
 
     def _fake_resolve_quota(*, spec, workspace_id, session=None, **_):  # noqa: ANN001
         return quota_mod.ResolvedQuota(
@@ -112,7 +116,7 @@ def test_hpc_create_json_uses_alias_resolution(
             "hpc-demo",
             "-c",
             "bash run_hpc.sh",
-            "--compute-group",
+            "--group",
             "CG-123",
             "--quota",
             "0,32,256",
@@ -120,6 +124,8 @@ def test_hpc_create_json_uses_alias_resolution(
             "alias-project",
             "--workspace",
             "cpu-room",
+            "--image",
+            "registry.local/hpc:latest",
             "--cpus-per-task",
             "8",
             "--memory-per-cpu",
@@ -130,7 +136,7 @@ def test_hpc_create_json_uses_alias_resolution(
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     assert payload["success"] is True
-    assert payload["data"]["job_id"] == "hpc-job-123"
+    assert payload["data"]["status"] == "QUEUING"
 
     call = api.calls["create_hpc_job"]
     assert call["project_id"] == "project-alias"
@@ -160,12 +166,16 @@ def test_hpc_create_slurm_knobs_default_from_quota(
             "hpc-demo",
             "-c",
             "srun python train.py",
-            "--compute-group",
+            "--group",
             "CG-123",
             "--quota",
             "0,32,256",
             "--workspace",
             "cpu-room",
+            "--project",
+            "alias-project",
+            "--image",
+            "registry.local/hpc:latest",
         ],
     )
     assert result.exit_code == 0, result.output
@@ -206,7 +216,7 @@ def test_hpc_create_human_output_includes_priority(
             "hpc-demo",
             "-c",
             "srun python train.py",
-            "--compute-group",
+            "--group",
             "CG-123",
             "--quota",
             "0,32,256",
@@ -214,6 +224,10 @@ def test_hpc_create_human_output_includes_priority(
             "7",
             "--workspace",
             "cpu-room",
+            "--project",
+            "alias-project",
+            "--image",
+            "registry.local/hpc:latest",
         ],
     )
 
@@ -233,7 +247,7 @@ def test_hpc_create_rejects_priority_11() -> None:
             "hpc-demo",
             "-c",
             "srun python train.py",
-            "--compute-group",
+            "--group",
             "CG-123",
             "--quota",
             "0,32,256",
@@ -261,12 +275,16 @@ def test_hpc_create_rejects_full_slurm_script(
             "hpc-demo",
             "-c",
             "#!/bin/bash\n#SBATCH --time=1:00:00\nsrun python train.py",
-            "--compute-group",
+            "--group",
             "CG-123",
             "--quota",
             "0,32,256",
             "--workspace",
             "cpu-room",
+            "--project",
+            "alias-project",
+            "--image",
+            "registry.local/hpc:latest",
         ],
     )
 
@@ -319,6 +337,8 @@ def test_hpc_list_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
 
     class _DummySession:
         workspace_id = "ws-session-default"
+        all_workspace_names = {"ws-session-default": "cpu-room"}
+        all_workspace_ids = ["ws-session-default"]
 
     monkeypatch.setattr(hpc_cmd_module, "get_web_session", lambda: _DummySession())
     monkeypatch.setattr(
@@ -362,8 +382,82 @@ def test_hpc_list_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     payload = json.loads(result.output)
     assert payload["success"] is True
     assert payload["data"]["total"] == 1
-    assert payload["data"]["jobs"][0]["job_id"] == "hpc-job-001"
-    assert payload["data"]["jobs"][0]["workspace_id"] == "ws-00000000-0000-0000-0000-000000000002"
+    assert payload["data"]["jobs"][0]["name"] == "prep"
+    assert "job_id" not in payload["data"]["jobs"][0]
+    assert "workspace_id" not in payload["data"]["jobs"][0]
+
+
+def test_hpc_instances_requires_workspace_and_uses_num(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    patch_hpc_config_and_auth(monkeypatch, tmp_path)
+    runner = CliRunner()
+    captured: dict[str, Any] = {}
+
+    from inspire.cli.commands.hpc import hpc_commands as hpc_cmd_module
+
+    def fake_list_hpc_jobs(**kwargs):  # noqa: ANN001
+        captured["resolve"] = kwargs
+        return (
+            [
+                HPCJobInfo(
+                    job_id="hpc-job-001",
+                    name="prep",
+                    status="RUNNING",
+                    entrypoint="srun python prep.py",
+                    created_at="1770000000",
+                    finished_at=None,
+                    created_by_name="tester",
+                    created_by_id="user-1",
+                    project_id="project-1",
+                    project_name="Project 1",
+                    compute_group_name="CPU资源-2",
+                    workspace_id=kwargs["workspace_id"],
+                )
+            ],
+            1,
+        )
+
+    def fake_list_hpc_job_instances(job_id, *, num, session):  # noqa: ANN001
+        captured["instances"] = {"job_id": job_id, "num": num, "session": session}
+        return (
+            [
+                {
+                    "name": "launcher",
+                    "component": "launcher",
+                    "status": "Running",
+                    "node": "cpu-node-a",
+                    "created_at": 1770000000,
+                }
+            ],
+            1,
+        )
+
+    monkeypatch.setattr(hpc_cmd_module.browser_api_module, "list_hpc_jobs", fake_list_hpc_jobs)
+    monkeypatch.setattr(
+        hpc_cmd_module.browser_api_module,
+        "list_hpc_job_instances",
+        fake_list_hpc_job_instances,
+    )
+
+    missing_workspace = runner.invoke(cli_main, ["hpc", "instances", "prep"])
+    assert missing_workspace.exit_code != 0
+    assert "Missing option '--workspace'" in missing_workspace.output
+
+    result = runner.invoke(
+        cli_main,
+        ["hpc", "instances", "prep", "--workspace", "cpu-room", "--num", "42"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["resolve"]["workspace_id"] == "ws-00000000-0000-0000-0000-000000000002"
+    assert captured["resolve"]["created_by"] == "user-1"
+    assert captured["resolve"]["page_num"] == 1
+    assert captured["resolve"]["page_size"] == 42
+    assert captured["instances"]["job_id"] == "hpc-job-001"
+    assert captured["instances"]["num"] == 42
+    assert "HPC Instances" in result.output
+    assert "launcher" in result.output
 
 
 def test_hpc_stop_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

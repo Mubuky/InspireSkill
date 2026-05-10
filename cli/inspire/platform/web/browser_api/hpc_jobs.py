@@ -68,14 +68,26 @@ def list_hpc_jobs(
 
     if workspace_id is None:
         workspace_id = session.workspace_id or DEFAULT_WORKSPACE_ID
+    if created_by is None:
+        data = _request_json(
+            session,
+            "GET",
+            _browser_api_path("/user/detail"),
+            referer=f"{_get_base_url()}/jobs/highPerformanceComputing",
+            timeout=30,
+        )
+        user_payload = data.get("data")
+        current_user: dict[str, Any] = user_payload if isinstance(user_payload, dict) else {}
+        created_by = str(current_user.get("id") or current_user.get("user_id") or "").strip()
+        if not created_by:
+            raise ValueError("current user is required for HPC listing")
 
     body: dict[str, Any] = {
         "workspace_id": workspace_id,
         "page_num": page_num,
         "page_size": page_size,
+        "created_by": created_by,
     }
-    if created_by:
-        body["created_by"] = created_by
     if status:
         body["status"] = status
 
@@ -112,11 +124,9 @@ def list_hpc_job_events(
 ) -> list[dict]:
     """List platform events for an HPC job.
 
-    Endpoint: ``POST /api/v1/hpc_jobs/events/list``. Only job-level events
-    are exposed — per-pod events are **not** populated on this endpoint
-    (confirmed: `object_type="instance"` with real pod names returns 0
-    across launcher / slurmctld / slurmd). So there is no `instance_ids`
-    parameter.
+    Endpoint: ``POST /api/v1/hpc_jobs/events/list``. This wrapper fetches
+    job-level events. Use :func:`list_hpc_job_instances` for the component
+    inventory shown on the job detail page.
 
     Returns ``[]`` on any error (the platform GCs events for long-completed
     jobs — ``code=100000 record not found`` is a normal steady state for
@@ -158,8 +168,7 @@ def list_hpc_job_events(
 def list_hpc_job_instances(
     job_id: str,
     *,
-    page_num: int = 1,
-    page_size: int = 50,
+    num: int = 500,
     session: Optional[WebSession] = None,
 ) -> tuple[list[dict[str, Any]], int]:
     """List pod/component instances for an HPC job.
@@ -167,6 +176,12 @@ def list_hpc_job_instances(
     Endpoint: ``POST /api/v1/hpc_jobs/instances/list`` with body
     ``{jobId, page_num, page_size}``.
     """
+    job_id = str(job_id or "").strip()
+    if not job_id:
+        raise ValueError("job_id is required")
+    if num < 1:
+        raise ValueError("num must be positive")
+
     if session is None:
         session = get_web_session()
     data = _request_json(
@@ -174,7 +189,7 @@ def list_hpc_job_instances(
         "POST",
         _browser_api_path("/hpc_jobs/instances/list"),
         referer=f"{_get_base_url()}/jobs/hpcDetail/{job_id}",
-        body={"jobId": job_id, "page_num": page_num, "page_size": page_size},
+        body={"jobId": job_id, "page_num": 1, "page_size": num},
         timeout=30,
     )
     if data.get("code") != 0:

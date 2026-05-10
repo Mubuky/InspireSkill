@@ -38,10 +38,10 @@ _SSH_KEY_TYPES = {
 }
 
 
-def _resolve_workspace_id(config: Config, workspace: Optional[str]) -> Optional[str]:
+def _resolve_workspace_id(config: Config, workspace: Optional[str], session) -> Optional[str]:  # noqa: ANN001
     if workspace is None:
         return None
-    return select_workspace_id(config, explicit_workspace_name=workspace)
+    return select_workspace_id(config, explicit_workspace_name=workspace, session=session)
 
 
 def _ssh_key_id(item: dict) -> str:
@@ -239,7 +239,7 @@ def api_keys_user(ctx: Context) -> None:
 
         click.echo(f"API Keys (total={len(items)})")
         for i, item in enumerate(items, 1):
-            name = item.get("name") or item.get("title") or item.get("id") or "?"
+            name = scrub_raw_ids(item.get("name") or item.get("title") or f"key-{i}")
             created = item.get("create_at") or item.get("created_at") or ""
             last_used = item.get("last_used_at") or item.get("last_used") or ""
             suffix = []
@@ -394,15 +394,15 @@ def delete_ssh_key(ctx: Context, name: str, force: bool) -> None:
 
 
 @click.command("permissions")
-@click.option("--workspace", default=None, help="Workspace name (from [workspaces])")
+@click.option("--workspace", default=None, help="Workspace name")
 @pass_context
 def permissions_user(
     ctx: Context, workspace: Optional[str],) -> None:
     """Show per-workspace permission matrix (`/user/permissions/{ws}`)."""
     try:
         config, _ = Config.from_files_and_env(require_credentials=False)
-        resolved_workspace = _resolve_workspace_id(config, workspace)
         session = get_web_session()
+        resolved_workspace = _resolve_workspace_id(config, workspace, session)
         perms = browser_api_module.get_user_permissions(
             workspace_id=resolved_workspace, session=session
         )
