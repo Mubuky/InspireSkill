@@ -18,7 +18,8 @@ inspire notebook create --workspace <WORKSPACE> --group <GROUP> -q 0,20,256 \
   --name <name>-base --image <IMAGE_URL> \
   --project <P> --wait
 
-inspire notebook ssh <name>-base --cwd me
+inspire notebook ssh connect <name>-base
+inspire notebook shell <name>-base --cwd me
 inspire notebook exec <name>-base --cwd me:<repo> "python --version && nvidia-smi || true"
 inspire notebook install-deps <name>-base --slurm --ray
 inspire image save <name>-base -n <img> -v v1 --public --wait

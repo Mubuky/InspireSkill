@@ -36,11 +36,10 @@ inspire notebook exec <name> --cwd repo "pwd"
 
 ## 3. 连接命令边界
 
-`inspire notebook ssh <name>` 建立并缓存连接；后续 `exec`、`shell` 和 `scp` 都使用 notebook name，不需要在任务中处理连接细节。
+`inspire notebook ssh connect <name>` 建立并缓存连接；后续 `exec`、`shell` 和 `scp` 都使用 notebook name，不需要在任务中处理连接细节。
 
 ```bash
-inspire notebook ssh <name>
-inspire notebook connections
+inspire notebook ssh connect <name>
 inspire notebook exec <name> --cwd me "hostname"
 inspire notebook scp <name> ./config.yaml me:<repo>/config.yaml
 ```
@@ -91,7 +90,7 @@ inspire notebook metrics <name> --metric gpu,gpu_mem,cpu,mem --sparkline --no-pl
 ```bash
 git push origin <branch>
 inspire notebook exec <notebook-name> --cwd me:<repo> "git pull && git log -1 --oneline"
-inspire notebook ssh <notebook-name> --cwd me:<repo>
+inspire notebook shell <notebook-name> --cwd me:<repo>
 inspire notebook exec <notebook-name> --cwd me "hostname"
 ```
 
@@ -130,7 +129,7 @@ inspire notebook create --workspace <WORKSPACE> --group <GROUP> -q 0,20,256 \
   --name cpu-box --image <IMAGE_URL> \
   --project <P> --wait
 
-inspire notebook ssh cpu-box
+inspire notebook ssh connect cpu-box
 inspire notebook exec cpu-box "apt-get update && apt-get install -y <deps> && pip install <pkgs>"
 ```
 

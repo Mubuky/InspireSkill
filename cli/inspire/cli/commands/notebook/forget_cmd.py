@@ -11,7 +11,7 @@ from inspire.cli.context import Context, EXIT_CONFIG_ERROR, pass_context
 from inspire.cli.formatters import human_formatter, json_formatter
 
 
-@click.command("remove")
+@click.command("forget")
 @click.argument("notebook", metavar="NOTEBOOK")
 @pass_context
 def tunnel_remove(ctx: Context, notebook: str) -> None:
@@ -21,7 +21,7 @@ def tunnel_remove(ctx: Context, notebook: str) -> None:
 
     \b
     Example:
-        inspire notebook forget my-notebook
+        inspire notebook ssh forget my-notebook
     """
     from inspire.cli.utils.id_resolver import reject_id_at_boundary
 
@@ -29,7 +29,7 @@ def tunnel_remove(ctx: Context, notebook: str) -> None:
         ctx,
         notebook,
         resource_type="notebook",
-        list_command="inspire notebook connections",
+        list_command="inspire notebook list",
     )
     config = load_tunnel_config()
 

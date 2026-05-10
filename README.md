@@ -115,7 +115,7 @@ inspire resources list --all --include-cpu
 <tr>
   <td width="50%">
     <h4>📝 Notebook 统一入口</h4>
-    全链路命令化：<code>create / list / status / start · stop / ssh / exec / shell / scp / refresh / forget / connections / install-deps / top / metrics / events / lifecycle</code>。一次 <code>notebook ssh &lt;name&gt;</code> 建立连接，后续 <code>exec / shell / scp / ...</code> 都直接用 notebook name。<b>任何镜像、任何计算组、有无公网</b>都能直接使用远程执行和文件流转命令。
+    全链路命令化：<code>create / list / status / start · stop / ssh connect / exec / shell / scp / install-deps / metrics / events / lifecycle</code>。一次 <code>notebook ssh connect &lt;name&gt;</code> 建立连接，后续 <code>exec / shell / scp / ...</code> 都直接用 notebook name。<b>任何镜像、任何计算组、有无公网</b>都能直接使用远程执行和文件流转命令。
   </td>
   <td width="50%">
     <h4>🚀 HPC 任务分派</h4>

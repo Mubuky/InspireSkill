@@ -1,5 +1,7 @@
+import json
 from pathlib import Path
 import subprocess
+from types import SimpleNamespace
 from typing import Any, Optional
 
 import pytest
@@ -7,8 +9,8 @@ from click.testing import CliRunner
 
 from inspire import config as config_module
 from inspire.bridge import tunnel as tunnel_module
+from inspire.cli.commands.notebook import connection_test_cmd as connection_test_cmd_module
 from inspire.cli.commands.notebook import notebook_commands as notebook_cmd_module
-from inspire.cli.commands.notebook import connections_cmd as connections_cmd_module
 from inspire.cli.commands.notebook import remote_exec as remote_exec_module
 from inspire.cli.commands.notebook import remote_shell as remote_shell_module
 from inspire.cli.commands.notebook import notebook_ssh_flow as ssh_flow_module
@@ -220,41 +222,6 @@ def test_resolve_notebook_id_retries_until_eventual_consistency_settles(
     assert notebook_id == "abcd1234-5678-90ab-cdef-1234567890ab"
     assert ws_id == "ws-77777777-7777-7777-7777-777777777777"
     assert len(call_log) >= 2  # at least one retry past the initial empty result
-
-
-def test_notebook_connections_reads_active_account_cache(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    config = make_test_config(tmp_path)
-    config.username = "alice"
-    tunnel_config = tunnel_module.TunnelConfig(account="default")
-    tunnel_config.add_bridge(
-        tunnel_module.BridgeProfile(
-            name="test-nb",
-            proxy_url="https://proxy.example.com/proxy/31337/",
-            notebook_id="notebook-12345678",
-        )
-    )
-    captured: dict[str, object] = {}
-
-    monkeypatch.setattr(
-        config_module.Config,
-        "from_files_and_env",
-        classmethod(lambda cls, require_credentials=True: (config, {})),
-    )
-
-    def fake_load_tunnel_config(account=None):  # type: ignore[no-untyped-def]
-        captured["account"] = account
-        return tunnel_config
-
-    monkeypatch.setattr(connections_cmd_module, "load_tunnel_config", fake_load_tunnel_config)
-
-    runner = CliRunner()
-    result = runner.invoke(cli_main, ["notebook", "connections", "--no-check"])
-
-    assert result.exit_code == EXIT_SUCCESS
-    assert captured["account"] is None
-    assert "test-nb" in result.output
 
 
 def test_notebook_create_accepts_priority_10(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1756,10 +1723,41 @@ def test_ssh_notebook_cache_hit_invokes_reconnect_with_notebook_kwarg(
     monkeypatch.setattr(remote_shell_module, "bridge_ssh", fake_reconnect)
 
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["notebook", "ssh", "gpu-main"])
+    result = runner.invoke(cli_main, ["notebook", "ssh", "connect", "gpu-main"])
 
     assert result.exit_code == EXIT_SUCCESS
     assert captured["notebook"] == "gpu-main"
+
+
+def test_notebook_ssh_test_json_exposes_proxy_url_without_notebook_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tunnel_config = tunnel_module.TunnelConfig()
+    tunnel_config.add_bridge(
+        tunnel_module.BridgeProfile(
+            name="gpu-main",
+            proxy_url="https://proxy.example/proxy/31337/",
+            notebook_id="notebook-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            notebook_name="gpu-main",
+            rtunnel_port=31337,
+        )
+    )
+
+    monkeypatch.setattr(connection_test_cmd_module, "load_tunnel_config", lambda: tunnel_config)
+    monkeypatch.setattr(
+        connection_test_cmd_module,
+        "run_ssh_command",
+        lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout="gpu-host\n", stderr=""),
+    )
+
+    result = CliRunner().invoke(cli_main, ["--json", "notebook", "ssh", "test", "gpu-main"])
+
+    assert result.exit_code == EXIT_SUCCESS
+    payload = json.loads(result.output)
+    bridge = payload["data"]["bridge"]
+    assert bridge["proxy_url"] == "https://proxy.example/proxy/31337/"
+    assert bridge["rtunnel_port"] == 31337
+    assert "notebook_id" not in bridge
 
 
 def test_notebook_path_commands_manage_project_path_alias(
@@ -1972,7 +1970,7 @@ def test_notebook_ssh_cache_hit_without_default_path_alias_uses_login_home(
     monkeypatch.setattr(remote_shell_module.subprocess, "call", lambda args: 0)
 
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["notebook", "ssh", "gpu-main"])
+    result = runner.invoke(cli_main, ["notebook", "ssh", "connect", "gpu-main"])
 
     assert result.exit_code == EXIT_SUCCESS
     assert captured["bridge_name"] == "gpu-main"

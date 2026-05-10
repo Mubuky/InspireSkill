@@ -28,19 +28,33 @@ def test_notebook_help_includes_key_subcommands() -> None:
     result = runner.invoke(cli_main, ["notebook", "--help"])
     assert result.exit_code == 0
     for sub in (
-        "list", "status", "ssh", "exec", "scp", "shell",
-        "connections", "refresh", "forget", "test",
+        "list",
+        "status",
+        "ssh",
+        "exec",
+        "scp",
+        "shell",
+        "install-deps",
+        "metrics",
+        "events",
+        "lifecycle",
     ):
         assert sub in result.output, f"missing: {sub}\n{result.output}"
+    for removed in ("connections", "refresh", "forget", "test", "top"):
+        assert f"\n  {removed} " not in result.output
     removed_default_cmd = "set" + "-default"
     assert removed_default_cmd not in result.output
 
 
-def test_notebook_ssh_help_is_black_box_no_save_as() -> None:
+def test_notebook_ssh_help_is_connection_cache_group_no_old_options() -> None:
     runner = CliRunner()
     result = runner.invoke(cli_main, ["notebook", "ssh", "--help"])
     assert result.exit_code == 0
-    assert "establishes and\n  caches the connection" in result.output
+    assert "Manage cached SSH connections for notebooks" in result.output
+    for subcommand in ("connect", "refresh", "forget", "test"):
+        assert f"\n  {subcommand} " in result.output
+    for removed in ("list", "status", "exec", "shell", "scp", "install-deps"):
+        assert f"\n  {removed} " not in result.output
     assert "bootstrap" not in result.output.lower()
     assert "rtunnel" not in result.output.lower()
     assert "sshd" not in result.output.lower()

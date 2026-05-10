@@ -9,7 +9,7 @@ re-submitted name shows the most recent run, not a clobbered file. Pass
 ``--remote-log-path`` to override (e.g. for jobs created outside the CLI).
 
 Bulk mode and the legacy GitHub-workflow fallback were removed. Use
-``inspire notebook ssh <name>`` once to create the cached notebook connection.
+``inspire notebook ssh connect <name>`` once to create the cached notebook connection.
 """
 
 from __future__ import annotations
@@ -408,12 +408,12 @@ def _emit_no_tunnel_error(ctx: Context, *, bridge_name: Optional[str]) -> None:
         hint = (
             f"Cached notebook tunnel(s): {preview}. "
             "Pass --notebook <name> to target one explicitly, "
-            "or run `inspire notebook ssh <notebook-name>` to bootstrap a new one."
+            "or run `inspire notebook ssh connect <notebook-name>` to bootstrap a new one."
         )
     else:
         hint = (
             "No cached notebook tunnels found. "
-            "Run `inspire notebook ssh <notebook-name>` to bootstrap one with shared-FS access."
+            "Run `inspire notebook ssh connect <notebook-name>` to bootstrap one with shared-FS access."
         )
     label = f"bridge '{bridge_name}'" if bridge_name else "default bridge"
     _handle_error(
@@ -465,7 +465,7 @@ def _run_job_logs_single_job(
                     "NotebookTunnelNotFound",
                     f"No cached notebook tunnel for '{bridge_name}'.",
                     EXIT_GENERAL_ERROR,
-                    hint="Run 'inspire notebook connections' to see cached notebooks.",
+                    hint="Run `inspire notebook ssh connect <name>` to create or refresh a notebook connection.",
                 )
             _emit_no_tunnel_error(ctx, bridge_name=bridge_name)
             return
@@ -739,7 +739,7 @@ def _run_job_logs_web_single_job(
     help=(
         "Notebook name whose cached SSH connection should be used. Required when more "
         "than one is cached and the default connection is ambiguous. "
-        "Run `inspire notebook ssh <notebook-name>` first. "
+        "Run `inspire notebook ssh connect <notebook-name>` first. "
         "No short alias — `-n` is reserved for --tail."
     ),
 )
@@ -809,7 +809,7 @@ def logs(
     Default mode reads the log file written by `inspire job create` under
     the `me` path alias, usually
     ``<me>/.inspire/training_master_<name>_*.log``. It requires a cached
-    notebook connection / SSH bridge from `inspire notebook ssh <notebook>`.
+    notebook connection / SSH bridge from `inspire notebook ssh connect <notebook>`.
 
     Use ``--web`` only as a fallback to platform aggregated logs when no cached
     notebook bridge or shared-FS log path is available.
@@ -833,7 +833,7 @@ def logs(
             ctx,
             notebook,
             resource_type="notebook",
-            list_command="inspire notebook connections",
+            list_command="inspire notebook list",
         )
     bridge = notebook
 

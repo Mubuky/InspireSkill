@@ -12,7 +12,7 @@ from inspire.cli.formatters import human_formatter, json_formatter
 from inspire.cli.utils.raw_ids import scrub_raw_ids
 
 
-@click.command("update")
+@click.command("refresh")
 @click.argument("notebook", metavar="NOTEBOOK")
 @click.option("--url", help="Update the proxy URL")
 @click.option("--ssh-user", help="Update the SSH user")
@@ -47,10 +47,10 @@ def tunnel_update(
 
     \b
     Examples:
-        inspire notebook refresh my-notebook --has-internet
-        inspire notebook refresh my-notebook --no-internet
-        inspire notebook refresh my-notebook --url "https://new-url.../proxy/31337/"
-        inspire notebook refresh my-notebook --ssh-port 22223
+        inspire notebook ssh refresh my-notebook --has-internet
+        inspire notebook ssh refresh my-notebook --no-internet
+        inspire notebook ssh refresh my-notebook --url "https://new-url.../proxy/31337/"
+        inspire notebook ssh refresh my-notebook --ssh-port 22223
     """
     from inspire.cli.utils.id_resolver import reject_id_at_boundary
 
@@ -58,7 +58,7 @@ def tunnel_update(
         ctx,
         notebook,
         resource_type="notebook",
-        list_command="inspire notebook connections",
+        list_command="inspire notebook list",
     )
     config = load_tunnel_config()
 

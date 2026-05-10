@@ -195,7 +195,7 @@ def _resolve_notebook(notebook: str, tunnel_config: TunnelConfig):
     if bridge is None:
         raise click.UsageError(
             f"No cached notebook connection for {notebook!r}. "
-            "Create one with: inspire notebook ssh <notebook>"
+            "Create one with: inspire notebook ssh connect <notebook>"
         )
     return bridge
 
@@ -315,8 +315,8 @@ def install_deps_cmd(
                 hint=(
                     "Re-run with `--debug` to see the full SSH transcript. "
                     "If the cached connection dropped, run "
-                    f"`inspire notebook test {notebook}` or "
-                    f"`inspire notebook refresh {notebook}` first."
+                    f"`inspire notebook ssh test {notebook}` or "
+                    f"`inspire notebook ssh refresh {notebook}` first."
                 ),
             )
             return

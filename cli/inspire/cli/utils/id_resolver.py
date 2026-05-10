@@ -297,8 +297,8 @@ def reject_id_at_boundary(
     """Reject handle-shaped inputs at the user boundary, pass names through.
 
     Used by commands that look up a cached connection by its display name
-    (``notebook shell`` / ``exec`` / ``scp`` / ``refresh`` / ``forget`` /
-    ``connections test`` / ``job logs``). Names are the only normal CLI
+    (``notebook shell`` / ``exec`` / ``scp`` / ``ssh refresh`` /
+    ``ssh forget`` / ``ssh test`` / ``job logs``). Names are the only normal CLI
     reference; this helper enforces that on cached-cache lookups too —
     without it, a handle-shaped argument would
     silently miss the cache key and fall through to a confusing

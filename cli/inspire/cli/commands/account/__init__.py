@@ -20,7 +20,7 @@ def account() -> None:
 
     Each account lives in its own directory under
     ``~/.inspire/accounts/<name>/`` with its own config.toml, cached
-    notebook connections, and login cache. Switch the active account with
+    notebook SSH entries, and login cache. Switch the active account with
     ``inspire account use <name>``; inspect with ``inspire account list``.
     """
 

@@ -13,7 +13,7 @@ Notebook HTTPS proxy 只解决“外部客户端如何到达容器内某个 HTTP
 | 容器里跑 Gradio / FastAPI | 服务监听 `<container-port>`，对外使用 notebook proxy URL |
 | 容器里跑 OpenAI-compatible API | base URL 指向 `/proxy/<container-port>/v1` |
 | 小组内临时共享 demo | 使用 notebook proxy URL，并在应用层开启登录或 API key |
-| 本机 CLI 文件操作 | 不用本文，直接用 `notebook ssh`、`exec`、`shell`、`scp` |
+| 本机 CLI 文件操作 | 不用本文，直接用 `notebook ssh connect`、`exec`、`shell`、`scp` |
 
 ## 2. 发布流程
 
@@ -27,14 +27,14 @@ inspire notebook exec <name> "curl -sS http://127.0.0.1:<container-port>/health"
 建立一次 notebook 连接，让 CLI 写入连接信息：
 
 ```bash
-inspire notebook ssh <name>
+inspire notebook ssh connect <name>
 ```
 
 读取 notebook proxy URL 模板：
 
 ```bash
-inspire --json notebook connections --no-check \
-  | jq -r '.data.bridges[] | select(.name == "<name>").proxy_url'
+inspire --json notebook ssh test <name> \
+  | jq -r '.data.bridge.proxy_url'
 ```
 
 把模板里的 `/proxy/<cached-port>/` 改成服务端口 `/proxy/<container-port>/`，再追加服务路径。不要手写 URL 里其它路径段；它们由平台和连接缓存生成。例如容器内 OpenAI-compatible 服务监听 `30000` 时，把模板中的 proxy 端口替换为 `30000` 后，在末尾追加 `/v1`。
@@ -55,8 +55,8 @@ inspire --json notebook connections --no-check \
 inspire notebook exec <name> "curl -sS http://127.0.0.1:30000/v1/models"
 
 # 本机取得 proxy URL 模板
-inspire --json notebook connections --no-check \
-  | jq -r '.data.bridges[] | select(.name == "<name>").proxy_url'
+inspire --json notebook ssh test <name> \
+  | jq -r '.data.bridge.proxy_url'
 ```
 
 将输出 URL 中的 `/proxy/<cached-port>/` 替换为 `/proxy/30000/`，OpenAI-compatible base URL 追加到 `/v1`。

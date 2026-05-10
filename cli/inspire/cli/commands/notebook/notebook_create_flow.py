@@ -428,7 +428,7 @@ def create_notebook_and_report(
             quoted_name = shlex.quote(name)
             click.echo("  Next:")
             click.echo(f"    inspire notebook events {quoted_name}")
-            click.echo(f"    inspire notebook ssh {quoted_name}")
+            click.echo(f"    inspire notebook ssh connect {quoted_name}")
             click.echo(f"    inspire notebook exec {quoted_name} \"pwd\"")
             click.echo(f"    inspire notebook delete {quoted_name} --yes")
 

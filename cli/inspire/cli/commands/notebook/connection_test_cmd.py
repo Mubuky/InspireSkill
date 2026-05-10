@@ -6,9 +6,29 @@ import sys
 
 import click
 
-from inspire.bridge.tunnel import TunnelNotAvailableError, load_tunnel_config, run_ssh_command
+from inspire.bridge.tunnel import (
+    BridgeProfile,
+    TunnelNotAvailableError,
+    load_tunnel_config,
+    run_ssh_command,
+)
 from inspire.cli.context import Context, EXIT_CONFIG_ERROR, EXIT_GENERAL_ERROR, pass_context
 from inspire.cli.formatters import human_formatter, json_formatter
+
+
+def _bridge_public_payload(bridge: BridgeProfile) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "name": bridge.name,
+        "proxy_url": bridge.proxy_url,
+        "ssh_user": bridge.ssh_user,
+        "ssh_port": bridge.ssh_port,
+        "has_internet": bridge.has_internet,
+    }
+    if bridge.notebook_name:
+        payload["notebook_name"] = bridge.notebook_name
+    if bridge.rtunnel_port is not None:
+        payload["rtunnel_port"] = bridge.rtunnel_port
+    return payload
 
 
 @click.command("test")
@@ -21,8 +41,8 @@ def tunnel_test(ctx: Context, notebook: str) -> None:
 
     \b
     Examples:
-        inspire notebook test
-        inspire notebook test my-notebook
+        inspire notebook ssh test
+        inspire notebook ssh test my-notebook
     """
     import time
 
@@ -37,7 +57,7 @@ def tunnel_test(ctx: Context, notebook: str) -> None:
                     "ConfigError",
                     "No cached notebook connection",
                     EXIT_CONFIG_ERROR,
-                    hint="Create one with: inspire notebook ssh <notebook>",
+                    hint="Create one with: inspire notebook ssh connect <notebook>",
                 ),
                 err=True,
             )
@@ -45,7 +65,7 @@ def tunnel_test(ctx: Context, notebook: str) -> None:
             click.echo(
                 human_formatter.format_error(
                     "No cached notebook connection. Create one with: "
-                    "inspire notebook ssh <notebook>"
+                    "inspire notebook ssh connect <notebook>"
                 ),
                 err=True,
             )
@@ -68,6 +88,7 @@ def tunnel_test(ctx: Context, notebook: str) -> None:
                             "notebook": bridge_profile.name,
                             "hostname": hostname,
                             "elapsed_ms": int(elapsed * 1000),
+                            "bridge": _bridge_public_payload(bridge_profile),
                         }
                     )
                 )

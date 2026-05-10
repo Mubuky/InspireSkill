@@ -14,13 +14,13 @@ def remove(name: str, assume_yes: bool) -> None:
     """Permanently delete an account's local directory.
 
     Removes ``~/.inspire/accounts/<name>/`` (config.toml, cached notebook
-    connections, login cache). Platform-side resources (notebooks, jobs,
+    SSH entries, login cache). Platform-side resources (notebooks, jobs,
     images) tied to that login keep running — clean them up first if needed.
     """
     if not assume_yes:
         click.confirm(
             f"Delete account {name!r} and all its local files "
-            "(config.toml, cached notebook connections, login cache)?",
+            "(config.toml, cached notebook SSH entries, login cache)?",
             abort=True,
         )
     try:

@@ -165,9 +165,9 @@ def try_exec_via_ssh_tunnel(
 
         if not str(bridge.notebook_id or "").strip():
             hint = (
-                "Run 'inspire notebook test' to troubleshoot. "
+                "Run 'inspire notebook ssh test' to troubleshoot. "
                 "If needed, re-create the cached connection via "
-                "'inspire notebook ssh <notebook>'."
+                "'inspire notebook ssh connect <notebook>'."
             )
             return _emit_error(
                 ctx,
@@ -184,8 +184,8 @@ def try_exec_via_ssh_tunnel(
                 "TunnelError",
                 "SSH tunnel not available",
                 hint=(
-                    "Auto-rebuild retries exhausted. Run 'inspire notebook test' and "
-                    "retry 'inspire notebook ssh <notebook>'."
+                    "Auto-rebuild retries exhausted. Run 'inspire notebook ssh test' and "
+                    "retry 'inspire notebook ssh connect <notebook>'."
                 ),
             )
 
@@ -308,14 +308,14 @@ def try_exec_via_ssh_tunnel(
                     ctx,
                     "ConfigError",
                     f"No cached notebook connection for '{bridge_name}'.",
-                    hint="Run 'inspire notebook connections' to see cached notebook names.",
+                    hint="Run `inspire notebook ssh connect <name>` to create or refresh this notebook connection.",
                 )
             if bridge is None:
                 return _emit_error(
                     ctx,
                     "TunnelError",
                     "No cached notebook connection for SSH execution.",
-                    hint="Create one with: inspire notebook ssh <notebook>",
+                    hint="Create one with: inspire notebook ssh connect <notebook>",
                 )
 
             resolved_bridge_name = bridge.name
@@ -703,7 +703,7 @@ def exec_command(
         ctx,
         notebook,
         resource_type="notebook",
-        list_command="inspire notebook connections",
+        list_command="inspire notebook list",
     )
     bridge = notebook
     command = _normalize_exec_command(command_parts)

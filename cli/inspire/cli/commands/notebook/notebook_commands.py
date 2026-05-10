@@ -353,7 +353,7 @@ def delete_notebook_cmd(
     \b
     The instance disappears from the platform UI. This cannot be undone;
     if the notebook is still running, stop it first. The local cached SSH
-    connection is NOT removed — run `inspire notebook forget <notebook>`
+    connection is NOT removed — run `inspire notebook ssh forget <notebook>`
     to clean up.
 
     \b
@@ -843,7 +843,7 @@ def list_notebooks(
     _print_notebook_list(all_items, json_output)
 
 
-@click.command("ssh")
+@click.command("connect")
 @click.argument("notebook")
 @click.option(
     "--wait/--no-wait",
@@ -906,7 +906,7 @@ def ssh_notebook_cmd(
     debug_playwright: bool,
     setup_timeout: int,
 ) -> None:
-    """Open an SSH session to a notebook instance.
+    """Create or refresh the cached SSH connection for a notebook.
 
     The positional argument is the notebook name. The first call establishes
     and caches the connection under that same name; later calls reconnect
@@ -915,8 +915,8 @@ def ssh_notebook_cmd(
 
     \b
     Examples:
-        inspire notebook ssh <notebook-name>
-        inspire notebook ssh <notebook-name> --command "hostname"
+        inspire notebook ssh connect <notebook-name>
+        inspire notebook ssh connect <notebook-name> --command "hostname"
     """
     from inspire.accounts import normalize_environment
 

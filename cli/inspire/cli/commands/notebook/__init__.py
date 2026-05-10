@@ -5,12 +5,9 @@ Usage:
     inspire notebook status <name>
     inspire notebook create --quota 1,20,200
     inspire notebook stop <name>
-    inspire notebook ssh <notebook>             # establish cached connection
+    inspire notebook ssh connect <notebook>     # establish cached connection
     inspire notebook exec <notebook> "<cmd>"
-    inspire notebook scp <src> <dst>
-    inspire notebook connections                # list cached notebook connections
-    inspire notebook refresh <notebook>
-    inspire notebook forget <notebook>
+    inspire notebook scp <notebook> <src> <dst>
 """
 
 from __future__ import annotations
@@ -26,11 +23,11 @@ from .notebook_commands import (
     list_notebooks,
     notebook_id_cmd,
     notebook_status,
-    ssh_notebook_cmd,
     start_notebook_cmd,
     stop_notebook_cmd,
 )
 from .path_aliases import path_aliases_cmd
+from .ssh import notebook_ssh
 from .notebook_events import events as notebook_events
 from .notebook_lifecycle import lifecycle as notebook_lifecycle
 from .notebook_metrics import notebook_metrics
@@ -41,12 +38,6 @@ from .remote_exec import exec_command as _remote_exec
 from .remote_scp import bridge_scp as _remote_scp
 from .remote_shell import bridge_ssh as _remote_shell
 
-# Local notebook connection cache management.
-from .connections_cmd import tunnel_list as _connections
-from .forget_cmd import tunnel_remove as _forget
-from .refresh_cmd import tunnel_update as _refresh
-from .connection_test_cmd import tunnel_test as _connection_test
-
 
 @click.group()
 def notebook():
@@ -55,8 +46,8 @@ def notebook():
     \b
     Examples:
         inspire notebook list                          # List all instances
-        inspire notebook ssh <notebook>                # Establish cached connection
-        inspire notebook exec <notebook> "nvidia-smi"  # Run a command on a cached notebook
+        inspire notebook ssh connect <notebook>        # Establish cached connection
+        inspire notebook exec <notebook> "nvidia-smi"  # Run a remote command
         inspire notebook metrics <notebook> --window 30m
     """
     pass
@@ -72,7 +63,7 @@ notebook.add_command(notebook_batch)            # batch
 notebook.add_command(stop_notebook_cmd)         # stop
 notebook.add_command(start_notebook_cmd)        # start
 notebook.add_command(delete_notebook_cmd)       # delete
-notebook.add_command(ssh_notebook_cmd)          # ssh
+notebook.add_command(notebook_ssh)              # ssh
 notebook.add_command(notebook_events)           # events (K8s scheduling / pod lifecycle)
 notebook.add_command(notebook_lifecycle)        # lifecycle (run-cycle timeline; /run_index/list)
 notebook.add_command(notebook_metrics)          # metrics (资源视图 time-series, no SSH needed)
@@ -83,9 +74,3 @@ notebook.add_command(_remote_exec,  name="exec")
 notebook.add_command(_remote_scp,   name="scp")
 notebook.add_command(_remote_shell, name="shell")
 notebook.add_command(install_deps_cmd, name="install-deps")
-
-# Local cache management.
-notebook.add_command(_connections,     name="connections")
-notebook.add_command(_refresh,         name="refresh")
-notebook.add_command(_forget,          name="forget")
-notebook.add_command(_connection_test, name="test")

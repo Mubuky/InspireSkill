@@ -93,7 +93,7 @@ def bridge_scp(
         ctx,
         notebook,
         resource_type="notebook",
-        list_command="inspire notebook connections",
+        list_command="inspire notebook list",
     )
     bridge = notebook
     try:
@@ -115,14 +115,14 @@ def bridge_scp(
     tunnel_config = load_tunnel_config()
     if bridge and tunnel_config.get_bridge(bridge) is None:
         message = f"No cached notebook connection for '{bridge}'."
-        hint = "Run 'inspire notebook connections' to see cached notebook names."
+        hint = "Run `inspire notebook ssh connect <name>` to create or refresh this notebook connection."
         _handle_error(ctx, "BridgeNotFound", message, EXIT_GENERAL_ERROR, hint=hint)
 
     if not is_tunnel_available(bridge_name=bridge, config=tunnel_config):
         hint = (
-            "Run 'inspire notebook test' to troubleshoot. "
+            "Run 'inspire notebook ssh test' to troubleshoot. "
             "If needed, re-create the cached connection via "
-            "'inspire notebook ssh <notebook>'."
+            "'inspire notebook ssh connect <notebook>'."
         )
         _handle_error(ctx, "TunnelError", "SSH tunnel not available", EXIT_GENERAL_ERROR, hint=hint)
 

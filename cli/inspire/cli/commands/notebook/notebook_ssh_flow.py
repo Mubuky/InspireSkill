@@ -198,7 +198,7 @@ def _run_notebook_command_with_reconnect(
                 "ConfigError",
                 f"No cached notebook connection for '{scrub_raw_ids(profile_name)}'.",
                 EXIT_CONFIG_ERROR,
-                hint="Run 'inspire notebook connections' to see cached notebook names.",
+                hint="Run `inspire notebook ssh connect <name>` to create or refresh this notebook connection.",
             )
             return False
 
@@ -236,9 +236,9 @@ def _run_notebook_command_with_reconnect(
             _handle_error(
                 ctx,
                 "ConfigError",
-                f"Cached notebook '{profile_name}' is missing notebook metadata.",
+                f"Cached notebook '{scrub_raw_ids(profile_name)}' is missing notebook metadata.",
                 EXIT_CONFIG_ERROR,
-                hint="Re-run 'inspire notebook ssh <notebook>' to re-bootstrap.",
+                hint="Re-run 'inspire notebook ssh connect <notebook>' to re-bootstrap.",
             )
             return False
 
@@ -260,7 +260,7 @@ def _run_notebook_command_with_reconnect(
                 else "SSH connection dropped and auto-reconnect retries were exhausted."
             ),
             EXIT_API_ERROR,
-            hint="Re-run 'inspire notebook ssh <notebook>' to refresh the tunnel.",
+            hint="Re-run 'inspire notebook ssh connect <notebook>' to refresh the tunnel.",
         )
         return False
 
@@ -389,9 +389,9 @@ def _run_interactive_notebook_ssh_with_reconnect(
             _handle_error(
                 ctx,
                 "ConfigError",
-                f"No cached notebook connection for '{profile_name}'.",
+                f"No cached notebook connection for '{scrub_raw_ids(profile_name)}'.",
                 EXIT_CONFIG_ERROR,
-                hint="Run 'inspire notebook connections' to see cached notebook names.",
+                hint="Run `inspire notebook ssh connect <name>` to create or refresh this notebook connection.",
             )
             return
 
@@ -411,7 +411,7 @@ def _run_interactive_notebook_ssh_with_reconnect(
                 "APIError",
                 "SSH connection dropped and auto-reconnect retries were exhausted.",
                 EXIT_API_ERROR,
-                hint="Re-run 'inspire notebook ssh <notebook>' to refresh the tunnel.",
+                hint="Re-run 'inspire notebook ssh connect <notebook>' to refresh the tunnel.",
             )
             return
 
@@ -455,9 +455,9 @@ def _run_interactive_notebook_ssh_with_reconnect(
             _handle_error(
                 ctx,
                 "ConfigError",
-                f"Cached notebook '{profile_name}' is missing notebook metadata.",
+                f"Cached notebook '{scrub_raw_ids(profile_name)}' is missing notebook metadata.",
                 EXIT_CONFIG_ERROR,
-                hint="Re-run 'inspire notebook ssh <notebook>' to re-bootstrap.",
+                hint="Re-run 'inspire notebook ssh connect <notebook>' to re-bootstrap.",
             )
             return
 
@@ -475,7 +475,7 @@ def _run_interactive_notebook_ssh_with_reconnect(
                 "APIError",
                 "SSH connection dropped and auto-reconnect retries were exhausted.",
                 EXIT_API_ERROR,
-                hint="Re-run 'inspire notebook ssh <notebook>' to refresh the tunnel.",
+                hint="Re-run 'inspire notebook ssh connect <notebook>' to refresh the tunnel.",
             )
             return
 
@@ -493,7 +493,7 @@ def _run_interactive_notebook_ssh_with_reconnect(
                 "APIError",
                 "Tunnel rebuild completed, but SSH preflight still failed.",
                 EXIT_API_ERROR,
-                hint=f"Run 'inspire notebook test {profile_name}' for diagnostics.",
+                hint=f"Run 'inspire notebook ssh test {scrub_raw_ids(profile_name)}' for diagnostics.",
             )
             return
 
@@ -766,7 +766,7 @@ def run_notebook_ssh(
                 "     在容器里应当存在且可执行。\n"
                 "  2. 如果这条路径不存在 / 不可读，说明平台侧的 global_public 挂载\n"
                 "     没覆盖到这台实例——这不是 InspireSkill 的问题，找 SII 运维。\n"
-                "  3. 如果 kit 存在但 bootstrap 仍失败，跑 `inspire --debug notebook ssh ...`\n"
+                "  3. 如果 kit 存在但 bootstrap 仍失败，跑 `inspire --debug notebook ssh connect ...`\n"
                 "     看 trace 再开 issue。"
             ),
         )
@@ -814,8 +814,8 @@ def run_notebook_ssh(
             "Tunnel setup completed, but SSH preflight failed.",
             EXIT_API_ERROR,
             hint=(
-                f"Retry 'inspire notebook ssh {profile_name}' in a few seconds, "
-                f"or run 'inspire notebook test {profile_name}' to inspect connectivity. "
+                f"Retry 'inspire notebook ssh connect {scrub_raw_ids(profile_name)}' in a few seconds, "
+                f"or run 'inspire notebook ssh test {scrub_raw_ids(profile_name)}' to inspect connectivity. "
                 "Proxy readiness report: "
                 f"{scrub_raw_ids(proxy_status)} ({scrub_raw_ids(redact_proxy_url(proxy_url))})."
                 f"{ssh_capability_hint}"

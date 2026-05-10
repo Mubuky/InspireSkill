@@ -1,4 +1,4 @@
-"""`notebook shell` command -- open an interactive SSH shell to a cached notebook."""
+"""`notebook shell` command -- open an interactive shell to a cached notebook."""
 
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ def _build_remote_shell_command(*, remote_cwd: Optional[str], env_exports: str) 
     return None
 
 
-@click.command("ssh")
+@click.command("shell")
 @click.argument("notebook", required=False)
 @click.option(
     "--cwd",
@@ -56,11 +56,11 @@ def bridge_ssh(ctx: Context, notebook: Optional[str], cwd: Optional[str]) -> Non
     """Open an interactive SSH shell to a cached notebook.
 
     Requires a cached notebook connection. Create one with
-    ``inspire notebook ssh <notebook>``.
+    ``inspire notebook ssh connect <notebook>``.
 
     \b
     Example:
-        inspire notebook ssh my-notebook
+        inspire notebook ssh connect my-notebook
         inspire notebook shell my-notebook
         inspire notebook shell my-notebook --cwd me
     """
@@ -71,7 +71,7 @@ def bridge_ssh(ctx: Context, notebook: Optional[str], cwd: Optional[str]) -> Non
             ctx,
             notebook,
             resource_type="notebook",
-            list_command="inspire notebook connections",
+            list_command="inspire notebook list",
         )
     bridge = notebook
     try:
@@ -92,7 +92,7 @@ def bridge_ssh(ctx: Context, notebook: Optional[str], cwd: Optional[str]) -> Non
             ctx,
             "BridgeNotFound",
             f"No cached notebook connection for '{bridge}'.",
-            hint="Run 'inspire notebook connections' to see cached notebook names.",
+            hint="Run `inspire notebook ssh connect <name>` to create or refresh this notebook connection.",
         )
         raise RuntimeError("unreachable")
     if selected_bridge is None:
@@ -100,7 +100,7 @@ def bridge_ssh(ctx: Context, notebook: Optional[str], cwd: Optional[str]) -> Non
             ctx,
             "TunnelError",
             "No cached notebook connection.",
-            hint="Create one with: inspire notebook ssh <notebook>",
+            hint="Create one with: inspire notebook ssh connect <notebook>",
         )
         raise RuntimeError("unreachable")
 
@@ -127,7 +127,7 @@ def bridge_ssh(ctx: Context, notebook: Optional[str], cwd: Optional[str]) -> Non
                 ctx,
                 "BridgeNotFound",
                 f"No cached notebook connection for '{bridge_name}'.",
-                hint="Run 'inspire notebook connections' to see cached notebook names.",
+                hint="Run `inspire notebook ssh connect <name>` to create or refresh this notebook connection.",
             )
             raise RuntimeError("unreachable")
 
@@ -145,8 +145,8 @@ def bridge_ssh(ctx: Context, notebook: Optional[str], cwd: Optional[str]) -> Non
                     "TunnelError",
                     "SSH tunnel not available",
                     hint=(
-                        "Auto-rebuild retries exhausted. Run 'inspire notebook test' and "
-                        "retry 'inspire notebook ssh <notebook>'."
+                        "Auto-rebuild retries exhausted. Run 'inspire notebook ssh test' and "
+                        "retry 'inspire notebook ssh connect <notebook>'."
                     ),
                 )
 
@@ -159,7 +159,7 @@ def bridge_ssh(ctx: Context, notebook: Optional[str], cwd: Optional[str]) -> Non
                     hint=(
                         "This cached connection has no notebook handle, so it cannot be "
                         "rebuilt automatically. Re-create it via "
-                        "'inspire notebook ssh <notebook>'."
+                        "'inspire notebook ssh connect <notebook>'."
                     ),
                 )
 
