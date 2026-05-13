@@ -95,9 +95,10 @@ def _ensure_playwright_browser() -> None:
 
     try:
         from playwright.sync_api import sync_playwright
+        from inspire.platform.web.session.browser_launch import chromium_launch_kwargs
 
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
+            browser = p.chromium.launch(**chromium_launch_kwargs(headless=True))
             browser.close()
         return  # already installed
     except Exception:

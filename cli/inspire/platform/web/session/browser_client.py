@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Optional, cast
 from weakref import WeakSet
 
 from .models import SessionExpiredError, WebSession
+from .browser_launch import chromium_launch_kwargs
 from .proxy import get_playwright_proxy
 
 if TYPE_CHECKING:
@@ -22,7 +23,9 @@ class _BrowserRequestClient:
         proxy = cast("ProxySettings | None", get_playwright_proxy())
         self._closed = False
         self._playwright = sync_playwright().start()
-        self._browser = self._playwright.chromium.launch(headless=True, proxy=proxy)
+        self._browser = self._playwright.chromium.launch(
+            **chromium_launch_kwargs(headless=True, proxy=proxy)
+        )
         self._context = self._browser.new_context(
             storage_state=cast("StorageState", session.storage_state),
             proxy=proxy,

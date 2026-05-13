@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Optional, cast
 from inspire.config import Config
 
 from .models import DEFAULT_WORKSPACE_ID, WebSession
+from .browser_launch import chromium_launch_kwargs
 from .proxy import get_playwright_proxy
 
 if TYPE_CHECKING:
@@ -31,6 +32,23 @@ def _session_matches_username(cached: WebSession, username: str) -> bool:
 def _has_real_workspace_id(session: WebSession) -> bool:
     value = str(session.workspace_id or "").strip()
     return bool(value) and value != DEFAULT_WORKSPACE_ID
+
+
+def _is_browser_closed_error(exc: BaseException) -> bool:
+    text = str(exc)
+    return "Target page, context or browser has been closed" in text
+
+
+def _raise_browser_closed_error(exc: BaseException) -> None:
+    from inspire.config import ConfigError
+
+    raise ConfigError(
+        "Playwright Chromium closed during Inspire login. This is usually a "
+        "browser runtime problem in a containerized notebook, not an account "
+        "credential problem. InspireSkill launches Chromium with container-safe "
+        "sandbox and /dev/shm flags; if this still happens, reinstall the "
+        "Playwright browser runtime for the active package and retry."
+    ) from exc
 
 
 def get_credentials() -> tuple[str, str]:
@@ -75,7 +93,7 @@ def login_with_playwright(
     proxy = cast("ProxySettings | None", get_playwright_proxy())
     with sync_playwright() as p:
         try:
-            browser = p.chromium.launch(headless=headless, proxy=proxy)
+            browser = p.chromium.launch(**chromium_launch_kwargs(headless=headless, proxy=proxy))
         except Exception as exc:
             if "Executable doesn't exist" in str(exc):
                 # ConfigError surfaces through the standard CLI error path
@@ -97,7 +115,12 @@ def login_with_playwright(
 
         # Navigate to login page; use domcontentloaded since CAS may have
         # long-polling resources that prevent networkidle from completing.
-        page.goto(f"{base_url}/login", wait_until="domcontentloaded", timeout=60000)
+        try:
+            page.goto(f"{base_url}/login", wait_until="domcontentloaded", timeout=60000)
+        except Exception as exc:
+            if _is_browser_closed_error(exc):
+                _raise_browser_closed_error(exc)
+            raise
         # Give some time for any redirects to settle
         page.wait_for_timeout(2000)
 
@@ -164,9 +187,16 @@ def login_with_playwright(
                 f"{base_url}/jobs/distributedTraining", wait_until="networkidle", timeout=15000
             )
         except Exception:
-            page.goto(
-                f"{base_url}/jobs/distributedTraining", wait_until="domcontentloaded", timeout=30000
-            )
+            try:
+                page.goto(
+                    f"{base_url}/jobs/distributedTraining",
+                    wait_until="domcontentloaded",
+                    timeout=30000,
+                )
+            except Exception as exc:
+                if _is_browser_closed_error(exc):
+                    _raise_browser_closed_error(exc)
+                raise
         page.wait_for_timeout(1000)
 
         def _wait_for_api_auth() -> None:

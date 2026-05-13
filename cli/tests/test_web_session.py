@@ -8,6 +8,10 @@ import requests
 
 from inspire.platform.web import session as ws
 from inspire.platform.web.session import auth as ws_auth
+from inspire.platform.web.session.browser_launch import (
+    CHROMIUM_CONTAINER_ARGS,
+    chromium_launch_kwargs,
+)
 from inspire.platform.web.session import browser_client as ws_browser_client
 from inspire.platform.web.session import WebSession
 from inspire.platform.web.session import requests as ws_requests_module
@@ -85,6 +89,24 @@ class DummyRequestContext:
 class DummyBrowserContext:
     def __init__(self) -> None:
         self.request = DummyRequestContext()
+
+
+def test_chromium_launch_kwargs_include_container_compat_args() -> None:
+    proxy = {"server": "http://127.0.0.1:7897"}
+
+    kwargs = chromium_launch_kwargs(headless=True, proxy=proxy)
+
+    assert kwargs["headless"] is True
+    assert kwargs["proxy"] == proxy
+    for arg in CHROMIUM_CONTAINER_ARGS:
+        assert arg in kwargs["args"]
+
+
+def test_browser_closed_error_detection() -> None:
+    assert ws_auth._is_browser_closed_error(
+        RuntimeError("Page.goto: Target page, context or browser has been closed")
+    )
+    assert not ws_auth._is_browser_closed_error(RuntimeError("Timeout 60000ms exceeded"))
 
 
 def test_build_requests_session_applies_toml_proxy(monkeypatch: pytest.MonkeyPatch) -> None:

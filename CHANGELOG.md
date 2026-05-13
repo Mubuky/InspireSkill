@@ -6,6 +6,13 @@
 
 当前无未发布变更。
 
+## 5.1.6（2026-05-13）
+
+### Fixed
+
+- 修复启智 Notebook 容器内运行 `inspire init` 时，Playwright Chromium 在 `page.goto()` 阶段关闭并报 `Target page, context or browser has been closed` 的问题。所有 CLI Playwright 启动入口现在统一带上容器兼容参数，覆盖 root/no sandbox 和小 `/dev/shm` 环境。
+- 登录浏览器仍异常关闭时，CLI 现在会给出浏览器运行时 / 容器环境诊断，不再直接暴露 Playwright 底层 `Page.goto` 错误，也不再把这类失败误导成账号密码问题。
+
 ## 5.1.5（2026-05-13）
 
 ### Fixed

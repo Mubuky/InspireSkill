@@ -13,6 +13,7 @@ import threading
 from typing import Any, Optional
 
 from inspire.platform.web.session import WebSession, get_playwright_proxy, request_json
+from inspire.platform.web.session.browser_launch import chromium_launch_kwargs
 
 DEFAULT_BASE_URL = "https://api.example.com"
 # Backward-compatible constant (legacy imports). Prefer _get_base_url() for runtime use.
@@ -157,7 +158,7 @@ def _run_in_thread(func, *args, **kwargs):  # noqa: ANN001
 
 def _launch_browser(p, headless: bool = True):  # noqa: ANN001
     proxy = get_playwright_proxy()
-    return p.chromium.launch(headless=headless, proxy=proxy)
+    return p.chromium.launch(**chromium_launch_kwargs(headless=headless, proxy=proxy))
 
 
 def _new_context(browser, *, storage_state=None):  # noqa: ANN001
