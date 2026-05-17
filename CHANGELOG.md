@@ -6,6 +6,14 @@
 
 当前无未发布变更。
 
+## 5.1.11（2026-05-17）
+
+### Changed
+
+- 同步 SII 内部源文档：更新 PIP / PyPI、Conda、npm、Maven、PyTorch wheel、Docker 镜像仓库、OSS 和 NTP 的 Agent 可执行入口。
+- 收敛内部源说明边界：根 `SKILL.md` 继续只保留公网 / 内部源判断原则，具体地址集中在 `references/resources-and-paths.md`，避免日常入口过重。
+- 更新 notebook 基底环境示例，使用新的 PyPI 内部源配置路径。
+
 ## 5.1.10（2026-05-13）
 
 ### Fixed
