@@ -92,7 +92,7 @@ def _apply_account_layer(
 
     # Reject per-repository keys anywhere in the file. A single account
     # spans many repos; these values must live in each repo's own
-    # ./.inspire/config.toml or come from env vars.
+    # the account-scoped project config or come from env vars.
     _reject_per_repo_keys(raw, account_path)
 
     compute_groups = raw.pop("compute_groups", [])
@@ -150,8 +150,8 @@ def _reject_per_repo_keys(raw: dict[str, Any], account_path: Path) -> None:
     raise ConfigError(
         f"Account config at {account_path} contains per-repository keys: "
         f"{', '.join(offending)}. These must live in the repo's own "
-        "./.inspire/config.toml (run 'inspire init' from inside "
-        "the repo), not at the account level — a single account usually has "
+        "this repo's account-scoped project config (run 'inspire init' from "
+        "inside the repo), not at the account level — a single account usually has "
         "many repos with different path aliases / Inspire projects / "
         "GitHub bindings, and placing per-repo values here silently shadows "
         "the correct ones."

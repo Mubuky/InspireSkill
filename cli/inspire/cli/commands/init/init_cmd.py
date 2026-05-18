@@ -27,11 +27,8 @@ from inspire.cli.commands.account.add import (
     DEFAULT_PROXY_HINT,
     _render_config as _render_account_config,
 )
-from inspire.config import (
-    CONFIG_FILENAME,
-    PROJECT_CONFIG_DIR,
-    Config,
-)
+from inspire.config import Config
+from inspire.config.toml import _project_config_write_path
 
 from .discover import _init_discover_mode
 from .env_detect import _detect_env_vars
@@ -59,7 +56,7 @@ def _get_config_paths() -> tuple[Path, Path]:
     when no account is active instead of crashing later on a ``None`` path.
     """
     global_path = _require_active_account_config_path()
-    project_path = Path.cwd() / PROJECT_CONFIG_DIR / CONFIG_FILENAME
+    project_path = _project_config_write_path()
     return global_path, project_path
 
 
@@ -213,14 +210,15 @@ def init(
     Plain `inspire init` logs in or uses the active account, discovers visible
     workspaces / projects / compute groups, asks which storage tier the `me`
     path alias should use, then writes account config plus this repository's
-    ./.inspire/config.toml.
+    ./.inspire/accounts/<account>/config.toml.
 
     `--template` writes a placeholder config. `--scope project|global` forces
     environment-variable detection / smart init into one config file instead
     of running discovery.
 
     Discovery writes account-scoped catalogs to the active account config and
-    project-scoped context/path aliases to ./.inspire/config.toml.
+    project-scoped context/path aliases to this repository's account-scoped
+    project config.
 
     \b
     Prompted passwords are stored in global config for the selected account.

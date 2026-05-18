@@ -118,7 +118,11 @@ def _format_preview_by_scope(detected: list[tuple[ConfigOption, str]]) -> None:
 
     if global_opts:
         click.echo(
-            click.style("Global config (~/.config/inspire/config.toml):", fg="cyan", bold=True)
+            click.style(
+                "Account config (~/.inspire/accounts/<name>/config.toml):",
+                fg="cyan",
+                bold=True,
+            )
         )
 
         by_category: dict[str, list[tuple[ConfigOption, str]]] = {}
@@ -140,7 +144,7 @@ def _format_preview_by_scope(detected: list[tuple[ConfigOption, str]]) -> None:
         click.echo()
 
     if project_opts:
-        click.echo(click.style("Project config (./.inspire/config.toml):", fg="green", bold=True))
+        click.echo(click.style("Project config (repo + active account):", fg="green", bold=True))
 
         by_category = {}
         for option, value in project_opts:

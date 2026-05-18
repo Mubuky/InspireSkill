@@ -8,7 +8,8 @@ from typing import Any, Optional
 
 # Config file paths
 CONFIG_FILENAME = "config.toml"
-PROJECT_CONFIG_DIR = ".inspire"  # ./.inspire/config.toml
+PROJECT_CONFIG_DIR = ".inspire"  # ./.inspire/accounts/<account>/config.toml
+PROJECT_ACCOUNT_CONFIG_DIR = "accounts"
 
 
 class ConfigError(Exception):

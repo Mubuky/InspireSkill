@@ -90,7 +90,7 @@ inspire resources availability --workspace all --include-cpu
 `inspire init` 会发现可用项目、workspace、compute group 和远端存储池，并写入：
 
 - 账号级发现结果：`~/.inspire/accounts/<name>/config.toml`
-- 当前仓库项目上下文：`./.inspire/config.toml`
+- 当前仓库项目上下文：`./.inspire/accounts/<name>/config.toml`
 
 CLI 会拒绝账号 config.toml 中出现 `[paths]`，避免项目级路径污染所有仓库。
 

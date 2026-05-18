@@ -2,8 +2,8 @@
 
 The per-account TOML layer now covers what ``_apply_global_layer`` used to
 handle — see ``load_account_layer.py``. This module only loads the
-per-repo ``./.inspire/config.toml`` on top of the already-applied account
-layer.
+per-repo, per-account ``./.inspire/accounts/<account>/config.toml`` on top
+of the already-applied account layer.
 """
 
 from __future__ import annotations
@@ -73,11 +73,12 @@ def _apply_project_layer(
 
     flat_project = _flatten_toml(project_raw)
 
-    # Enforce ConfigOption.scope at the loader: a per-repo `./.inspire/config.toml`
-    # may only carry project-scope keys. Account-scope identity / API / proxy
-    # keys must live in the active account's `~/.inspire/accounts/<n>/config.toml`,
-    # because one account is shared across many repos and silently overriding
-    # auth from a repo file would let one repo poison another.
+    # Enforce ConfigOption.scope at the loader: a per-repo account-scoped
+    # project config may only carry project-scope keys. Account-scope identity
+    # / API / proxy keys must live in the active account's
+    # `~/.inspire/accounts/<n>/config.toml`, because one account is shared
+    # across many repos and silently overriding auth from a repo file would let
+    # one repo poison another.
     from inspire.config.schema import get_option_by_toml
 
     misplaced: list[str] = []

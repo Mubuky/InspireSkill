@@ -1268,7 +1268,9 @@ def test_init_json_global_contract_via_top_level_flag(
     payload = json.loads(result.output)
     assert payload["success"] is True
     assert payload["data"]["mode"] == "template"
-    assert payload["data"]["files_written"] == [str(tmp_path / ".inspire" / "config.toml")]
+    assert payload["data"]["files_written"] == [
+        str(tmp_path / ".inspire" / "accounts" / "default" / "config.toml")
+    ]
 
 
 def test_config_show_respects_global_json_flag(

@@ -28,9 +28,10 @@ def _resolve_alias(name: str, aliases: dict[str, str]) -> tuple[str, str]:
 def path_aliases_cmd() -> None:
     """Manage project-level remote path aliases.
 
-    Path aliases live in this repository's .inspire/config.toml under
-    [path_aliases]. They are shared by notebook exec/shell/scp and job log
-    paths; they are not bound to any one notebook instance.
+    Path aliases live in this repository's account-scoped project config
+    under [path_aliases]. They are shared by notebook exec/shell/scp and job
+    log paths for the active account; they are not bound to any one notebook
+    instance.
     """
 
 

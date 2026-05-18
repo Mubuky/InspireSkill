@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from inspire.config.models import CONFIG_FILENAME, PROJECT_CONFIG_DIR, ConfigError
-from inspire.config.toml import _find_project_config, _load_toml
+from inspire.config.models import ConfigError
+from inspire.config.toml import _load_toml, _project_config_write_path
 
 PROFILE_FIELDS = ("workspace", "project", "group", "image", "quota")
 PROFILE_KINDS = ("notebook", "job", "hpc", "ray", "serving")
@@ -66,7 +66,7 @@ def merge_workload_profiles(
 
 def project_profile_config_path() -> Path:
     """Return the project config path to use when writing profiles."""
-    return _find_project_config() or (Path.cwd() / PROJECT_CONFIG_DIR / CONFIG_FILENAME)
+    return _project_config_write_path()
 
 
 def load_project_profile_data() -> tuple[Path, dict[str, Any]]:

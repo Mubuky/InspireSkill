@@ -20,6 +20,13 @@ def test_init_template_project_succeeds_with_active_account(
     repo_dir.mkdir()
     monkeypatch.chdir(repo_dir)
 
+    fake_home = tmp_path / "home"
+    account_dir = fake_home / ".inspire" / "accounts" / "alice"
+    account_dir.mkdir(parents=True)
+    (account_dir / "config.toml").write_text("")
+    (fake_home / ".inspire" / "current").write_text("alice\n")
+    monkeypatch.setattr(Path, "home", lambda: fake_home)
+
     account_config_path = tmp_path / "accounts" / "alice" / "config.toml"
     monkeypatch.setattr(
         Config,
@@ -30,7 +37,7 @@ def test_init_template_project_succeeds_with_active_account(
     runner = CliRunner()
     result = runner.invoke(cli_main, ["init", "--template", "--scope", "project", "--force"])
 
-    project_config = repo_dir / ".inspire" / "config.toml"
+    project_config = repo_dir / ".inspire" / "accounts" / "alice" / "config.toml"
     assert result.exit_code == EXIT_SUCCESS
     assert project_config.exists()
     assert "Inspire CLI Configuration" in project_config.read_text(encoding="utf-8")

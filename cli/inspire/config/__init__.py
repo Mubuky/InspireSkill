@@ -7,6 +7,7 @@ from inspire.config.load import config_from_files_and_env, get_config_paths
 from inspire.config.load_env import config_from_env
 from inspire.config.models import (
     CONFIG_FILENAME,
+    PROJECT_ACCOUNT_CONFIG_DIR,
     PROJECT_CONFIG_DIR,
     SOURCE_DEFAULT,
     SOURCE_ENV,
@@ -48,6 +49,7 @@ __all__ = [
     "CATEGORY_ORDER",
     "CONFIG_FILENAME",
     "CONFIG_OPTIONS",
+    "PROJECT_ACCOUNT_CONFIG_DIR",
     "PROJECT_CONFIG_DIR",
     "PATH_ALIASES_SECTION",
     "SOURCE_DEFAULT",

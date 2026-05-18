@@ -1783,6 +1783,12 @@ def test_notebook_path_commands_manage_project_path_alias(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
+    fake_home = tmp_path / "__home"
+    account_dir = fake_home / ".inspire" / "accounts" / "alice"
+    account_dir.mkdir(parents=True)
+    (account_dir / "config.toml").write_text("")
+    (fake_home / ".inspire" / "current").write_text("alice\n")
+    monkeypatch.setattr(Path, "home", lambda: fake_home)
     monkeypatch.chdir(tmp_path)
 
     runner = CliRunner()
@@ -1798,7 +1804,7 @@ def test_notebook_path_commands_manage_project_path_alias(
     )
 
     assert set_result.exit_code == EXIT_SUCCESS
-    config_path = tmp_path / ".inspire" / "config.toml"
+    config_path = tmp_path / ".inspire" / "accounts" / "alice" / "config.toml"
     assert config_path.exists()
     content = config_path.read_text(encoding="utf-8")
     assert "[path_aliases]" in content

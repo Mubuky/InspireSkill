@@ -42,8 +42,15 @@ def test_notebook_cli_base_url_reads_account_toml(
 def test_notebook_compute_group_fallback_uses_layered_config(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    project_dir = tmp_path / ".inspire"
-    project_dir.mkdir()
+    fake_home = tmp_path / "home"
+    account_dir = fake_home / ".inspire" / "accounts" / "alice"
+    account_dir.mkdir(parents=True)
+    (account_dir / "config.toml").write_text("")
+    (fake_home / ".inspire" / "current").write_text("alice\n")
+    monkeypatch.setattr(Path, "home", lambda: fake_home)
+
+    project_dir = tmp_path / ".inspire" / "accounts" / "alice"
+    project_dir.mkdir(parents=True)
     (project_dir / "config.toml").write_text(
         """
 [[compute_groups]]

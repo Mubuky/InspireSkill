@@ -12,11 +12,8 @@ from typing import Any
 import click
 
 from inspire.cli.utils.raw_ids import scrub_raw_ids
-from inspire.config import (
-    CONFIG_FILENAME,
-    PROJECT_CONFIG_DIR,
-    Config,
-)
+from inspire.config import Config
+from inspire.config.toml import _project_config_write_path
 from inspire.platform.web.session.browser_launch import is_playwright_browser_runtime_error
 from .toml_helpers import _toml_dumps
 
@@ -1338,7 +1335,7 @@ def _persist_discovery_catalog(request: _DiscoveryPersistRequest) -> None:
     global_path = Config.writable_config_path()
     if global_path is None:
         raise click.ClickException("No active account configured. Run `inspire account add` first.")
-    project_path = Path.cwd() / PROJECT_CONFIG_DIR / CONFIG_FILENAME
+    project_path = _project_config_write_path()
     if not _confirm_discovery_writes(
         force=force, global_path=global_path, project_path=project_path
     ):

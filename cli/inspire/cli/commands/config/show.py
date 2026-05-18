@@ -89,7 +89,11 @@ def _show_table(
     if project_path:
         click.echo(f"  Project: {project_path} " + click.style("(found)", fg="green"))
     else:
-        click.echo("  Project: ./inspire/config.toml " + click.style("(not found)", fg="white"))
+        from inspire.config.toml import _project_config_write_path
+
+        click.echo(
+            f"  Project: {_project_config_write_path()} " + click.style("(not found)", fg="white")
+        )
 
     prefer_source = getattr(cfg, "prefer_source", "env")
     if prefer_source == "toml":

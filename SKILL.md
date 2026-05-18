@@ -91,4 +91,4 @@ uv run inspire hpc create --help
 - `Existing Notebooks`
 - `Ongoing Jobs`
 
-不要把账号配置、密码、代理密钥或 `.inspire/config.toml` 内容复制进 `INSPIRE.md`。配置由 CLI 合并和展示。
+不要把账号配置、密码、代理密钥或 `.inspire/accounts/<account>/config.toml` 内容复制进 `INSPIRE.md`。配置由 CLI 合并和展示。

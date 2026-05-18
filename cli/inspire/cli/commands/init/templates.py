@@ -8,11 +8,10 @@ from pathlib import Path
 import click
 
 from inspire.config import (
-    CONFIG_FILENAME,
-    PROJECT_CONFIG_DIR,
     Config,
     ConfigOption,
 )
+from inspire.config.toml import _project_config_write_path
 
 from .env_detect import _format_preview_by_scope, _generate_toml_content
 
@@ -122,22 +121,22 @@ def _init_template_mode(global_flag: bool, project_flag: bool, force: bool) -> N
         config_path = global_path
         location_comment = f"{global_path} (account)"
     elif project_flag:
-        config_path = Path.cwd() / PROJECT_CONFIG_DIR / CONFIG_FILENAME
-        location_comment = "./.inspire/config.toml (project-specific)"
+        config_path = _project_config_write_path()
+        location_comment = f"{config_path} (project/account)"
     else:
         click.echo("Where would you like to create the config?")
-        click.echo("  [g] Global config (~/.config/inspire/config.toml)")
-        click.echo("  [p] Project config (./.inspire/config.toml)")
+        click.echo("  [g] Account config (~/.inspire/accounts/<name>/config.toml)")
+        click.echo("  [p] Project config (this repo, active account)")
         choice = click.prompt(
             "Choice", default="p", type=click.Choice(["g", "p"], case_sensitive=False)
         )
 
         if choice.lower() == "g":
             config_path = global_path
-            location_comment = "~/.config/inspire/config.toml (global)"
+            location_comment = f"{global_path} (account)"
         else:
-            config_path = Path.cwd() / PROJECT_CONFIG_DIR / CONFIG_FILENAME
-            location_comment = "./.inspire/config.toml (project-specific)"
+            config_path = _project_config_write_path()
+            location_comment = f"{config_path} (project/account)"
 
     if config_path.exists() and not force:
         click.echo(click.style(f"Config file already exists: {config_path}", fg="yellow"))
@@ -264,7 +263,7 @@ def _init_smart_mode(
     click.echo()
 
     global_path = _require_writable_global_path()
-    project_path = Path.cwd() / PROJECT_CONFIG_DIR / CONFIG_FILENAME
+    project_path = _project_config_write_path()
 
     if global_flag:
         _write_single_file(detected, global_path, force, "global")

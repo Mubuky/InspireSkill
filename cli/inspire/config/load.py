@@ -6,7 +6,8 @@ Layer order (later wins):
 
 Identity (username / password / base_url / proxy) lives in the active
 account's ``~/.inspire/accounts/<name>/config.toml``. Per-repo state
-(``[context].project``, ``[path_aliases]``, …) lives in ``./.inspire/config.toml``.
+(``[context].project``, ``[path_aliases]``, …) lives in
+``./.inspire/accounts/<name>/config.toml`` for the active account.
 Without an active account, identity fields
 stay empty; callers that pass ``require_credentials=True`` will get a
 ``ConfigError`` pointing at ``inspire account add``.

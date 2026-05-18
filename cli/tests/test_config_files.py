@@ -223,6 +223,15 @@ timeout = 60
 class TestLayeredConfig:
     """Tests for layered configuration loading."""
 
+    @pytest.fixture(autouse=True)
+    def _no_active_account(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> Generator[None, None, None]:
+        fake_home = tmp_path / "__home_no_account"
+        fake_home.mkdir(exist_ok=True)
+        monkeypatch.setattr(Path, "home", lambda: fake_home)
+        yield
+
     @pytest.fixture
     def clean_env(self, monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
         """Clear relevant env vars for testing."""
@@ -392,6 +401,12 @@ class TestAccountConfigLayer:
         (home / ".inspire" / "current").write_text(name + "\n")
         return path
 
+    def _write_project_account_config(self, root: Path, name: str, body: str) -> Path:
+        path = root / ".inspire" / "accounts" / name / "config.toml"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(body)
+        return path
+
     def test_account_config_drives_identity_when_active(
         self, home: Path, clean_env: None
     ) -> None:
@@ -441,9 +456,7 @@ class TestAccountConfigLayer:
             '[auth]\nusername = "alice-platform"\npassword = "pw"\n'
             '[api]\ntimeout = 55\n',
         )
-        project_dir = tmp_path / ".inspire"
-        project_dir.mkdir()
-        (project_dir / "config.toml").write_text('[api]\ntimeout = 123\n')
+        self._write_project_account_config(tmp_path, "alice", '[api]\ntimeout = 123\n')
 
         with pytest.raises(ConfigError, match="account-scope keys"):
             Config.from_files_and_env(require_credentials=False)
@@ -598,10 +611,10 @@ class TestAccountConfigLayer:
             '[auth]\nusername = "alice"\npassword = "pw"\n\n'
             '[remote_env]\nWANDB_API_KEY = "account-key"\nUV_PYTHON_INSTALL_DIR = "/opt/uv"\n',
         )
-        project_dir = tmp_path / ".inspire"
-        project_dir.mkdir()
-        (project_dir / "config.toml").write_text(
-            '[remote_env]\nWANDB_API_KEY = "project-key"\nHF_TOKEN = "hf"\n'
+        self._write_project_account_config(
+            tmp_path,
+            "alice",
+            '[remote_env]\nWANDB_API_KEY = "project-key"\nHF_TOKEN = "hf"\n',
         )
 
         cfg, sources = Config.from_files_and_env(require_credentials=False)
@@ -611,6 +624,104 @@ class TestAccountConfigLayer:
             "HF_TOKEN": "hf",
         }
         assert sources["remote_env"] == SOURCE_PROJECT
+
+    def test_project_config_is_scoped_by_active_account(
+        self, home: Path, clean_env: None, tmp_path: Path
+    ) -> None:
+        """Switching accounts must not reuse workspace/path caches."""
+        self._write_account_config(
+            home,
+            "alice",
+            '[auth]\nusername = "alice"\npassword = "pw"\n',
+        )
+        self._write_account_config(
+            home,
+            "bob",
+            '[auth]\nusername = "bob"\npassword = "pw"\n',
+        )
+        self._write_project_account_config(
+            tmp_path,
+            "alice",
+            '[path_aliases]\nme = "/inspire/ssd/project/topic/alice/"\n',
+        )
+        self._write_project_account_config(
+            tmp_path,
+            "bob",
+            '[path_aliases]\nme = "/inspire/ssd/project/topic/bob/"\n',
+        )
+        legacy_project = tmp_path / ".inspire" / "config.toml"
+        legacy_project.write_text('[path_aliases]\nme = "/inspire/legacy/"\n')
+
+        (home / ".inspire" / "current").write_text("alice\n")
+        alice_cfg, alice_sources = Config.from_files_and_env(require_credentials=False)
+
+        (home / ".inspire" / "current").write_text("bob\n")
+        bob_cfg, bob_sources = Config.from_files_and_env(require_credentials=False)
+
+        assert alice_cfg.path_aliases["me"] == "/inspire/ssd/project/topic/alice/"
+        assert bob_cfg.path_aliases["me"] == "/inspire/ssd/project/topic/bob/"
+        assert alice_sources["path_aliases"] == SOURCE_PROJECT
+        assert bob_sources["path_aliases"] == SOURCE_PROJECT
+
+    def test_project_config_search_does_not_treat_home_account_as_project(
+        self, tmp_path: Path, clean_env: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        fake_home = tmp_path / "home"
+        repo = fake_home / "repo"
+        repo.mkdir(parents=True)
+        monkeypatch.setattr(Path, "home", lambda: fake_home)
+        account_config = fake_home / ".inspire" / "accounts" / "alice" / "config.toml"
+        account_config.parent.mkdir(parents=True)
+        account_config.write_text(
+            '[auth]\nusername = "alice"\npassword = "pw"\n[api]\ntimeout = 44\n'
+        )
+        (fake_home / ".inspire" / "current").write_text("alice\n")
+        monkeypatch.chdir(repo)
+
+        cfg, sources = Config.from_files_and_env(require_credentials=False)
+        account_path, project_path = Config.get_config_paths()
+
+        assert cfg.username == "alice"
+        assert cfg.timeout == 44
+        assert sources["timeout"] == SOURCE_GLOBAL
+        assert account_path == account_config
+        assert project_path is None
+
+    def test_profile_write_targets_active_project_account_config(
+        self, home: Path, clean_env: None, tmp_path: Path
+    ) -> None:
+        self._write_account_config(
+            home,
+            "alice",
+            '[auth]\nusername = "alice"\npassword = "pw"\n',
+        )
+
+        result = CliRunner().invoke(
+            cli_main,
+            [
+                "notebook",
+                "profile",
+                "set",
+                "h200",
+                "--workspace",
+                "分布式训练空间",
+                "--project",
+                "CI-情境智能",
+                "--group",
+                "H200-2号机房",
+                "--quota",
+                "1,20,200",
+                "--image",
+                "unified-base:v2",
+            ],
+        )
+
+        config_path = tmp_path / ".inspire" / "accounts" / "alice" / "config.toml"
+        assert result.exit_code == 0, result.output
+        assert config_path.exists()
+        content = config_path.read_text(encoding="utf-8")
+        assert "[profiles.notebook.h200]" in content
+        assert 'workspace = "分布式训练空间"' in content
 
     def test_require_credentials_without_active_account_raises(
         self, home: Path, clean_env: None
@@ -628,7 +739,8 @@ class TestAccountConfigLayer:
         )
         project_dir = tmp_path / ".inspire"
         project_dir.mkdir()
-        project_config = project_dir / "config.toml"
+        project_config = project_dir / "accounts" / "alice" / "config.toml"
+        project_config.parent.mkdir(parents=True)
         project_config.write_text('[api]\ntimeout = 77\n')
 
         account_path, proj_path = Config.get_config_paths()
@@ -643,6 +755,9 @@ class TestAccountConfigLayer:
 
 class TestInitCommand:
     """Tests for inspire init command."""
+
+    def _project_config_path(self, root: Path) -> Path:
+        return root / PROJECT_CONFIG_DIR / "accounts" / "default" / CONFIG_FILENAME
 
     @pytest.fixture
     def clean_env(self, monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
@@ -682,7 +797,7 @@ class TestInitCommand:
 
         assert result.exit_code == 0
         assert "Creating template config" in result.output
-        config_file = tmp_path / ".inspire" / "config.toml"
+        config_file = self._project_config_path(tmp_path)
         assert config_file.exists()
         content = config_file.read_text()
         assert "[auth]" in content
@@ -701,7 +816,7 @@ class TestInitCommand:
 
         assert result.exit_code == 0
         assert "Creating template config" in result.output
-        config_file = tmp_path / ".inspire" / "config.toml"
+        config_file = self._project_config_path(tmp_path)
         assert config_file.exists()
         content = config_file.read_text()
         # Should have template placeholder, not actual env var value
@@ -724,7 +839,7 @@ class TestInitCommand:
         payload = json.loads(result.output)
         assert payload["success"] is True
         assert payload["data"]["mode"] == "template"
-        assert payload["data"]["files_written"] == [str(tmp_path / ".inspire" / "config.toml")]
+        assert payload["data"]["files_written"] == [str(self._project_config_path(tmp_path))]
         assert payload["data"]["detected_env_count"] == 0
         assert payload["data"]["secret_env_count"] == 0
 
@@ -733,9 +848,9 @@ class TestInitCommand:
     ) -> None:
         """Test that JSON mode fails fast instead of entering interactive overwrite prompts."""
         monkeypatch.chdir(tmp_path)
-        config_dir = tmp_path / ".inspire"
-        config_dir.mkdir()
-        (config_dir / "config.toml").write_text("[auth]\nusername = 'existing'")
+        config_file = self._project_config_path(tmp_path)
+        config_file.parent.mkdir(parents=True)
+        config_file.write_text("[auth]\nusername = 'existing'")
 
         runner = CliRunner()
         result = runner.invoke(
@@ -756,9 +871,8 @@ class TestInitCommand:
         monkeypatch.chdir(tmp_path)
 
         # Create existing config
-        config_dir = tmp_path / ".inspire"
-        config_dir.mkdir()
-        config_file = config_dir / "config.toml"
+        config_file = self._project_config_path(tmp_path)
+        config_file.parent.mkdir(parents=True)
         config_file.write_text("[auth]\nusername = 'existing'")
 
         runner = CliRunner()
@@ -777,9 +891,8 @@ class TestInitCommand:
         monkeypatch.chdir(tmp_path)
 
         # Create existing config
-        config_dir = tmp_path / ".inspire"
-        config_dir.mkdir()
-        config_file = config_dir / "config.toml"
+        config_file = self._project_config_path(tmp_path)
+        config_file.parent.mkdir(parents=True)
         config_file.write_text("[auth]\nusername = 'existing'")
 
         runner = CliRunner()
@@ -806,7 +919,7 @@ class TestInitCommand:
         assert result.exit_code == 0
 
         # Project config should have BOTH values
-        project_config = tmp_path / PROJECT_CONFIG_DIR / CONFIG_FILENAME
+        project_config = self._project_config_path(tmp_path)
         assert project_config.exists()
         project_content = project_config.read_text()
         assert 'username = "testuser"' in project_content
@@ -824,7 +937,7 @@ class TestInitCommand:
         result = runner.invoke(init, ["--scope", "project", "--force"])
 
         assert result.exit_code == 0
-        project_config = tmp_path / PROJECT_CONFIG_DIR / CONFIG_FILENAME
+        project_config = self._project_config_path(tmp_path)
         content = project_config.read_text()
 
         # Username should be written
@@ -865,7 +978,7 @@ class TestInitCommand:
         assert result.exit_code == 0
 
         # Project config should exist
-        project_config = tmp_path / PROJECT_CONFIG_DIR / CONFIG_FILENAME
+        project_config = self._project_config_path(tmp_path)
         assert project_config.exists()
         project_content = project_config.read_text()
         assert 'repo = "user/repo"' in project_content
@@ -998,7 +1111,7 @@ class TestInitCommand:
         assert "Discovering account catalog" in result.output
         assert "Workspace:" not in result.output
         assert "CPU临时测试空间" not in result.output
-        project_config = tmp_path / PROJECT_CONFIG_DIR / CONFIG_FILENAME
+        project_config = self._project_config_path(tmp_path)
         assert project_config.exists()
         project_content = project_config.read_text(encoding="utf-8")
         assert "[context]" in project_content
@@ -1252,6 +1365,15 @@ class TestMigrateCommandRemoved:
 
 class TestPreferSource:
     """Tests for the [cli] prefer_source config setting."""
+
+    @pytest.fixture(autouse=True)
+    def _no_active_account(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> Generator[None, None, None]:
+        fake_home = tmp_path / "__home_no_account"
+        fake_home.mkdir(exist_ok=True)
+        monkeypatch.setattr(Path, "home", lambda: fake_home)
+        yield
 
     @pytest.fixture
     def clean_env(self, monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:

@@ -1,4 +1,4 @@
-"""Remote path alias helpers for project config and notebook commands."""
+"""Remote path alias helpers for account-scoped project config and notebook commands."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ import re
 from pathlib import Path
 from typing import Any
 
-from inspire.config.models import CONFIG_FILENAME, PROJECT_CONFIG_DIR, ConfigError
-from inspire.config.toml import _find_project_config, _load_toml
+from inspire.config.models import ConfigError
+from inspire.config.toml import _load_toml, _project_config_write_path
 
 _ALIAS_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 PATH_ALIASES_SECTION = "path_aliases"
@@ -146,7 +146,7 @@ def resolve_remote_cwd(*, cwd: str | None, aliases: dict[str, str]) -> str | Non
 
 
 def project_path_alias_config_path() -> Path:
-    return _find_project_config() or Path.cwd() / PROJECT_CONFIG_DIR / CONFIG_FILENAME
+    return _project_config_write_path()
 
 
 def load_project_path_alias_data() -> tuple[Path, dict[str, Any]]:
