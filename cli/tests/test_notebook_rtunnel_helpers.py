@@ -9,14 +9,14 @@ import pytest
 from inspire.platform.web.browser_api import rtunnel as rtunnel_module
 from inspire.platform.web.browser_api.rtunnel import (
     INSPIRE_BOOTSTRAP_ROOT,
-    OPENSSH_JAMMY_INSTALL_FAILED_FILE,
-    OPENSSH_JAMMY_INSTALL_FAILED_MARKER,
+    OPENSSH_INSTALL_FAILED_FILE,
+    OPENSSH_INSTALL_FAILED_MARKER,
     SII_UBUNTU_APT_MIRROR,
     SETUP_DONE_MARKER,
     _StepTimer,
     _build_batch_setup_script,
     _build_terminal_websocket_url,
-    _check_openssh_jammy_install_failed_via_ws,
+    _check_openssh_install_failed_via_ws,
     _check_rtunnel_present_via_ws,
     _create_terminal_via_api,
     _delete_terminal_via_api,
@@ -911,7 +911,7 @@ def test_recover_api_terminal_surface_waits_for_menu_before_file_menu_fallback(
 # ---------------------------------------------------------------------------
 
 
-def test_build_rtunnel_setup_commands_supports_jammy_openssh_via_internal_apt() -> None:
+def test_build_rtunnel_setup_commands_installs_openssh_via_internal_ubuntu_apt() -> None:
     commands = build_rtunnel_setup_commands(
         port=31337,
         ssh_port=22222,
@@ -919,21 +919,31 @@ def test_build_rtunnel_setup_commands_supports_jammy_openssh_via_internal_apt() 
     )
     script = "\n".join(commands)
 
+    assert "ID" in script
     assert "VERSION_CODENAME" in script
-    assert '"jammy"' in script
-    assert "OpenSSH_8[.]9" in script
+    assert "UBUNTU_CODENAME" in script
     assert SII_UBUNTU_APT_MIRROR in script
     assert "archive.ubuntu.com" not in script
     assert "security.ubuntu.com" not in script
     assert "ports.ubuntu.com" not in script
+    assert "$_OS_CODENAME main restricted universe multiverse" in script
+    assert "$_OS_CODENAME-updates main restricted universe multiverse" in script
+    assert "$_OS_CODENAME-security main restricted universe multiverse" in script
     assert "Dir::Etc::sourcelist=$_apt_source" in script
-    assert "apt-get remove" in script
+    assert "Dir::State::lists=$_apt_lists" in script
+    assert "apt-cache $_apt_opts policy openssh-server" in script
+    assert "apt-cache $_apt_opts policy openssh-client" in script
+    assert "apt-cache $_apt_opts policy openssh-sftp-server" in script
+    assert "apt-get $_apt_opts remove" in script
+    assert "dpkg --remove --force-depends openssh-server openssh-client openssh-sftp-server" in script
     assert "--allow-downgrades" in script
-    assert "openssh-server/jammy" in script
-    assert OPENSSH_JAMMY_INSTALL_FAILED_FILE in script
-    assert OPENSSH_JAMMY_INSTALL_FAILED_MARKER in script
-    # Non-jammy images still use the 24.04 offline kit path.
-    assert '"$KIT/sshd-debs"/*.deb' in script
+    assert '"openssh-server=$_OPENSSH_SERVER_CANDIDATE"' in script
+    assert '"openssh-client=$_OPENSSH_CLIENT_CANDIDATE"' in script
+    assert '"openssh-sftp-server=$_OPENSSH_SFTP_CANDIDATE"' in script
+    assert OPENSSH_INSTALL_FAILED_FILE in script
+    assert OPENSSH_INSTALL_FAILED_MARKER in script
+    assert '"$KIT/sshd-debs"/*.deb' not in script
+    assert "dpkg -i" not in script
 
 
 def test_rtunnel_presence_probe_accepts_zero_copy_kit_binary(
@@ -954,21 +964,19 @@ def test_rtunnel_presence_probe_accepts_zero_copy_kit_binary(
     assert "linux-${_rt_arch}/rtunnel" in command
 
 
-def test_openssh_jammy_failure_probe_checks_marker_file(
+def test_openssh_failure_probe_checks_marker_file(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, object] = {}
 
     def fake_probe(**kwargs):  # type: ignore[no-untyped-def]
         captured.update(kwargs)
-        return kwargs["markers"]["__INSPIRE_OPENSSH_JAMMY_FAILED__"]
+        return kwargs["markers"]["__INSPIRE_OPENSSH_FAILED__"]
 
     monkeypatch.setattr(rtunnel_module, "_probe_terminal_command_markers_via_ws", fake_probe)
 
-    assert _check_openssh_jammy_install_failed_via_ws(
-        context=object(), lab_frame=object()
-    ) is True
-    assert OPENSSH_JAMMY_INSTALL_FAILED_FILE in str(captured["command"])
+    assert _check_openssh_install_failed_via_ws(context=object(), lab_frame=object()) is True
+    assert OPENSSH_INSTALL_FAILED_FILE in str(captured["command"])
 
 
 # ---------------------------------------------------------------------------

@@ -86,7 +86,9 @@ from .images import (
     wait_for_image_ready,
 )
 from .rtunnel import (
+    OpenSSHInternalInstallError,
     OpenSSHJammyInstallError,
+    OPENSSH_INSTALL_LOG,
     OPENSSH_JAMMY_INSTALL_LOG,
     RtunnelMissingInContainerError,
     SII_UBUNTU_APT_MIRROR,
@@ -226,7 +228,9 @@ __all__ = [
     "list_notebook_runs",
     "list_notebook_users",
     "run_command_in_notebook",
+    "OpenSSHInternalInstallError",
     "OpenSSHJammyInstallError",
+    "OPENSSH_INSTALL_LOG",
     "OPENSSH_JAMMY_INSTALL_LOG",
     "RtunnelMissingInContainerError",
     "SII_UBUNTU_APT_MIRROR",

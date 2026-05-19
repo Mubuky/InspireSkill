@@ -6,6 +6,12 @@
 
 当前无未发布变更。
 
+## 5.1.16（2026-05-19）
+
+### Fixed
+
+- 收敛 Notebook SSH bootstrap 的 OpenSSH 安装逻辑：容器侧动态读取 Ubuntu `VERSION_CODENAME`，统一使用 SII 内部 Ubuntu apt 源安装或校正 `openssh-server`、`openssh-client` 和 `openssh-sftp-server`。Ubuntu 22.04 镜像误装 Ubuntu 24.04 OpenSSH 时会先卸载再按 `jammy` 候选版本重装；不强制降级 `libc6` / `libtinfo6` 等基础包。rtunnel 仍从 `global_public` kit 零拷贝执行，OpenSSH 不再回退 `$KIT/sshd-debs`。
+
 ## 5.1.15（2026-05-19）
 
 ### Fixed

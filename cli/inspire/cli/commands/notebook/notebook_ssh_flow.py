@@ -758,18 +758,19 @@ def run_notebook_ssh(
             headless=not debug_playwright,
             timeout=setup_timeout,
         )
-    except browser_api_module.OpenSSHJammyInstallError:
+    except browser_api_module.OpenSSHInternalInstallError:
         _handle_error(
             ctx,
             "SetupError",
-            "SSH bootstrap 失败：Ubuntu 22.04 OpenSSH 需要联网安装或降级。",
+            "SSH bootstrap 失败：OpenSSH 需要通过 SII 内部 Ubuntu apt 源安装或校正。",
             EXIT_API_ERROR,
             hint=(
-                "这个兼容路径用于 Ubuntu 22.04 / jammy 镜像，尤其是已装入 24.04 "
-                "OpenSSH 的 paper-repro:v2。请确认 notebook 能访问 SII 内部 Ubuntu "
-                f"apt 源 `{browser_api_module.SII_UBUNTU_APT_MIRROR}` 后重新执行 "
+                "SSH bootstrap 会在 notebook 容器内读取 `/etc/os-release` 的 Ubuntu "
+                "`VERSION_CODENAME`，再临时使用对应 suite 的 SII 内部 Ubuntu apt 源安装"
+                "或校正 OpenSSH。请确认 notebook 能访问 "
+                f"`{browser_api_module.SII_UBUNTU_APT_MIRROR}` 后重新执行 "
                 "`inspire notebook ssh connect <name> --workspace <workspace>`；"
-                f"远端日志在 `{browser_api_module.OPENSSH_JAMMY_INSTALL_LOG}`。"
+                f"远端日志在 `{browser_api_module.OPENSSH_INSTALL_LOG}`。"
             ),
         )
         return

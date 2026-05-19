@@ -44,21 +44,24 @@ _log = logging.getLogger("inspire.platform.web.browser_api.rtunnel")
 BOOTSTRAP_SENTINEL = "/tmp/.inspire_rtunnel_bootstrap_v1"
 SETUP_DONE_MARKER = "INSPIRE_RTUNNEL_SETUP_DONE"
 RTUNNEL_MISSING_MARKER = "INSPIRE_RTUNNEL_MISSING_IN_BOOTSTRAP"
-OPENSSH_JAMMY_INSTALL_FAILED_MARKER = "INSPIRE_OPENSSH_JAMMY_INSTALL_FAILED"
-OPENSSH_JAMMY_INSTALL_FAILED_FILE = "/tmp/.inspire_openssh_jammy_install_failed"
-OPENSSH_JAMMY_INSTALL_LOG = "/tmp/inspire-openssh-jammy-install.log"
+OPENSSH_INSTALL_FAILED_MARKER = "INSPIRE_OPENSSH_INSTALL_FAILED"
+OPENSSH_INSTALL_FAILED_FILE = "/tmp/.inspire_openssh_install_failed"
+OPENSSH_INSTALL_LOG = "/tmp/inspire-openssh-install.log"
+OPENSSH_JAMMY_INSTALL_FAILED_MARKER = OPENSSH_INSTALL_FAILED_MARKER
+OPENSSH_JAMMY_INSTALL_FAILED_FILE = OPENSSH_INSTALL_FAILED_FILE
+OPENSSH_JAMMY_INSTALL_LOG = OPENSSH_INSTALL_LOG
 SII_UBUNTU_APT_MIRROR = "http://nexus.sii.shaipower.online/repository/ubuntu"
 
 # Canonical path of the InspireSkill offline SSH-bootstrap kit on the Inspire
 # platform's global_public fileset — mounted read-only in every notebook
 # container. Layout (see the kit's MANIFEST.txt):
 #   <root>/rtunnel/linux-{amd64,arm64}/rtunnel   (static Go binary)
-#   <root>/sshd-debs/*.deb                        (openssh-server + full dep closure, Ubuntu 24.04)
+#   <root>/sshd-debs/*.deb                        (legacy, no longer used here)
 #
-# This is the canonical offline source for rtunnel and Ubuntu 24.04 sshd.
-# Ubuntu 22.04 sshd is a temporary compatibility exception: there is no jammy
-# sshd kit yet, so jammy containers that lack OpenSSH 8.9, or that were
-# polluted by the 24.04 kit, downgrade via the SII internal Ubuntu apt mirror.
+# This is the canonical offline source for rtunnel. OpenSSH is installed or
+# corrected through the SII internal Ubuntu apt mirror selected from the
+# container's /etc/os-release codename; the old kit sshd-debs path is no
+# longer used by the bootstrap script.
 INSPIRE_BOOTSTRAP_ROOT = "/inspire/hdd/global_public/inspire-skill-bootstrap/v1"
 
 
@@ -69,13 +72,11 @@ def build_rtunnel_setup_commands(
     ssh_public_key: Optional[str],
 ) -> list[str]:
     """Build the shell emitted into a notebook container to bring up sshd +
-    rtunnel from the global_public offline kit.
+    rtunnel.
 
-    rtunnel is always read from the kit. Ubuntu 24.04 sshd is installed from
-    kit debs when missing. Ubuntu 22.04 sshd is accepted when already present;
-    if it is missing, or if a jammy image has a 24.04 OpenSSH package installed,
-    the script downgrades through apt and marks a clear failure when the
-    SII internal Ubuntu apt mirror is unavailable.
+    rtunnel is always read from the global_public kit. OpenSSH install or
+    version correction always uses the SII internal Ubuntu apt mirror selected
+    from the container's Ubuntu codename.
     """
     if ssh_public_key:
         ssh_public_key_escaped = ssh_public_key.replace("'", "'\"'\"'")
@@ -93,8 +94,8 @@ def build_rtunnel_setup_commands(
         key_line,
         f"BOOTSTRAP_SENTINEL={BOOTSTRAP_SENTINEL}",
         f"KIT={INSPIRE_BOOTSTRAP_ROOT}",
-        f"OPENSSH_JAMMY_INSTALL_FAILED_FILE={OPENSSH_JAMMY_INSTALL_FAILED_FILE}",
-        f"OPENSSH_JAMMY_INSTALL_LOG={OPENSSH_JAMMY_INSTALL_LOG}",
+        f"OPENSSH_INSTALL_FAILED_FILE={OPENSSH_INSTALL_FAILED_FILE}",
+        f"OPENSSH_INSTALL_LOG={OPENSSH_INSTALL_LOG}",
         f"SII_UBUNTU_APT_MIRROR={SII_UBUNTU_APT_MIRROR}",
         # Detect container arch once — rtunnel ships one binary per Linux arch.
         '_RT_ARCH=$(uname -m 2>/dev/null); '
@@ -103,81 +104,123 @@ def build_rtunnel_setup_commands(
         # /inspire/hdd/global_public/inspire-skill-bootstrap/v1/rtunnel/linux-<arch>/rtunnel
         # We exec it straight from there — no copy / chmod into the container.
         '_RT_BIN="$KIT/rtunnel/linux-${_RT_ARCH}/rtunnel"',
-        '_OS_CODENAME=$(. /etc/os-release 2>/dev/null && echo "${VERSION_CODENAME:-}" || true)',
+        '_OS_ID=$(. /etc/os-release 2>/dev/null && echo "${ID:-}" || true)',
+        '_OS_CODENAME=$(. /etc/os-release 2>/dev/null && '
+        'echo "${VERSION_CODENAME:-${UBUNTU_CODENAME:-}}" || true)',
         '_OPENSSH_SERVER_VERSION=$(dpkg-query -W -f=\'${Version}\' openssh-server 2>/dev/null || true)',
+        '_OPENSSH_CLIENT_VERSION=$(dpkg-query -W -f=\'${Version}\' openssh-client 2>/dev/null || true)',
+        '_OPENSSH_SFTP_VERSION=$(dpkg-query -W -f=\'${Version}\' openssh-sftp-server 2>/dev/null || true)',
         '_OPENSSH_BINARY_VERSION=$(/usr/sbin/sshd -V 2>&1 || true)',
-        'echo "[inspire bootstrap] distro=${_OS_CODENAME:-unknown} openssh-server=${_OPENSSH_SERVER_VERSION:-none}"',
-        '_fail_jammy_openssh(){ touch "$OPENSSH_JAMMY_INSTALL_FAILED_FILE"; '
-        'echo "[inspire bootstrap] ERROR: $1" | tee -a "$OPENSSH_JAMMY_INSTALL_LOG"; }',
+        'echo "[inspire bootstrap] distro=${_OS_ID:-unknown}/${_OS_CODENAME:-unknown} '
+        'openssh-server=${_OPENSSH_SERVER_VERSION:-none} '
+        'openssh-client=${_OPENSSH_CLIENT_VERSION:-none} '
+        'openssh-sftp-server=${_OPENSSH_SFTP_VERSION:-none}"',
+        '_fail_openssh(){ touch "$OPENSSH_INSTALL_FAILED_FILE"; '
+        'echo "[inspire bootstrap] ERROR: $1" | tee -a "$OPENSSH_INSTALL_LOG"; }',
     ]
 
     # sshd:
-    #   - jammy accepts OpenSSH 8.9 when present.
-    #   - jammy installs/downgrades through SII internal apt because there is no 22.04 kit.
-    #   - non-jammy keeps the existing offline Ubuntu 24.04 kit path.
+    #   - Ubuntu containers are matched to their own codename at runtime.
+    #   - Missing or mismatched OpenSSH is installed/corrected from SII apt.
+    #   - Non-Ubuntu containers may reuse an existing sshd, but bootstrap will
+    #     not install OpenSSH from the old kit debs path.
     cmd_lines.append(
-        'rm -f "$OPENSSH_JAMMY_INSTALL_FAILED_FILE"; '
-        'if [ "$_OS_CODENAME" = "jammy" ]; then '
-        '_need_jammy_openssh=0; '
-        'if [ ! -x /usr/sbin/sshd ]; then _need_jammy_openssh=1; fi; '
-        'if [ -x /usr/sbin/sshd ] && '
-        '! printf "%s\\n%s\\n" "$_OPENSSH_SERVER_VERSION" "$_OPENSSH_BINARY_VERSION" '
-        '| grep -Eq "8[.]9p1|OpenSSH_8[.]9"; then _need_jammy_openssh=1; fi; '
-        'if [ "$_need_jammy_openssh" = "1" ]; then '
-        'echo "[inspire bootstrap] installing Ubuntu 22.04 OpenSSH via SII internal apt mirror" '
-        '| tee "$OPENSSH_JAMMY_INSTALL_LOG"; '
-        '_apt_source=/tmp/inspire-jammy-openssh.sources.list; '
+        'rm -f "$OPENSSH_INSTALL_FAILED_FILE"; '
+        'if [ "$_OS_ID" = "ubuntu" ] && [ -n "$_OS_CODENAME" ]; then '
+        'echo "[inspire bootstrap] resolving Ubuntu ${_OS_CODENAME} OpenSSH via SII internal apt mirror" '
+        '| tee "$OPENSSH_INSTALL_LOG"; '
+        '_apt_source="/tmp/inspire-openssh-${_OS_CODENAME}.sources.list"; '
         '_apt_sourceparts=/tmp/inspire-empty-apt-sourceparts; '
+        '_apt_lists="/tmp/inspire-openssh-${_OS_CODENAME}-apt-lists"; '
         'rm -rf "$_apt_sourceparts"; mkdir -p "$_apt_sourceparts"; '
+        'rm -rf "$_apt_lists"; mkdir -p "$_apt_lists/partial"; '
         'printf "%s\\n" '
-        '"deb $SII_UBUNTU_APT_MIRROR jammy main restricted universe multiverse" '
-        '"deb $SII_UBUNTU_APT_MIRROR jammy-updates main restricted universe multiverse" '
-        '"deb $SII_UBUNTU_APT_MIRROR jammy-security main restricted universe multiverse" '
+        '"deb $SII_UBUNTU_APT_MIRROR $_OS_CODENAME main restricted universe multiverse" '
+        '"deb $SII_UBUNTU_APT_MIRROR $_OS_CODENAME-updates main restricted universe multiverse" '
+        '"deb $SII_UBUNTU_APT_MIRROR $_OS_CODENAME-security main restricted universe multiverse" '
         '> "$_apt_source"; '
         '_apt_opts="-o Dir::Etc::sourcelist=$_apt_source '
-        '-o Dir::Etc::sourceparts=$_apt_sourceparts -o APT::Get::List-Cleanup=0"; '
+        '-o Dir::Etc::sourceparts=$_apt_sourceparts -o Dir::State::lists=$_apt_lists '
+        '-o APT::Get::List-Cleanup=0"; '
         'export DEBIAN_FRONTEND=noninteractive; '
         'if ! timeout 45 apt-get $_apt_opts -o Acquire::Retries=2 -o Acquire::http::Timeout=15 update -qq '
-        '>>"$OPENSSH_JAMMY_INSTALL_LOG" 2>&1; then '
-        '_fail_jammy_openssh "apt update failed; SII internal Ubuntu apt mirror is unreachable or rejected."; '
+        '>>"$OPENSSH_INSTALL_LOG" 2>&1; then '
+        '_fail_openssh "apt update failed; SII internal Ubuntu apt mirror is unreachable or rejected."; '
         'else '
-        'if [ -n "$_OPENSSH_SERVER_VERSION" ]; then '
-        'timeout 45 apt-get remove -y -qq openssh-server openssh-client openssh-sftp-server '
-        '>>"$OPENSSH_JAMMY_INSTALL_LOG" 2>&1 || true; fi; '
+        '_OPENSSH_SERVER_CANDIDATE=$(apt-cache $_apt_opts policy openssh-server '
+        '2>>"$OPENSSH_INSTALL_LOG" | awk \'/Candidate:/ {print $2; exit}\' || true); '
+        '_OPENSSH_CLIENT_CANDIDATE=$(apt-cache $_apt_opts policy openssh-client '
+        '2>>"$OPENSSH_INSTALL_LOG" | awk \'/Candidate:/ {print $2; exit}\' || true); '
+        '_OPENSSH_SFTP_CANDIDATE=$(apt-cache $_apt_opts policy openssh-sftp-server '
+        '2>>"$OPENSSH_INSTALL_LOG" | awk \'/Candidate:/ {print $2; exit}\' || true); '
+        'echo "[inspire bootstrap] internal apt candidate openssh-server=${_OPENSSH_SERVER_CANDIDATE:-none}" '
+        '>>"$OPENSSH_INSTALL_LOG"; '
+        'if [ -z "$_OPENSSH_SERVER_CANDIDATE" ] || [ "$_OPENSSH_SERVER_CANDIDATE" = "(none)" ] '
+        '|| [ -z "$_OPENSSH_CLIENT_CANDIDATE" ] || [ "$_OPENSSH_CLIENT_CANDIDATE" = "(none)" ] '
+        '|| [ -z "$_OPENSSH_SFTP_CANDIDATE" ] || [ "$_OPENSSH_SFTP_CANDIDATE" = "(none)" ]; then '
+        '_fail_openssh "SII internal Ubuntu apt mirror did not provide OpenSSH packages for ${_OS_CODENAME}."; '
+        'else '
+        '_need_openssh=0; '
+        'if [ ! -x /usr/sbin/sshd ]; then _need_openssh=1; fi; '
+        'if [ "$_OPENSSH_SERVER_VERSION" != "$_OPENSSH_SERVER_CANDIDATE" ]; then _need_openssh=1; fi; '
+        'if [ "$_OPENSSH_CLIENT_VERSION" != "$_OPENSSH_CLIENT_CANDIDATE" ]; then _need_openssh=1; fi; '
+        'if [ "$_OPENSSH_SFTP_VERSION" != "$_OPENSSH_SFTP_CANDIDATE" ]; then _need_openssh=1; fi; '
+        'if [ "$_need_openssh" = "1" ]; then '
+        'if [ -n "$_OPENSSH_SERVER_VERSION" ] || [ -n "$_OPENSSH_CLIENT_VERSION" ] '
+        '|| [ -n "$_OPENSSH_SFTP_VERSION" ]; then '
+        'timeout 45 apt-get $_apt_opts remove -y -qq '
+        'openssh-server openssh-client openssh-sftp-server '
+        '>>"$OPENSSH_INSTALL_LOG" 2>&1 || true; '
+        'dpkg --remove --force-depends openssh-server openssh-client openssh-sftp-server '
+        '>>"$OPENSSH_INSTALL_LOG" 2>&1 || true; fi; '
         'if ! timeout 120 apt-get $_apt_opts install -y -qq --allow-downgrades --no-install-recommends '
-        'openssh-server/jammy openssh-client/jammy openssh-sftp-server/jammy '
-        '>>"$OPENSSH_JAMMY_INSTALL_LOG" 2>&1; then '
-        '_fail_jammy_openssh "apt install failed; SII internal Ubuntu apt mirror did not provide the jammy OpenSSH packages."; '
+        '"openssh-server=$_OPENSSH_SERVER_CANDIDATE" "openssh-client=$_OPENSSH_CLIENT_CANDIDATE" '
+        '"openssh-sftp-server=$_OPENSSH_SFTP_CANDIDATE" '
+        '>>"$OPENSSH_INSTALL_LOG" 2>&1; then '
+        '_fail_openssh "apt install failed; SII internal Ubuntu apt mirror did not provide usable OpenSSH packages."; '
         'else '
+        'echo "[inspire bootstrap] installed OpenSSH from SII internal Ubuntu apt mirror" '
+        '>>"$OPENSSH_INSTALL_LOG"; '
+        'fi; '
+        'else '
+        'echo "[inspire bootstrap] existing OpenSSH matches internal apt candidate" '
+        '>>"$OPENSSH_INSTALL_LOG"; '
+        'fi; '
         '_OPENSSH_SERVER_VERSION=$(dpkg-query -W -f=\'${Version}\' openssh-server 2>/dev/null || true); '
+        '_OPENSSH_CLIENT_VERSION=$(dpkg-query -W -f=\'${Version}\' openssh-client 2>/dev/null || true); '
+        '_OPENSSH_SFTP_VERSION=$(dpkg-query -W -f=\'${Version}\' openssh-sftp-server 2>/dev/null || true); '
         '_OPENSSH_BINARY_VERSION=$(/usr/sbin/sshd -V 2>&1 || true); '
-        'if ! printf "%s\\n%s\\n" "$_OPENSSH_SERVER_VERSION" "$_OPENSSH_BINARY_VERSION" '
-        '| grep -Eq "8[.]9p1|OpenSSH_8[.]9"; then '
-        '_fail_jammy_openssh "installed OpenSSH is not Ubuntu 22.04 OpenSSH."; '
-        'fi; fi; fi; fi; '
+        'if [ ! -x /usr/sbin/sshd ]; then '
+        '_fail_openssh "OpenSSH install completed without /usr/sbin/sshd."; '
+        'elif [ "$_OPENSSH_SERVER_VERSION" != "$_OPENSSH_SERVER_CANDIDATE" ]; then '
+        '_fail_openssh "installed OpenSSH does not match the internal apt candidate for ${_OS_CODENAME}."; '
+        'elif [ "$_OPENSSH_CLIENT_VERSION" != "$_OPENSSH_CLIENT_CANDIDATE" ]; then '
+        '_fail_openssh "installed OpenSSH client does not match the internal apt candidate for ${_OS_CODENAME}."; '
+        'elif [ "$_OPENSSH_SFTP_VERSION" != "$_OPENSSH_SFTP_CANDIDATE" ]; then '
+        '_fail_openssh "installed OpenSSH SFTP server does not match the internal apt candidate for ${_OS_CODENAME}."; '
+        'fi; '
+        'fi; fi; '
         'elif [ ! -x /usr/sbin/sshd ]; then '
-        'if [ -d "$KIT/sshd-debs" ] && ls "$KIT/sshd-debs"/*.deb >/dev/null 2>&1; then '
-        'dpkg -i "$KIT/sshd-debs"/*.deb >/dev/null 2>&1 || true; fi; '
+        '_fail_openssh "OpenSSH is missing and this image is not a detectable Ubuntu release; '
+        'internal apt installation was skipped."; '
         "fi"
     )
 
     # Sentinel bookkeeping (both pieces in place → sentinel set; else clear).
     cmd_lines.append(
         'if [ -x "$_RT_BIN" ] && [ -x /usr/sbin/sshd ] '
-        '&& [ ! -f "$OPENSSH_JAMMY_INSTALL_FAILED_FILE" ]; then '
+        '&& [ ! -f "$OPENSSH_INSTALL_FAILED_FILE" ]; then '
         'touch "$BOOTSTRAP_SENTINEL"; '
         'else rm -f "$BOOTSTRAP_SENTINEL"; fi'
     )
 
-    # The dpkg-i in our cp/dpkg path skips postinst. Two follow-ups must run
-    # before sshd can start, even on a totally bare image:
-    #   (a) the privilege-separation user `sshd` must exist (postinst would
-    #       have run `useradd sshd`); without it sshd dies with
+    # These follow-ups keep sshd start robust across bare images and images
+    # left behind by older bootstrap attempts:
+    #   (a) the privilege-separation user `sshd` must exist; without it sshd dies with
     #       "Privilege separation user sshd does not exist".
-    #   (b) sshd insists on opening /etc/ssh/sshd_config; if the postinst
-    #       didn't run, the file is missing and sshd refuses to start.
-    #       We write a *minimal* config (no Port/ListenAddress, those are
-    #       set via -o); writing them in the file would conflict because
+    #   (b) sshd insists on opening /etc/ssh/sshd_config. We write a minimal
+    #       config when it is missing (no Port/ListenAddress, those are set via
+    #       -o); writing them in the file would conflict because
     #       sshd ADDs -o ListenAddress on top of config ListenAddress and
     #       the second bind() fails with "Address already in use".
     cmd_lines.append(
@@ -193,7 +236,7 @@ def build_rtunnel_setup_commands(
 
     # Start sshd on SSH_PORT if not already running.
     cmd_lines.append(
-        'if [ ! -f "$OPENSSH_JAMMY_INSTALL_FAILED_FILE" ] && [ -x /usr/sbin/sshd ] '
+        'if [ ! -f "$OPENSSH_INSTALL_FAILED_FILE" ] && [ -x /usr/sbin/sshd ] '
         '&& ! ps -ef | grep -q "[s]shd -p $SSH_PORT"; then '
         "mkdir -p /run/sshd && chmod 0755 /run/sshd; "
         "ssh-keygen -A >/dev/null 2>&1 || true; "
@@ -223,8 +266,8 @@ def build_rtunnel_setup_commands(
         "fi"
     )
     cmd_lines.append(
-        'if [ -f "$OPENSSH_JAMMY_INSTALL_FAILED_FILE" ]; then '
-        f'echo {OPENSSH_JAMMY_INSTALL_FAILED_MARKER}; '
+        'if [ -f "$OPENSSH_INSTALL_FAILED_FILE" ]; then '
+        f'echo {OPENSSH_INSTALL_FAILED_MARKER}; '
         "fi"
     )
     cmd_lines.append(f"echo {SETUP_DONE_MARKER}")
@@ -1099,8 +1142,11 @@ class RtunnelMissingInContainerError(RuntimeError):
     """
 
 
-class OpenSSHJammyInstallError(RuntimeError):
-    """Raised when Ubuntu 22.04 OpenSSH apt install/downgrade failed."""
+class OpenSSHInternalInstallError(RuntimeError):
+    """Raised when OpenSSH install/correction through the internal apt mirror failed."""
+
+
+OpenSSHJammyInstallError = OpenSSHInternalInstallError
 
 
 def _probe_terminal_command_markers_via_ws(
@@ -1229,16 +1275,16 @@ def _check_rtunnel_present_via_ws(
     )
 
 
-def _check_openssh_jammy_install_failed_via_ws(
+def _check_openssh_install_failed_via_ws(
     *,
     context: Any,
     lab_frame: Any,
     timeout_ms: int = 5000,
 ) -> Optional[bool]:
-    failed_marker = "__INSPIRE_OPENSSH_JAMMY_FAILED__"
-    ok_marker = "__INSPIRE_OPENSSH_JAMMY_OK__"
+    failed_marker = "__INSPIRE_OPENSSH_FAILED__"
+    ok_marker = "__INSPIRE_OPENSSH_OK__"
     command = (
-        f'[ -f "{OPENSSH_JAMMY_INSTALL_FAILED_FILE}" ] '
+        f'[ -f "{OPENSSH_INSTALL_FAILED_FILE}" ] '
         f'&& echo {failed_marker} || echo {ok_marker}'
     )
     return _probe_terminal_command_markers_via_ws(
@@ -1248,6 +1294,9 @@ def _check_openssh_jammy_install_failed_via_ws(
         markers={failed_marker: True, ok_marker: False},
         timeout_ms=timeout_ms,
     )
+
+
+_check_openssh_jammy_install_failed_via_ws = _check_openssh_install_failed_via_ws
 
 
 def _build_batch_setup_script(cmd_lines: list[str]) -> str:
@@ -2157,15 +2206,15 @@ def _setup_notebook_rtunnel_sync(
                 setup_sent_via_ws=setup_sent_via_ws,
                 timer=timer,
             )
-            jammy_openssh_failed = _check_openssh_jammy_install_failed_via_ws(
+            openssh_install_failed = _check_openssh_install_failed_via_ws(
                 context=context,
                 lab_frame=lab_frame,
             )
-            timer.mark("check_openssh_jammy")
-            _log.debug("jammy_openssh_failed=%s", jammy_openssh_failed)
-            if jammy_openssh_failed is True:
-                raise OpenSSHJammyInstallError(
-                    "Ubuntu 22.04 OpenSSH install/downgrade failed. "
+            timer.mark("check_openssh_install")
+            _log.debug("openssh_install_failed=%s", openssh_install_failed)
+            if openssh_install_failed is True:
+                raise OpenSSHInternalInstallError(
+                    "OpenSSH install/correction failed. "
                     "This bootstrap path requires the SII internal Ubuntu apt mirror."
                 )
             # Detect the "no rtunnel in image + no public network" case up
@@ -2241,7 +2290,11 @@ def setup_notebook_rtunnel(
 
 
 __all__ = [
+    "OpenSSHInternalInstallError",
     "OpenSSHJammyInstallError",
+    "OPENSSH_INSTALL_FAILED_MARKER",
+    "OPENSSH_INSTALL_FAILED_FILE",
+    "OPENSSH_INSTALL_LOG",
     "OPENSSH_JAMMY_INSTALL_LOG",
     "RtunnelMissingInContainerError",
     "SII_UBUNTU_APT_MIRROR",

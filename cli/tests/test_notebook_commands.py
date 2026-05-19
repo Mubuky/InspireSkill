@@ -883,7 +883,7 @@ def test_run_notebook_ssh_passes_resolved_runtime_to_setup(
     )
 
 
-def test_run_notebook_ssh_reports_jammy_openssh_install_failure(
+def test_run_notebook_ssh_reports_openssh_internal_install_failure(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     class FakeSession:
@@ -938,7 +938,7 @@ def test_run_notebook_ssh_reports_jammy_openssh_install_failure(
     monkeypatch.setattr(
         browser_api_module,
         "setup_notebook_rtunnel",
-        lambda **kwargs: (_ for _ in ()).throw(browser_api_module.OpenSSHJammyInstallError()),
+        lambda **kwargs: (_ for _ in ()).throw(browser_api_module.OpenSSHInternalInstallError()),
     )
 
     with pytest.raises(SystemExit) as exc:
@@ -957,10 +957,12 @@ def test_run_notebook_ssh_reports_jammy_openssh_install_failure(
 
     assert exc.value.code == EXIT_API_ERROR
     assert captured["type"] == "SetupError"
-    assert "Ubuntu 22.04 OpenSSH" in captured["message"]
+    assert "OpenSSH" in captured["message"]
+    assert "SII 内部 Ubuntu apt 源" in captured["message"]
+    assert "`VERSION_CODENAME`" in captured["hint"]
     assert "SII 内部 Ubuntu apt 源" in captured["hint"]
     assert browser_api_module.SII_UBUNTU_APT_MIRROR in captured["hint"]
-    assert browser_api_module.OPENSSH_JAMMY_INSTALL_LOG in captured["hint"]
+    assert browser_api_module.OPENSSH_INSTALL_LOG in captured["hint"]
 
 
 def test_run_notebook_ssh_refreshes_saved_profile_on_notebook_mismatch(
