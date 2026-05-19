@@ -69,6 +69,20 @@ class TestCreateListCurrent:
         storage.create_account("alice", "y = 2\n", overwrite=True)
         assert storage.account_config_path("alice").read_text() == "y = 2\n"
 
+    def test_create_overwrite_clears_old_account_cache_files(self, home: Path) -> None:
+        storage.create_account("alice", "x = 1\n")
+        account_dir = storage.account_dir("alice")
+        (account_dir / "web_session.json").write_text("{}")
+        (account_dir / "bridges.json").write_text("{}")
+        (account_dir / "rtunnel-proxy-state.json").write_text("{}")
+
+        storage.create_account("alice", "y = 2\n", overwrite=True)
+
+        assert storage.account_config_path("alice").read_text() == "y = 2\n"
+        assert not (account_dir / "web_session.json").exists()
+        assert not (account_dir / "bridges.json").exists()
+        assert not (account_dir / "rtunnel-proxy-state.json").exists()
+
     def test_set_and_get_current(self, home: Path) -> None:
         storage.create_account("alice", "x = 1\n")
         storage.set_current_account("alice")
@@ -85,6 +99,7 @@ class TestCreateListCurrent:
 
         storage.remove_account("alice")
         assert storage.current_account() is None
+        assert not storage.current_file().exists()
         assert storage.list_accounts() == ["bob"]
 
     def test_remove_keeps_current_if_different(self, home: Path) -> None:
@@ -300,6 +315,181 @@ class TestAccountUseCommand:
         result = runner.invoke(account, ["use", "ghost"])
         assert result.exit_code != 0
         assert "not found" in result.output
+
+    def test_use_switches_layered_config_and_browser_api_cache(
+        self, home: Path, runner: CliRunner
+    ) -> None:
+        from inspire.config import Config
+        from inspire.platform.web.browser_api import core as browser_core
+
+        storage.create_account(
+            "alice",
+            '[auth]\nusername = "alice"\npassword = "pw"\n'
+            '[api]\nbase_url = "https://alice.example"\n',
+        )
+        storage.create_account(
+            "bob",
+            '[auth]\nusername = "bob"\npassword = "pw"\n'
+            '[api]\nbase_url = "https://bob.example"\n',
+        )
+        storage.set_current_account("alice")
+        browser_core.clear_browser_api_runtime_cache()
+        cfg, _ = Config.from_files_and_env(require_credentials=False)
+        assert cfg.username == "alice"
+        assert browser_core._get_base_url() == "https://alice.example"
+
+        result = runner.invoke(account, ["use", "bob"])
+
+        assert result.exit_code == 0, result.output
+        cfg, _ = Config.from_files_and_env(require_credentials=False)
+        assert cfg.username == "bob"
+        assert browser_core._get_base_url() == "https://bob.example"
+
+    def test_use_clears_process_local_caches(self, home: Path, runner: CliRunner) -> None:
+        from inspire.cli.utils.auth import AuthManager
+        from inspire.platform.web import resources
+        from inspire.platform.web.browser_api import core as browser_core
+
+        storage.create_account("alice", "x = 1\n")
+        storage.create_account("bob", "x = 1\n")
+        storage.set_current_account("alice")
+
+        AuthManager._token = "stale-token"  # type: ignore[attr-defined]
+        AuthManager._expires_at = 9999999999  # type: ignore[attr-defined]
+        AuthManager._api = object()  # type: ignore[assignment]
+        AuthManager._cache_key = ("alice",)
+        browser_core._cached_base_url = "https://alice.example"  # type: ignore[attr-defined]
+        browser_core._cached_base_url_key = ("alice", None)  # type: ignore[attr-defined]
+        browser_core._cached_browser_api_prefix = "/alice"  # type: ignore[attr-defined]
+        browser_core._cached_browser_api_prefix_key = ("alice", None)  # type: ignore[attr-defined]
+        resources._availability_cache = {"all": ["stale"]}  # type: ignore[attr-defined]
+        resources._cache_time = 9999999999  # type: ignore[attr-defined]
+
+        result = runner.invoke(account, ["use", "bob"])
+
+        assert result.exit_code == 0, result.output
+        assert AuthManager._api is None
+        assert AuthManager._token is None
+        assert AuthManager._cache_key is None
+        assert browser_core._cached_base_url is None
+        assert browser_core._cached_browser_api_prefix is None
+        assert resources._availability_cache is None
+
+    def test_use_preserves_switched_away_account_disk_caches(
+        self, home: Path, runner: CliRunner
+    ) -> None:
+        storage.create_account("alice", "x = 1\n")
+        storage.create_account("bob", "x = 1\n")
+        storage.set_current_account("alice")
+        alice_dir = storage.account_dir("alice")
+        bob_dir = storage.account_dir("bob")
+        for name in ("web_session.json", "bridges.json", "rtunnel-proxy-state.json"):
+            (alice_dir / name).write_text(f"alice:{name}\n")
+            (bob_dir / name).write_text(f"bob:{name}\n")
+
+        result = runner.invoke(account, ["use", "bob"])
+
+        assert result.exit_code == 0, result.output
+        for name in ("web_session.json", "bridges.json", "rtunnel-proxy-state.json"):
+            assert (alice_dir / name).read_text() == f"alice:{name}\n"
+            assert (bob_dir / name).read_text() == f"bob:{name}\n"
+
+    def test_auth_manager_cache_is_account_sensitive(
+        self, home: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from inspire.cli.utils import auth as auth_module
+        from inspire.cli.utils.auth import AuthManager
+        from inspire.config import Config
+
+        created: list[object] = []
+
+        class FakeAPI:
+            def __init__(self, api_config) -> None:  # noqa: ANN001
+                self.config = api_config
+                self.token = ""
+                created.append(self)
+
+            def authenticate(self, username: str, password: str) -> None:
+                self.token = f"token:{username}:{password}"
+
+        monkeypatch.setattr(auth_module, "InspireAPI", FakeAPI)
+        storage.create_account(
+            "alice",
+            '[auth]\nusername = "alice-user"\npassword = "alice-pw"\n'
+            '[api]\nbase_url = "https://alice.example"\n',
+        )
+        storage.create_account(
+            "bob",
+            '[auth]\nusername = "bob-user"\npassword = "bob-pw"\n'
+            '[api]\nbase_url = "https://bob.example"\n',
+        )
+
+        storage.set_current_account("alice")
+        alice_cfg, _ = Config.from_files_and_env(require_credentials=True)
+        alice_api = AuthManager.get_api(alice_cfg)
+        assert alice_api.token == "token:alice-user:alice-pw"
+
+        storage.set_current_account("bob")
+        bob_cfg, _ = Config.from_files_and_env(require_credentials=True)
+        bob_api = AuthManager.get_api(bob_cfg)
+        bob_api_again = AuthManager.get_api(bob_cfg)
+
+        assert bob_api is not alice_api
+        assert bob_api.token == "token:bob-user:bob-pw"
+        assert bob_api_again is bob_api
+        assert len(created) == 2
+
+    def test_rtunnel_state_cache_lives_under_active_account(
+        self, home: Path
+    ) -> None:
+        from inspire.platform.web.browser_api import rtunnel as rtunnel_module
+
+        storage.create_account("alice", "x = 1\n")
+        storage.create_account("bob", "x = 1\n")
+
+        storage.set_current_account("alice")
+        rtunnel_module.save_rtunnel_proxy_state(
+            notebook_id="nb-1",
+            proxy_url="https://alice.example/proxy/31337/",
+            port=31337,
+            ssh_port=22222,
+            base_url="https://qz.example",
+            account=storage.current_account(),
+            now_ts=100.0,
+        )
+
+        storage.set_current_account("bob")
+        rtunnel_module.save_rtunnel_proxy_state(
+            notebook_id="nb-1",
+            proxy_url="https://bob.example/proxy/31337/",
+            port=31337,
+            ssh_port=22222,
+            base_url="https://qz.example",
+            account=storage.current_account(),
+            now_ts=100.0,
+        )
+
+        alice_state = storage.account_dir("alice") / "rtunnel-proxy-state.json"
+        bob_state = storage.account_dir("bob") / "rtunnel-proxy-state.json"
+        assert alice_state.exists()
+        assert bob_state.exists()
+        assert "alice.example" in alice_state.read_text()
+        assert "bob.example" in bob_state.read_text()
+
+    def test_rtunnel_state_falls_back_for_non_account_login_name(
+        self, home: Path
+    ) -> None:
+        from inspire.platform.web.browser_api import rtunnel as rtunnel_module
+
+        state_file = rtunnel_module.get_rtunnel_state_file(
+            account="user-1",
+            cache_dir=None,
+        )
+
+        assert state_file == home / ".cache" / "inspire-skill" / (
+            "rtunnel-proxy-state-user-1.json"
+        )
+        assert not (home / ".inspire" / "accounts" / "user-1").exists()
 
 
 class TestAccountCurrentCommand:

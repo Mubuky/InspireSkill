@@ -781,7 +781,28 @@ def test_asyncio_browser_fallback_uses_disposable_clients(monkeypatch: pytest.Mo
     assert all(c.closed for c in created), "disposable clients must be closed"
 
 
-def test_clear_session_cache_removes_every_account_cache(
+def test_clear_session_cache_removes_only_active_account_cache(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    accounts_root = fake_home / ".inspire" / "accounts"
+    (accounts_root / "alice").mkdir(parents=True)
+    (accounts_root / "alice" / "web_session.json").write_text("{}")
+    (accounts_root / "bob").mkdir()
+    (accounts_root / "bob" / "web_session.json").write_text("{}")
+    (accounts_root / "bob" / "config.toml").write_text("")  # unrelated file kept
+    (fake_home / ".inspire" / "current").write_text("alice\n")
+
+    monkeypatch.setattr(Path, "home", lambda: fake_home)
+    ws.clear_session_cache()
+
+    assert not (accounts_root / "alice" / "web_session.json").exists()
+    assert (accounts_root / "bob" / "web_session.json").exists()
+    assert (accounts_root / "bob" / "config.toml").exists()
+
+
+def test_clear_all_session_caches_removes_every_account_cache(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     fake_home = tmp_path / "home"
@@ -794,7 +815,7 @@ def test_clear_session_cache_removes_every_account_cache(
     (accounts_root / "bob" / "config.toml").write_text("")  # unrelated file kept
 
     monkeypatch.setattr(Path, "home", lambda: fake_home)
-    ws.clear_session_cache()
+    ws.clear_all_session_caches()
 
     assert not (accounts_root / "alice" / "web_session.json").exists()
     assert not (accounts_root / "bob" / "web_session.json").exists()

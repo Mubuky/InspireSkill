@@ -24,6 +24,7 @@ from inspire.platform.web.session.models import (
     SESSION_TTL,
     SessionExpiredError,
     WebSession,
+    get_session_cache_file,
 )
 from inspire.platform.web.session.proxy import get_playwright_proxy
 from inspire.platform.web.session.requests import build_requests_session
@@ -41,6 +42,7 @@ __all__ = [
     "SessionExpiredError",
     "WebSession",
     "build_requests_session",
+    "clear_all_session_caches",
     "clear_session_cache",
     "fetch_gpu_availability",
     "fetch_node_specs",
@@ -222,7 +224,34 @@ def fetch_gpu_availability(
     )
 
 
-def clear_session_cache() -> None:
+def _remove_session_file(session_file: Path | None) -> None:
+    if session_file is None or not session_file.exists():
+        return
+    try:
+        session_file.unlink()
+    except Exception:
+        return
+
+
+def clear_session_cache(
+    account: str | None = None,
+    *,
+    all_accounts: bool = False,
+) -> None:
+    """Remove cached Web session for one account.
+
+    By default this clears the active account only. Switching accounts and
+    refreshing an expired session must not delete another account's session,
+    because the Agent may switch back to that account immediately.
+    """
+    if not all_accounts:
+        _remove_session_file(get_session_cache_file(account))
+        return
+
+    clear_all_session_caches()
+
+
+def clear_all_session_caches() -> None:
     """Remove every ``~/.inspire/accounts/*/web_session.json``."""
     accounts_root = Path.home() / ".inspire" / "accounts"
     if not accounts_root.exists():
@@ -230,9 +259,4 @@ def clear_session_cache() -> None:
     for account_dir in accounts_root.iterdir():
         if not account_dir.is_dir():
             continue
-        session_file = account_dir / "web_session.json"
-        if session_file.exists():
-            try:
-                session_file.unlink()
-            except Exception:
-                continue
+        _remove_session_file(account_dir / "web_session.json")

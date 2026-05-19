@@ -110,7 +110,7 @@ inspire account use <name>
 inspire account current
 ```
 
-每个账号的 config、SSH tunnel bridges 和登录缓存都放在 `~/.inspire/accounts/<name>/` 下；活动账号由 `~/.inspire/current` 选择。
+每个账号的 config、SSH tunnel bridges、Notebook rtunnel proxy state 和 Web session 登录缓存都放在 `~/.inspire/accounts/<name>/` 下；活动账号由 `~/.inspire/current` 选择。`inspire account use <name>` 只切换指针并刷新当前进程里的账号敏感缓存，不删除被切走账号的本地缓存；需要删除账号目录时才用 `inspire account remove <name>`。
 
 ## 7. 代理 setup
 

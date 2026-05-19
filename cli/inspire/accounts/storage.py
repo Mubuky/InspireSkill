@@ -4,7 +4,8 @@ One account = one isolated directory under ``~/.inspire/accounts/<name>/``.
 The active account is named in a single line at ``~/.inspire/current``. No
 layered merge, no ``[accounts."<name>"]`` sections, no env-var precedence
 chains — every account's state (config.toml, bridges.json, web_session.json,
-rtunnel cache) lives inside its own directory and never leaks into another.
+rtunnel-proxy-state.json) lives inside its own directory and never leaks
+into another.
 
 All callers must resolve per-account paths through helpers here rather than
 hard-coding ``~/.inspire/accounts/<name>/...`` strings, so there is only one
@@ -42,6 +43,36 @@ _NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
 class AccountError(Exception):
     """Raised for account-related failures (not found, already exists, bad name)."""
+
+
+def _clear_process_account_caches() -> None:
+    """Best-effort reset for account-sensitive in-process caches.
+
+    Normal CLI invocations are one process per command, but tests, embedded
+    callers, and Click runners can switch accounts several times in one
+    process. Keep low-level account storage responsible for invalidating any
+    process-local state that would otherwise keep using the previous account.
+    """
+    try:
+        from inspire.cli.utils.auth import AuthManager
+
+        AuthManager.clear_cache()
+    except Exception:
+        pass
+
+    try:
+        from inspire.platform.web.browser_api.core import clear_browser_api_runtime_cache
+
+        clear_browser_api_runtime_cache()
+    except Exception:
+        pass
+
+    try:
+        from inspire.platform.web.resources import clear_availability_cache
+
+        clear_availability_cache()
+    except Exception:
+        pass
 
 
 def validate_name(name: str) -> str:
@@ -134,6 +165,7 @@ def set_current_account(name: str) -> None:
         raise AccountError(f"Account not found: {validated}")
     ensure_inspire_home()
     _atomic_write_text(current_file(), validated + "\n")
+    _clear_process_account_caches()
 
 
 def clear_current_account() -> None:
@@ -141,6 +173,7 @@ def clear_current_account() -> None:
         current_file().unlink()
     except FileNotFoundError:
         pass
+    _clear_process_account_caches()
 
 
 def create_account(name: str, config_content: str, *, overwrite: bool = False) -> Path:
@@ -149,8 +182,12 @@ def create_account(name: str, config_content: str, *, overwrite: bool = False) -
     if target.exists() and not overwrite:
         raise AccountError(f"Account already exists: {validated}")
     ensure_inspire_home()
-    target.mkdir(parents=True, exist_ok=overwrite)
+    if target.exists() and overwrite:
+        shutil.rmtree(target)
+    target.mkdir(parents=True, exist_ok=True)
     _atomic_write_text(target / CONFIG_FILENAME, config_content)
+    if current_account() == validated:
+        _clear_process_account_caches()
     return target
 
 
@@ -159,6 +196,7 @@ def remove_account(name: str) -> None:
     target = accounts_dir() / validated
     if not target.exists():
         raise AccountError(f"Account not found: {validated}")
+    was_active = current_account() == validated
     shutil.rmtree(target)
-    if current_account() == validated:
+    if was_active:
         clear_current_account()

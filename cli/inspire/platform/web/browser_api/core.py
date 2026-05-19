@@ -24,15 +24,47 @@ DEFAULT_BROWSER_API_PREFIX = "/api/v1"
 
 # Cached base URL and browser API prefix (loaded once at module import)
 _cached_base_url: str | None = None
+_cached_base_url_key: tuple[str | None, str | None] | None = None
 # Cached browser API prefix (loaded once at module import)
 _cached_browser_api_prefix: str | None = None
+_cached_browser_api_prefix_key: tuple[str | None, str | None] | None = None
+
+
+def _active_account_key() -> str | None:
+    try:
+        from inspire.accounts import current_account
+
+        return current_account()
+    except Exception:
+        return None
+
+
+def _base_url_cache_key() -> tuple[str | None, str | None]:
+    return (_active_account_key(), os.environ.get("INSPIRE_BASE_URL"))
+
+
+def _browser_api_prefix_cache_key() -> tuple[str | None, str | None]:
+    return (_active_account_key(), os.environ.get("INSPIRE_BROWSER_API_PREFIX"))
+
+
+def clear_browser_api_runtime_cache() -> None:
+    """Clear account-sensitive browser API runtime caches."""
+    global _cached_base_url, _cached_base_url_key
+    global _cached_browser_api_prefix, _cached_browser_api_prefix_key, BASE_URL
+
+    _cached_base_url = None
+    _cached_base_url_key = None
+    _cached_browser_api_prefix = None
+    _cached_browser_api_prefix_key = None
+    BASE_URL = DEFAULT_BASE_URL
 
 
 def _get_base_url() -> str:
     """Get base URL from layered config with sane fallback."""
-    global _cached_base_url
+    global _cached_base_url, _cached_base_url_key
 
-    if _cached_base_url is not None:
+    cache_key = _base_url_cache_key()
+    if _cached_base_url is not None and _cached_base_url_key == cache_key:
         return _cached_base_url
 
     try:
@@ -41,11 +73,13 @@ def _get_base_url() -> str:
         config, _ = Config.from_files_and_env(require_credentials=False)
         if config.base_url:
             _cached_base_url = config.base_url
+            _cached_base_url_key = cache_key
             return _cached_base_url
     except Exception:
         pass
 
     _cached_base_url = os.environ.get("INSPIRE_BASE_URL", DEFAULT_BASE_URL)
+    _cached_base_url_key = cache_key
     return _cached_base_url
 
 
@@ -56,9 +90,10 @@ def _set_base_url(url: str) -> None:
     ``--base-url`` into the module-level cache so that all subsequent
     browser-API calls resolve to the correct host.
     """
-    global _cached_base_url, BASE_URL
+    global _cached_base_url, _cached_base_url_key, BASE_URL
 
     _cached_base_url = url.rstrip("/")
+    _cached_base_url_key = _base_url_cache_key()
     BASE_URL = _cached_base_url
 
 
@@ -68,15 +103,20 @@ def _get_browser_api_prefix() -> str:
     Returns:
         Browser API prefix (e.g., "/api/v1" or custom)
     """
-    global _cached_browser_api_prefix
+    global _cached_browser_api_prefix, _cached_browser_api_prefix_key
 
-    if _cached_browser_api_prefix is not None:
+    cache_key = _browser_api_prefix_cache_key()
+    if (
+        _cached_browser_api_prefix is not None
+        and _cached_browser_api_prefix_key == cache_key
+    ):
         return _cached_browser_api_prefix
 
     # Check environment variable first (highest priority)
     env_prefix = os.environ.get("INSPIRE_BROWSER_API_PREFIX")
     if env_prefix:
         _cached_browser_api_prefix = env_prefix
+        _cached_browser_api_prefix_key = cache_key
         return _cached_browser_api_prefix
 
     # Try to load from config files
@@ -86,12 +126,14 @@ def _get_browser_api_prefix() -> str:
         config, _ = Config.from_files_and_env(require_credentials=False)
         if config.browser_api_prefix:
             _cached_browser_api_prefix = config.browser_api_prefix
+            _cached_browser_api_prefix_key = cache_key
             return _cached_browser_api_prefix
     except Exception:
         pass
 
     # Use default
     _cached_browser_api_prefix = DEFAULT_BROWSER_API_PREFIX
+    _cached_browser_api_prefix_key = cache_key
     return _cached_browser_api_prefix
 
 

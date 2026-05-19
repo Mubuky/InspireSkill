@@ -19,6 +19,25 @@ class AuthManager:
     _token: Optional[str] = None
     _expires_at: float = 0
     _api: Optional[InspireAPI] = None
+    _cache_key: Optional[tuple[object, ...]] = None
+
+    @classmethod
+    def _build_cache_key(cls, config: Config) -> tuple[object, ...]:
+        try:
+            from inspire.accounts import current_account
+
+            account = current_account()
+        except Exception:
+            account = None
+        return (
+            account,
+            config.username,
+            config.base_url,
+            config.openapi_prefix,
+            config.auth_endpoint,
+            config.requests_http_proxy,
+            config.requests_https_proxy,
+        )
 
     @classmethod
     def get_api(cls, config: Optional[Config] = None) -> InspireAPI:
@@ -37,8 +56,15 @@ class AuthManager:
         if config is None:
             config = Config.from_env()
 
-        # Check if we have a valid cached token
-        if cls._api is not None and cls._token and time.time() < cls._expires_at:
+        cache_key = cls._build_cache_key(config)
+
+        # Check if we have a valid cached token for this exact account/config.
+        if (
+            cls._api is not None
+            and cls._token
+            and cls._cache_key == cache_key
+            and time.time() < cls._expires_at
+        ):
             return cls._api
 
         # Create new API client
@@ -70,6 +96,7 @@ class AuthManager:
         cls._token = api.token
         cls._expires_at = time.time() + 3000  # ~50 minutes
         cls._api = api
+        cls._cache_key = cache_key
 
         return api
 
@@ -79,3 +106,4 @@ class AuthManager:
         cls._token = None
         cls._expires_at = 0
         cls._api = None
+        cls._cache_key = None

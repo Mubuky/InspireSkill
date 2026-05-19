@@ -188,6 +188,25 @@ def _normalize_account(account: Optional[str]) -> Optional[str]:
     return normalized or None
 
 
+def _active_account_name() -> str | None:
+    try:
+        from inspire.accounts import current_account
+
+        return current_account()
+    except Exception:
+        return None
+
+
+def _resolve_rtunnel_account(
+    *,
+    explicit: Optional[str],
+    session: Optional[WebSession] = None,
+) -> str | None:
+    return (explicit or "").strip() or _active_account_name() or (
+        str(getattr(session, "login_username", "") or "").strip() or None
+    )
+
+
 def _default_cache_dir() -> Path:
     return Path.home() / ".cache" / "inspire-skill"
 
@@ -197,6 +216,15 @@ def get_rtunnel_state_file(
     account: Optional[str],
     cache_dir: Optional[Path] = None,
 ) -> Path:
+    if cache_dir is None and account:
+        try:
+            from inspire.accounts import account_dir, account_exists
+
+            if account_exists(account):
+                return account_dir(account) / f"{_CACHE_BASENAME}.json"
+        except Exception:
+            pass
+
     root = cache_dir or _default_cache_dir()
     normalized = _normalize_account(account)
     if normalized:
@@ -598,7 +626,7 @@ def probe_existing_rtunnel_proxy_url(
     notebook_lab_path = _browser_api_path(f"/notebook/lab/{notebook_id}/proxy/{port}/")
     known_proxy_url = f"{base_url}{notebook_lab_path}"
 
-    resolved_account = account or session.login_username
+    resolved_account = _resolve_rtunnel_account(explicit=account, session=session)
     urls: list[str] = [known_proxy_url]
     if candidate_urls:
         urls.extend(candidate_urls)
@@ -1964,7 +1992,7 @@ def _setup_notebook_rtunnel_sync(
 
     if session is None:
         session = get_web_session()
-    account = session.login_username
+    account = _resolve_rtunnel_account(explicit=None, session=session)
     timer.mark("session_init")
 
     existing = probe_existing_rtunnel_proxy_url(
