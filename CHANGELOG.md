@@ -6,6 +6,15 @@
 
 当前无未发布变更。
 
+## 5.1.12（2026-05-19）
+
+### Fixed
+
+- 修复多账号在同一工作区切换时复用旧项目配置的问题：项目级配置现在按活动账号写入 `./.inspire/accounts/<account>/config.toml`，避免 workspace、path alias 和 workload profile 在不同账号之间串用。
+- 修复同一进程内多次 `inspire account use` 后可能继续使用旧账号运行时缓存的问题：OpenAPI token/client、Browser API base URL / prefix 和资源 availability 进程缓存会随账号切换刷新。
+- 修复 Web session 过期刷新时误清其它账号登录缓存的问题：默认只清当前账号的 `web_session.json`，保留被切走账号的登录态，方便快速切回。
+- 修复 Notebook rtunnel proxy state 的账号隔离边界：真实账号 alias 使用 `~/.inspire/accounts/<account>/rtunnel-proxy-state.json`，Notebook SSH bridges 和 Web session 继续保留在同一账号目录；切换账号不会删除被切走账号的本地缓存。
+
 ## 5.1.11（2026-05-17）
 
 ### Changed
