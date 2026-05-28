@@ -634,7 +634,7 @@ wheels = [
 
 [[package]]
 name = "inspire-skill"
-version = "5.1.22"
+version = "5.1.23"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
