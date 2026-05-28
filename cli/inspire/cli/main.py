@@ -112,6 +112,16 @@ def main(ctx: Context, json_output: bool, debug: bool) -> None:
             pass
 
 
+@click.command("_ensure-playwright-runtime", hidden=True)
+@click.option("--silent", is_flag=True, help="Suppress runtime setup output.")
+def ensure_playwright_runtime(silent: bool) -> None:
+    """Internal installer/update hook for browser runtime setup."""
+    from inspire.cli.commands.update import _ensure_playwright_runtime
+
+    if not _ensure_playwright_runtime(silent=silent):
+        raise SystemExit(1)
+
+
 # Register command groups
 main.add_command(account)
 main.add_command(job)
@@ -127,6 +137,7 @@ main.add_command(ray)
 main.add_command(serving)
 main.add_command(update)
 main.add_command(user)
+main.add_command(ensure_playwright_runtime)
 
 
 def cli() -> None:

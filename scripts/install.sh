@@ -86,7 +86,16 @@ need curl
 need tar
 need mktemp
 
-playwright_system_deps_args() {
+installed_inspire_python() {
+  local shebang py
+  IFS= read -r shebang < "$INSPIRE_BIN" || return 1
+  [[ "$shebang" == "#!"* ]] || return 1
+  py="${shebang#\#!}"
+  [[ -x "$py" ]] || return 1
+  printf '%s\n' "$py"
+}
+
+playwright_install_args() {
   if [[ "$(uname -s)" == "Linux" ]] && [[ "$(id -u)" == "0" ]] && command -v apt-get >/dev/null 2>&1; then
     printf '%s\n' install --with-deps chromium
   else
@@ -94,9 +103,11 @@ playwright_system_deps_args() {
   fi
 }
 
-playwright_probe() {
-  if command -v uv >/dev/null 2>&1; then
-    uvx --from "$SPEC" python - "$@" >/dev/null 2>&1 <<'PY'
+legacy_playwright_runtime_setup() {
+  local py
+  py="$(installed_inspire_python)" || return 1
+  "$py" -m playwright $(playwright_install_args) || return 1
+  "$py" - <<'PY'
 from inspire.platform.web.session.browser_launch import chromium_launch_kwargs
 from playwright.sync_api import sync_playwright
 
@@ -104,9 +115,6 @@ with sync_playwright() as p:
     browser = p.chromium.launch(**chromium_launch_kwargs(headless=True))
     browser.close()
 PY
-  else
-    return 1
-  fi
 }
 
 # ---- install CLI via uv tool / pipx ----------------------------------------
@@ -116,7 +124,6 @@ SPEC_LABEL="$(bold "$PACKAGE") (PyPI)"
 
 if (( INSTALL_CLI )); then
   if command -v uv >/dev/null 2>&1; then
-    INSTALLER="uv"
     log "installing $SPEC_LABEL via $(bold 'uv tool')"
     uv tool install --force --refresh "$SPEC" || die "uv tool install failed — check the spec '$SPEC' and try again."
     # If a previous run installed the same package via pipx, leaving it around
@@ -126,7 +133,6 @@ if (( INSTALL_CLI )); then
       pipx uninstall "$PACKAGE" >/dev/null 2>&1 || true
     fi
   elif command -v pipx >/dev/null 2>&1; then
-    INSTALLER="pipx"
     log "installing $SPEC_LABEL via $(bold pipx)"
     pipx install --force "$SPEC" || die "pipx install failed — check the spec '$SPEC' and try again."
   else
@@ -174,36 +180,14 @@ if (( INSTALL_CLI )); then
     ok "$(INSPIRE_SKIP_UPDATE_CHECK=1 "$INSPIRE_BIN" --version 2>/dev/null || echo "$PACKAGE installed")"
   fi
 
-  log "installing Playwright Chromium for SSO login"
-  PLAYWRIGHT_INSTALL_ARGS=(install chromium)
-  if command -v uv >/dev/null 2>&1; then
-    if uvx --from "$SPEC" playwright "${PLAYWRIGHT_INSTALL_ARGS[@]}" >/dev/null; then
-      ok "Playwright Chromium installed"
-    else
-      warn "couldn't install Playwright Chromium automatically; run: uvx --from $PACKAGE playwright ${PLAYWRIGHT_INSTALL_ARGS[*]}"
-    fi
-  elif command -v playwright >/dev/null 2>&1; then
-    if playwright "${PLAYWRIGHT_INSTALL_ARGS[@]}" >/dev/null; then
-      ok "Playwright Chromium installed"
-    else
-      warn "couldn't install Playwright Chromium automatically; run: playwright ${PLAYWRIGHT_INSTALL_ARGS[*]}"
-    fi
+  log "preparing Playwright Chromium runtime"
+  if INSPIRE_SKIP_UPDATE_CHECK=1 "$INSPIRE_BIN" _ensure-playwright-runtime; then
+    ok "Playwright Chromium runtime ready"
   else
-    warn "couldn't find a Playwright CLI to install Chromium automatically."
-  fi
-
-  if [[ "$INSTALLER" == "uv" ]]; then
-    if playwright_probe; then
-      ok "Playwright Chromium launch check passed"
-    else
-      PLAYWRIGHT_DEPS_ARGS=($(playwright_system_deps_args))
-      if [[ "${PLAYWRIGHT_DEPS_ARGS[*]}" == *"--with-deps"* ]]; then
-        warn "Playwright Chromium is installed but cannot start; `inspire init` will ask before installing Linux system dependencies."
-        warn "Manual repair command: uvx --from $PACKAGE playwright ${PLAYWRIGHT_DEPS_ARGS[*]}"
-      else
-        warn "Playwright Chromium is installed but cannot start; rerun `inspire init` for diagnostics."
-      fi
-    fi
+    warn "installed CLI has no runtime setup hook yet; using installer-managed setup"
+    legacy_playwright_runtime_setup \
+      || die "Playwright Chromium runtime setup failed — check network and local browser support, then rerun this installer."
+    ok "Playwright Chromium runtime ready"
   fi
 fi
 

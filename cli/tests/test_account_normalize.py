@@ -144,6 +144,22 @@ def test_playwright_missing_no_auto_install(
     assert install_called == []
 
 
+def test_missing_playwright_notice_uses_standard_update_entrypoint(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _isolate_inspire_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(normalize_module, "_playwright_chromium_available", lambda: False)
+
+    normalize_environment(interactive=True, auto_install_playwright=False)
+
+    stderr = capsys.readouterr().err
+    assert "inspire update --cli-only" in stderr
+    assert "uvx --from" not in stderr
+    assert "python -m playwright" not in stderr
+
+
 def test_playwright_missing_auto_install_succeeds(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -205,6 +221,7 @@ def test_install_playwright_chromium_uses_shared_install_args(
             "with-deps" if include_system_deps else "no-deps",
         ],
     )
+    monkeypatch.setattr(normalize_module, "_current_environment_playwright_bin", lambda: None)
     monkeypatch.setattr(normalize_module.shutil, "which", lambda _name: None)
 
     def fake_run(cmd: list[str], **_kwargs) -> None:
@@ -216,3 +233,32 @@ def test_install_playwright_chromium_uses_shared_install_args(
     assert calls == [
         [normalize_module.sys.executable, "-m", "playwright", "install", "no-deps"]
     ]
+
+
+def test_install_playwright_chromium_prefers_current_environment_binary(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    bin_dir = tmp_path / "tool" / "bin"
+    bin_dir.mkdir(parents=True)
+    python = bin_dir / "python"
+    playwright = bin_dir / "playwright"
+    python.write_text("", encoding="utf-8")
+    playwright.write_text("", encoding="utf-8")
+    playwright.chmod(0o755)
+    monkeypatch.setattr(normalize_module.sys, "executable", str(python))
+    monkeypatch.setattr(normalize_module.shutil, "which", lambda _name: "/usr/local/bin/playwright")
+    monkeypatch.setattr(
+        normalize_module,
+        "playwright_install_args",
+        lambda *, include_system_deps=None: ["install", "chromium"],
+    )
+    calls: list[list[str]] = []
+
+    def fake_run(cmd: list[str], **_kwargs) -> None:
+        calls.append(cmd)
+
+    monkeypatch.setattr(normalize_module.subprocess, "run", fake_run)
+
+    assert normalize_module._install_playwright_chromium()
+    assert calls == [[str(playwright), "install", "chromium"]]

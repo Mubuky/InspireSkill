@@ -5,7 +5,7 @@ Covers two things a user might want:
     inspire update                 # full upgrade: CLI package + SKILL/references
     inspire update --check         # only check upstream; write cache; print status
     inspire update --silent        # suppress output (used by the background check)
-    inspire update --cli-only      # upgrade the Python package only
+    inspire update --cli-only      # upgrade the Python package and runtime only
     inspire update --skill-only    # refresh SKILL.md + references/ only
 
 Design notes:
@@ -24,6 +24,7 @@ import json
 import os
 import re
 import shutil
+import shlex
 import subprocess
 import sys
 import tarfile
@@ -42,6 +43,11 @@ from inspire.cli.utils.update_notice import (
     run_check,
     _is_newer,
 )
+from inspire.accounts.normalize import (
+    _install_playwright_chromium,
+    _playwright_chromium_available,
+)
+from inspire.platform.web.session.browser_launch import playwright_install_args
 
 
 def _opencode_config_dir() -> Path:
@@ -74,6 +80,7 @@ STALE_SKILL_PATTERNS = (
     ("INSPIRE_TARGET_DIR", "legacy target-dir environment variable"),
     ("env -u INSPIRE_PLAYWRIGHT_PROXY", "legacy proxy-unset command prefix"),
     ("-u INSPIRE_RTUNNEL_PROXY", "legacy rtunnel proxy command prefix"),
+    ("uvx --from inspire-skill playwright", "low-level Playwright runtime repair command"),
     ("[paths].target_dir", "legacy target_dir config path"),
     ("Missing target directory configuration", "legacy target_dir error wording"),
 )
@@ -401,6 +408,174 @@ def _upgrade_cli(silent: bool) -> bool:
             fg="red",
             err=True,
         )
+    return False
+
+
+def _ensure_playwright_runtime(silent: bool) -> bool:
+    """Ensure the installed InspireSkill environment can launch Chromium."""
+    if _playwright_chromium_available():
+        if not silent:
+            click.secho("✓ Playwright Chromium runtime verified", fg="green")
+        return True
+
+    if not silent:
+        click.secho("› preparing Playwright Chromium runtime", fg="blue")
+    if not _install_playwright_chromium(include_system_deps=None):
+        if not silent:
+            click.secho(
+                "✗ Playwright Chromium runtime setup failed. Re-run `inspire update` "
+                "after checking network access to the package and browser mirrors.",
+                fg="red",
+                err=True,
+            )
+        return False
+
+    if _playwright_chromium_available():
+        if not silent:
+            click.secho("✓ Playwright Chromium runtime verified", fg="green")
+        return True
+
+    if not silent:
+        click.secho(
+            "✗ Playwright Chromium was installed but could not start in this environment. "
+            "Re-run the standard installer after checking local browser support.",
+            fg="red",
+            err=True,
+        )
+    return False
+
+
+def _global_inspire_executable() -> str | None:
+    uv_info = _uv_tool_info()
+    if uv_info and uv_info.executable_path:
+        return uv_info.executable_path
+    return shutil.which("inspire")
+
+
+_PLAYWRIGHT_RUNTIME_PROBE = """
+from inspire.platform.web.session.browser_launch import chromium_launch_kwargs
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(**chromium_launch_kwargs(headless=True))
+    browser.close()
+"""
+
+
+def _emit_completed_process(proc: subprocess.CompletedProcess[str]) -> None:
+    if proc.stdout:
+        click.echo(proc.stdout, nl=False)
+    if proc.stderr:
+        click.echo(proc.stderr, nl=False, err=True)
+
+
+def _run_runtime_command(cmd: list[str]) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    env["INSPIRE_SKIP_UPDATE_CHECK"] = "1"
+    return subprocess.run(
+        cmd,
+        check=False,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+
+def _wrapper_python_from_inspire_executable(executable: str) -> str | None:
+    try:
+        with Path(executable).open("r", encoding="utf-8") as fh:
+            shebang = fh.readline().strip()
+    except OSError:
+        return None
+    if not shebang.startswith("#!"):
+        return None
+    try:
+        parts = shlex.split(shebang[2:])
+    except ValueError:
+        return None
+    if not parts:
+        return None
+    if Path(parts[0]).name == "env" and len(parts) >= 2:
+        return shutil.which(parts[1])
+    return parts[0] if Path(parts[0]).exists() else None
+
+
+def _ensure_playwright_runtime_with_wrapper_python(executable: str, silent: bool) -> bool:
+    python = _wrapper_python_from_inspire_executable(executable)
+    if not python:
+        if not silent:
+            click.secho(
+                f"✗ could not resolve the Python runtime behind `{executable}`.",
+                fg="red",
+                err=True,
+            )
+        return False
+
+    install_proc = _run_runtime_command(
+        [python, "-m", "playwright", *playwright_install_args(include_system_deps=None)],
+    )
+    if not silent:
+        _emit_completed_process(install_proc)
+    if install_proc.returncode != 0:
+        return False
+
+    probe_proc = _run_runtime_command([python, "-c", _PLAYWRIGHT_RUNTIME_PROBE])
+    if not silent:
+        _emit_completed_process(probe_proc)
+    return probe_proc.returncode == 0
+
+
+def _is_missing_runtime_hook(output: str) -> bool:
+    return "_ensure-playwright-runtime" in output and "No such command" in output
+
+
+def _ensure_global_playwright_runtime(silent: bool) -> bool:
+    executable = _global_inspire_executable()
+    if not executable:
+        if not silent:
+            click.secho(
+                "✗ `inspire` is not on PATH after update, so runtime setup could not run.",
+                fg="red",
+                err=True,
+            )
+        return False
+
+    cmd = [executable, "_ensure-playwright-runtime"]
+    if silent:
+        cmd.append("--silent")
+    env = os.environ.copy()
+    env["INSPIRE_SKIP_UPDATE_CHECK"] = "1"
+    try:
+        proc = subprocess.run(
+            cmd,
+            check=False,
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except OSError as e:
+        if not silent:
+            click.secho(f"✗ runtime setup could not start `{executable}`: {e}", fg="red", err=True)
+        return False
+    if proc.returncode == 0:
+        if not silent:
+            _emit_completed_process(proc)
+        return True
+
+    output = (proc.stdout or "") + (proc.stderr or "")
+    if _is_missing_runtime_hook(output):
+        if not silent:
+            click.secho(
+                "› installed CLI is older than the runtime setup hook; "
+                "using the installed wrapper environment",
+                fg="blue",
+            )
+        return _ensure_playwright_runtime_with_wrapper_python(executable, silent)
+
+    if not silent:
+        _emit_completed_process(proc)
     return False
 
 
@@ -736,7 +911,7 @@ def _print_status(check_result: dict, silent: bool) -> None:
 @click.command("update")
 @click.option("--check", "check_only", is_flag=True, help="Only check upstream; don't upgrade.")
 @click.option("--silent", is_flag=True, help="Suppress output (used by background checks).")
-@click.option("--cli-only", is_flag=True, help="Upgrade the Python package only.")
+@click.option("--cli-only", is_flag=True, help="Upgrade the Python package and runtime only.")
 @click.option("--skill-only", is_flag=True, help="Refresh SKILL.md + references/ only.")
 def update(check_only: bool, silent: bool, cli_only: bool, skill_only: bool) -> None:
     """Check for and install newer InspireSkill versions."""
@@ -784,6 +959,9 @@ def update(check_only: bool, silent: bool, cli_only: bool, skill_only: bool) -> 
         silent=silent,
     )
     ok = audit_ok and ok
+
+    if ok and not skill_only:
+        ok = _ensure_global_playwright_runtime(silent) and ok
 
     # Re-check after upgrade so the cache reflects the externally visible
     # PATH version, not the already-imported module version from this process.

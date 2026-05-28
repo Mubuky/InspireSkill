@@ -89,7 +89,7 @@ curl -fsSL https://raw.githubusercontent.com/realZillionX/InspireSkill/main/scri
 ```bash
 inspire update                # CLI 包 + SKILL/references 一起升到最新
 inspire update --check        # 只检查，不动
-inspire update --cli-only     # 仅升 Python 包
+inspire update --cli-only     # 仅升 CLI 包与运行时
 inspire update --skill-only   # 仅刷 SKILL.md / references/
 ```
 
@@ -185,7 +185,7 @@ inspire resources availability --workspace all --include-cpu
 SKILL.md 装完是一份**通用 playbook**。日常 workspace 基本就是 `CPU资源空间` 和 `分布式训练空间`；资源条件不要写成隐式默认值，把 `workspace`、`project`、`group`、`quota` 和 `image` 组合成 workload profile，并在 `inspire notebook/job/hpc/... create --profile <name>` 或 batch 文件里显式使用。如果 Agent 的主战场是启智的国产卡分区、`CI-情境智能` 工作空间，或小组自己划走的专属资源开发空间，两条口子做定制：
 
 1. **项目级（推荐）**：改仓库根的 `INSPIRE.md`，并用 `inspire <workload> profile set <name> ...` 保存条件组；`Path Conventions` 只写 remote path alias。`INSPIRE.md` 属于当前 repo，不会被 `inspire update` 覆写，也方便跟组内协作。
-2. **Harness 级**：直接编辑 `~/.claude/skills/inspire/SKILL.md` 和同目录 `references/`（Codex / Gemini / OpenClaw / OpenCode 同理），改按需加载入口或对应使用手册。注意：`inspire update` **默认会覆盖 SKILL.md 和 references/**；维护了本地改动后用 `inspire update --cli-only` 只升级 CLI 不动 skill 文件，想合并上游变更时再手动 diff。
+2. **Harness 级**：直接编辑 `~/.claude/skills/inspire/SKILL.md` 和同目录 `references/`（Codex / Gemini / OpenClaw / OpenCode 同理），改按需加载入口或对应使用手册。注意：`inspire update` **默认会覆盖 SKILL.md 和 references/**；维护了本地改动后用 `inspire update --cli-only` 只升级 CLI 与运行时、不动 skill 文件，想合并上游变更时再手动 diff。
 
 ---
 

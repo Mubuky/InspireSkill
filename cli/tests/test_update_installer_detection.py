@@ -31,6 +31,8 @@ import pytest
 
 from inspire.cli.commands.update import (
     _detect_installer,
+    _ensure_global_playwright_runtime,
+    _ensure_playwright_runtime,
     _is_local_requirement,
     _parse_uv_tool_list,
     _scan_stale_skill_patterns,
@@ -153,6 +155,121 @@ def test_upgrade_cli_from_repo_venv_updates_global_uv_tool(
     assert calls == [["uv", "tool", "install", "--force", "--refresh", "inspire-skill"]]
 
 
+def test_update_runtime_check_installs_missing_playwright_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    readiness = iter([False, True])
+    install_kwargs: list[dict[str, object]] = []
+    monkeypatch.setattr(update_module, "_playwright_chromium_available", lambda: next(readiness))
+    monkeypatch.setattr(
+        update_module,
+        "_install_playwright_chromium",
+        lambda **kwargs: install_kwargs.append(kwargs) or True,
+    )
+
+    assert _ensure_playwright_runtime(silent=True) is True
+    assert install_kwargs == [{"include_system_deps": None}]
+
+
+def test_update_runtime_check_fails_if_playwright_still_cannot_start(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(update_module, "_playwright_chromium_available", lambda: False)
+    monkeypatch.setattr(update_module, "_install_playwright_chromium", lambda **_kwargs: True)
+
+    assert _ensure_playwright_runtime(silent=True) is False
+
+
+def test_global_runtime_setup_uses_global_inspire_executable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[list[str], str | None]] = []
+    monkeypatch.setattr(
+        update_module,
+        "_uv_tool_info",
+        lambda: update_module.UvToolInfo(
+            executable_path="/Users/zillionx/.local/bin/inspire",
+        ),
+    )
+
+    def fake_run(cmd, check, env, text, stdout, stderr):
+        calls.append((cmd, env.get("INSPIRE_SKIP_UPDATE_CHECK") if env else None))
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(update_module.subprocess, "run", fake_run)
+
+    assert _ensure_global_playwright_runtime(silent=True) is True
+    assert calls == [
+        (["/Users/zillionx/.local/bin/inspire", "_ensure-playwright-runtime", "--silent"], "1")
+    ]
+
+
+def test_global_runtime_setup_falls_back_when_hidden_hook_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fallback_calls: list[tuple[str, bool]] = []
+    monkeypatch.setattr(
+        update_module,
+        "_uv_tool_info",
+        lambda: update_module.UvToolInfo(executable_path="/Users/zillionx/.local/bin/inspire"),
+    )
+
+    def fake_run(cmd, check, env, text, stdout, stderr):
+        return subprocess.CompletedProcess(
+            cmd,
+            2,
+            stdout="",
+            stderr="Error: No such command '_ensure-playwright-runtime'.\n",
+        )
+
+    monkeypatch.setattr(update_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        update_module,
+        "_ensure_playwright_runtime_with_wrapper_python",
+        lambda executable, silent: fallback_calls.append((executable, silent)) or True,
+    )
+
+    assert _ensure_global_playwright_runtime(silent=True) is True
+    assert fallback_calls == [("/Users/zillionx/.local/bin/inspire", True)]
+
+
+def test_update_runs_global_runtime_setup_after_cli_upgrade(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr(update_module, "run_check", lambda **_kwargs: {"latest": "4.1.1"})
+    monkeypatch.setattr(update_module, "_print_status", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(update_module, "_upgrade_cli", lambda silent: calls.append("cli") or True)
+    monkeypatch.setattr(
+        update_module,
+        "_refresh_skill_files",
+        lambda silent, latest_version=None: calls.append("skills") or True,
+    )
+    monkeypatch.setattr(
+        update_module,
+        "_audit_update_state",
+        lambda **_kwargs: (calls.append("audit") or True, "4.1.1"),
+    )
+    monkeypatch.setattr(
+        update_module,
+        "_ensure_global_playwright_runtime",
+        lambda silent: calls.append("runtime") or True,
+    )
+    monkeypatch.setattr(
+        "inspire.accounts.normalize_environment",
+        lambda **_kwargs: calls.append("normalize"),
+    )
+
+    update_module.update.callback(
+        check_only=False,
+        silent=True,
+        cli_only=False,
+        skill_only=False,
+    )
+
+    assert calls == ["cli", "skills", "audit", "runtime", "normalize"]
+
+
 def test_parse_uv_tool_list_captures_local_source_and_executable() -> None:
     info = _parse_uv_tool_list(
         "inspire-skill v4.1.1 [required: file:///Users/zillionx/InspireSkill/cli] "
@@ -178,6 +295,19 @@ def test_stale_skill_patterns_detect_legacy_target_dir(tmp_path: Path) -> None:
 
     assert errors
     assert "INSPIRE_TARGET_DIR" in errors[0]
+
+
+def test_stale_skill_patterns_detect_low_level_playwright_repair(tmp_path: Path) -> None:
+    (tmp_path / "references").mkdir()
+    (tmp_path / "references" / "setup.md").write_text(
+        "Repair with uvx --from inspire-skill playwright install chromium.\n",
+        encoding="utf-8",
+    )
+
+    errors = _scan_stale_skill_patterns(tmp_path)
+
+    assert errors
+    assert "uvx --from inspire-skill playwright" in errors[0]
 
 
 def test_global_audit_prefers_uv_tool_executable_over_repo_venv_path(

@@ -70,8 +70,8 @@ def normalize_environment(
 
     ``interactive=True`` permits printing reminders to stderr; pair with
     ``auto_install_playwright=True`` from `inspire account add` to offer
-    an automatic ``playwright install chromium`` when the browser is
-    missing. Other entry points should call with both False.
+    automatic browser runtime setup when Chromium is missing. Other entry
+    points should call with both False.
     """
     report = NormalizationReport()
 
@@ -176,27 +176,23 @@ def _print_remaining_observations(report: NormalizationReport) -> None:
     if not report.playwright_ready:
         if report.playwright_install_attempted and not report.playwright_install_succeeded:
             print(
-                "  Playwright chromium install failed. SSO login will fail until you run "
-                "manually:\n"
-                f"    {playwright_install_hint(include_system_deps=False)}\n"
-                "    # or, on a non-uv install: playwright "
-                + " ".join(playwright_install_args(include_system_deps=False)),
+                "  Playwright chromium setup failed. SSO login will fail until the "
+                "standard CLI environment is repaired:\n"
+                f"    {playwright_install_hint(include_system_deps=False)}",
                 file=sys.stderr,
             )
         elif report.playwright_install_attempted and report.playwright_install_succeeded:
             print(
                 "  Playwright chromium is installed but cannot start in this environment. "
-                "If `inspire init` asks to install Linux system dependencies, accept it; "
-                "or run manually:\n"
+                "Repair the standard CLI environment, then retry:\n"
                 f"    {playwright_install_hint()}",
                 file=sys.stderr,
             )
         else:
             print(
-                "  Playwright chromium not detected. SSO login will need it. Install with:\n"
-                f"    {playwright_install_hint(include_system_deps=False)}\n"
-                "    # or, on a non-uv install: playwright "
-                + " ".join(playwright_install_args(include_system_deps=False)),
+                "  Playwright chromium not detected. SSO login will need it. "
+                "Prepare the standard CLI environment with:\n"
+                f"    {playwright_install_hint(include_system_deps=False)}",
                 file=sys.stderr,
             )
 
@@ -218,19 +214,29 @@ def _playwright_chromium_available() -> bool:
         return False
 
 
-def _install_playwright_chromium(timeout_s: int = 600) -> bool:
+def _current_environment_playwright_bin() -> str | None:
+    candidate = Path(sys.executable).with_name("playwright")
+    if candidate.is_file() and os.access(candidate, os.X_OK):
+        return str(candidate)
+    return None
+
+
+def _install_playwright_chromium(
+    timeout_s: int = 600,
+    *,
+    include_system_deps: bool | None = False,
+) -> bool:
     """Attempt Playwright Chromium installation. Returns True on success.
 
-    Tries the in-venv ``playwright`` binary first (works under ``uv tool
-    install``); falls back to ``python -m playwright`` if the bin is not
-    on PATH from this process.
+    Tries the in-venv ``playwright`` binary first; falls back to the current
+    package interpreter if the bin is not on PATH from this process.
     """
     candidates: list[list[str]] = []
     # Account setup should not mutate the base image's apt layer. It may
     # download the browser binary, but Linux system dependencies are installed
     # only from `inspire init`, after a launch probe fails and the user accepts.
-    install_args = playwright_install_args(include_system_deps=False)
-    direct = shutil.which("playwright")
+    install_args = playwright_install_args(include_system_deps=include_system_deps)
+    direct = _current_environment_playwright_bin() or shutil.which("playwright")
     if direct:
         candidates.append([direct, *install_args])
     candidates.append([sys.executable, "-m", "playwright", *install_args])

@@ -49,8 +49,8 @@ def _is_browser_launch_runtime_error(exc: BaseException) -> bool:
 
 def _raise_browser_launch_runtime_error(exc: BaseException) -> None:
     raise RuntimeError(
-        "Playwright Chromium could not start for Inspire login. Repair the "
-        "browser runtime and Linux container dependencies with:\n"
+        "Playwright Chromium could not start for Inspire login. Prepare the "
+        "standard CLI runtime with:\n"
         f"    {playwright_install_hint()}\n"
         "Then retry `inspire init`."
     ) from exc
