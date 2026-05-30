@@ -2,6 +2,19 @@
 
 本文件同步 GitHub Releases 正文格式；Release 页面是发布说明的标准口径。
 
+# v5.2.3
+
+## 更新内容
+
+### 修复
+
+- 修复 `inspire update` 自更新后仍用旧进程继续刷新 skills 的问题。升级 CLI 后会调用新安装的 `inspire _post-update` 完成 skill 刷新、安装审计、Playwright runtime 校验和 Release 更新摘要，避免旧版本逻辑继续写过期 harness 路径。
+- 修复从旧 Gemini CLI 目录迁移到 Antigravity 时留下 `~/.gemini/skills/inspire/` 的问题；安装器和 `inspire update` 现在会清理该遗留目录，并使用官方 `~/.gemini/config/skills/inspire/`。
+
+### 说明
+
+- 如果已经从 `5.2.1` 升到 `5.2.2` 并看到 `~/.gemini/skills/inspire` 被刷新，运行 `inspire update` 升到 `5.2.3` 后会改用新的 post-update 流程；如需立即重刷 skill，可在升级后运行 `inspire update --skill-only`。
+
 # v5.2.2
 
 ## 更新内容

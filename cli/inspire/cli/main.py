@@ -122,6 +122,29 @@ def ensure_playwright_runtime(silent: bool) -> None:
         raise SystemExit(1)
 
 
+@click.command("_post-update", hidden=True)
+@click.option("--previous-version", required=True, help="Version before the outer update.")
+@click.option("--expected-version", required=True, help="Expected installed version.")
+@click.option("--cli-only", is_flag=True, help="Skip skill refresh.")
+@click.option("--silent", is_flag=True, help="Suppress post-update output.")
+def post_update(
+    previous_version: str,
+    expected_version: str,
+    cli_only: bool,
+    silent: bool,
+) -> None:
+    """Internal hook run from the newly installed CLI after self-update."""
+    from inspire.cli.commands.update import _run_post_update_tasks
+
+    if not _run_post_update_tasks(
+        expected_version=expected_version,
+        previous_version=previous_version,
+        cli_only=cli_only,
+        silent=silent,
+    ):
+        raise SystemExit(1)
+
+
 # Register command groups
 main.add_command(account)
 main.add_command(job)
@@ -138,6 +161,7 @@ main.add_command(serving)
 main.add_command(update)
 main.add_command(user)
 main.add_command(ensure_playwright_runtime)
+main.add_command(post_update)
 
 
 def cli() -> None:

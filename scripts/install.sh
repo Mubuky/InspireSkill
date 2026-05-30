@@ -216,15 +216,24 @@ TOP="$(find "$TMP" -mindepth 1 -maxdepth 1 -type d | head -n1)"
 install_skill() {
   local harness="$1"
   local target
+  local legacy_target=""
   case "$harness" in
     claude)   target="$HOME/.claude/skills/inspire"                                    ;;
     codex)    target="$HOME/.codex/skills/inspire"                                     ;;
-    antigravity) target="$HOME/.gemini/config/skills/inspire"                          ;;
+    antigravity)
+      target="$HOME/.gemini/config/skills/inspire"
+      legacy_target="$HOME/.gemini/skills/inspire"
+      ;;
     cursor)   target="$HOME/.cursor/skills/inspire"                                    ;;
     openclaw) target="$HOME/.openclaw/skills/inspire"                                  ;;
     opencode) target="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}/skills/inspire"   ;;
     qoder)    target="$HOME/.qoder/skills/inspire"                                     ;;
   esac
+
+  if [[ -n "$legacy_target" && "$legacy_target" != "$target" && ( -L "$legacy_target" || -e "$legacy_target" ) ]]; then
+    rm -rf "$legacy_target"
+    ok "removed legacy skill path → $(dim "$legacy_target")"
+  fi
 
   # Wipe prior install (handles real dirs and stale symlink layouts).
   if [[ -L "$target" || -e "$target" ]]; then

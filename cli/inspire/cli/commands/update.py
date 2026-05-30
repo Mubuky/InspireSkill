@@ -69,6 +69,9 @@ HARNESS_SKILL_DIRS = {
     "opencode": _opencode_config_dir() / "skills" / "inspire",
     "qoder": Path.home() / ".qoder" / "skills" / "inspire",
 }
+HARNESS_LEGACY_SKILL_DIRS = {
+    "antigravity": [Path.home() / ".gemini" / "skills" / "inspire"],
+}
 HARNESS_ROOTS = {
     "claude": Path.home() / ".claude",
     "codex": Path.home() / ".codex",
@@ -602,6 +605,56 @@ def _ensure_global_playwright_runtime(silent: bool) -> bool:
     return False
 
 
+def _run_post_update_command(
+    *,
+    previous_version: str,
+    expected_version: str,
+    cli_only: bool,
+    silent: bool,
+) -> bool:
+    executable = _global_inspire_executable()
+    if not executable:
+        if not silent:
+            click.secho(
+                "✗ `inspire` is not on PATH after update, so post-update setup could not run.",
+                fg="red",
+                err=True,
+            )
+        return False
+
+    cmd = [
+        executable,
+        "_post-update",
+        "--previous-version",
+        previous_version,
+        "--expected-version",
+        expected_version,
+    ]
+    if cli_only:
+        cmd.append("--cli-only")
+    if silent:
+        cmd.append("--silent")
+
+    env = os.environ.copy()
+    env["INSPIRE_SKIP_UPDATE_CHECK"] = "1"
+    try:
+        proc = subprocess.run(
+            cmd,
+            check=False,
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except OSError as e:
+        if not silent:
+            click.secho(f"✗ post-update setup could not start `{executable}`: {e}", fg="red", err=True)
+        return False
+    if not silent:
+        _emit_completed_process(proc)
+    return proc.returncode == 0
+
+
 def _download_tarball(timeout: int = 30) -> bytes | None:
     req = urllib.request.Request(
         TARBALL_URL,
@@ -699,6 +752,28 @@ def _verify_skill_target(source_root: Path, target: Path) -> list[str]:
     return errors
 
 
+def _clean_legacy_skill_targets(harness: str, silent: bool) -> bool:
+    ok = True
+    target = HARNESS_SKILL_DIRS.get(harness)
+    for legacy in HARNESS_LEGACY_SKILL_DIRS.get(harness, []):
+        if target is not None and legacy == target:
+            continue
+        if not legacy.exists() and not legacy.is_symlink():
+            continue
+        try:
+            if legacy.is_symlink() or legacy.is_file():
+                legacy.unlink()
+            else:
+                shutil.rmtree(legacy)
+            if not silent:
+                click.secho(f"✓ removed legacy skill path → {legacy}", fg="green")
+        except OSError as e:
+            ok = False
+            if not silent:
+                click.secho(f"✗ couldn't clean legacy skill path {legacy}: {e}", fg="red", err=True)
+    return ok
+
+
 def _write_install_state(target: Path, *, latest_version: str | None = None) -> None:
     payload = {
         "package": PACKAGE_NAME,
@@ -749,6 +824,8 @@ def _refresh_skill_files(silent: bool, *, latest_version: str | None = None) -> 
 
         for harness in harnesses:
             target = HARNESS_SKILL_DIRS[harness]
+            if not _clean_legacy_skill_targets(harness, silent):
+                return False
             # Wipe any previous install, including stale symlinks or files.
             if target.exists() or target.is_symlink():
                 try:
@@ -898,6 +975,53 @@ def _print_release_summary(previous_version: str, new_version: str, *, silent: b
         click.secho(f"v{version}", bold=True)
         if body:
             click.echo(body)
+
+
+def _normalize_after_success(silent: bool) -> None:
+    try:
+        from inspire.accounts import normalize_environment
+
+        normalize_environment(interactive=not silent)
+    except Exception:
+        # Normalization is best-effort cleanup; never fail the upgrade itself.
+        pass
+
+
+def _run_post_update_tasks(
+    *,
+    expected_version: str | None,
+    previous_version: str,
+    cli_only: bool,
+    silent: bool,
+) -> bool:
+    ok = True
+    if not cli_only:
+        ok = _refresh_skill_files(silent, latest_version=expected_version) and ok
+
+    audit_ok, actual_version = _audit_update_state(
+        expected_version=expected_version,
+        check_cli=True,
+        check_skills=not cli_only,
+        silent=silent,
+    )
+    ok = audit_ok and ok
+
+    if ok:
+        ok = _ensure_global_playwright_runtime(silent) and ok
+
+    run_check(write=True, current_version=actual_version or expected_version or __version__)
+
+    if not ok:
+        return False
+
+    _normalize_after_success(silent)
+
+    if not silent:
+        click.secho("✓ InspireSkill updated.", fg="green", bold=True)
+
+    new_version = str(actual_version or expected_version or __version__)
+    _print_release_summary(previous_version, new_version, silent=silent)
+    return True
 
 
 def _parse_version_output(output: str) -> str | None:
@@ -1076,6 +1200,17 @@ def update(check_only: bool, silent: bool, cli_only: bool, skill_only: bool) -> 
     ok = True
     if not skill_only:
         ok = _upgrade_cli(silent, target_version=pre.get("latest")) and ok
+        expected_version = str(pre.get("latest") or "")
+        previous_version = str(pre.get("current") or __version__)
+        if ok and expected_version and _is_newer(expected_version, __version__):
+            if not _run_post_update_command(
+                previous_version=previous_version,
+                expected_version=expected_version,
+                cli_only=cli_only,
+                silent=silent,
+            ):
+                sys.exit(1)
+            return
     if not cli_only:
         ok = _refresh_skill_files(silent, latest_version=pre.get("latest")) and ok
 
@@ -1104,13 +1239,7 @@ def update(check_only: bool, silent: bool, cli_only: bool, skill_only: bool) -> 
     # coming from v3.1.x (no sentinel yet) get pre-v3 unscoped files
     # quarantined and stale env vars flagged on the same `inspire update` they
     # ran to install v4. Idempotent via the normalization sentinel.
-    try:
-        from inspire.accounts import normalize_environment
-
-        normalize_environment(interactive=not silent)
-    except Exception:
-        # Normalization is best-effort cleanup; never fail the upgrade itself.
-        pass
+    _normalize_after_success(silent)
 
     if not silent:
         click.secho("✓ InspireSkill updated.", fg="green", bold=True)

@@ -24,6 +24,9 @@ def test_installer_first_uv_install_without_inspire_on_path(tmp_path: Path) -> N
     (home / ".codex").mkdir()
     (home / ".gemini").mkdir()
     (home / ".cursor").mkdir()
+    legacy_gemini_skill = home / ".gemini" / "skills" / "inspire"
+    legacy_gemini_skill.mkdir(parents=True)
+    (legacy_gemini_skill / "SKILL.md").write_text("# stale\n", encoding="utf-8")
     (bin_dir / "uv").write_text(
         "#!/usr/bin/env bash\n"
         "set -euo pipefail\n"
@@ -96,4 +99,5 @@ def test_installer_advertises_antigravity_not_gemini_cli() -> None:
     assert "antigravity" in text
     assert "cursor" in text
     assert "gemini)" not in text
-    assert ".gemini/skills/inspire" not in text
+    assert 'legacy_target="$HOME/.gemini/skills/inspire"' in text
+    assert '  target="$HOME/.gemini/skills/inspire"' not in text

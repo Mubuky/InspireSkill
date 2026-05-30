@@ -30,6 +30,7 @@ from pathlib import Path
 import pytest
 
 from inspire.cli.commands.update import (
+    _clean_legacy_skill_targets,
     _detect_installer,
     _ensure_global_playwright_runtime,
     _ensure_playwright_runtime,
@@ -326,6 +327,59 @@ def test_update_runs_global_runtime_setup_after_cli_upgrade(
     )
 
     assert calls == ["cli:4.1.1", "skills", "audit", "runtime", "normalize"]
+
+
+def test_update_delegates_post_upgrade_work_to_new_executable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr(update_module, "__version__", "5.2.2")
+    monkeypatch.setattr(
+        update_module,
+        "run_check",
+        lambda **_kwargs: {"current": "5.2.2", "latest": "5.2.3"},
+    )
+    monkeypatch.setattr(update_module, "_print_status", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        update_module,
+        "_upgrade_cli",
+        lambda silent, target_version=None: calls.append(f"cli:{target_version}") or True,
+    )
+    monkeypatch.setattr(
+        update_module,
+        "_run_post_update_command",
+        lambda **kwargs: calls.append(
+            f"post:{kwargs['previous_version']}->{kwargs['expected_version']}"
+        )
+        or True,
+    )
+    monkeypatch.setattr(
+        update_module,
+        "_refresh_skill_files",
+        lambda *_args, **_kwargs: calls.append("old-skill-refresh") or True,
+    )
+
+    update_module.update.callback(
+        check_only=False,
+        silent=True,
+        cli_only=False,
+        skill_only=False,
+    )
+
+    assert calls == ["cli:5.2.3", "post:5.2.2->5.2.3"]
+
+
+def test_clean_legacy_skill_targets_removes_old_antigravity_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    legacy = tmp_path / ".gemini" / "skills" / "inspire"
+    legacy.mkdir(parents=True)
+    (legacy / "SKILL.md").write_text("# stale\n", encoding="utf-8")
+    monkeypatch.setattr(update_module, "HARNESS_LEGACY_SKILL_DIRS", {"antigravity": [legacy]})
+
+    assert _clean_legacy_skill_targets("antigravity", silent=True) is True
+    assert not legacy.exists()
 
 
 def test_release_entries_between_includes_versions_between_old_and_new() -> None:
