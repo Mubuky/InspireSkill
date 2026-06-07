@@ -435,7 +435,7 @@ def create_notebook_and_report(
             quoted_workspace = shlex.quote(str(diagnostics.workspace or workspace_id or ""))
             click.echo("  Next:")
             click.echo(f"    inspire notebook events {quoted_name} --workspace {quoted_workspace}")
-            click.echo(f"    inspire notebook ssh connect {quoted_name} --workspace {quoted_workspace}")
+            click.echo(f"    inspire notebook ssh {quoted_name} --workspace {quoted_workspace}")
             click.echo(f"    inspire notebook exec {quoted_name} \"pwd\"")
             click.echo(f"    inspire notebook delete {quoted_name} --workspace {quoted_workspace} --yes")
 

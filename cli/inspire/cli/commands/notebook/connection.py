@@ -23,7 +23,21 @@ from .notebook_ssh_flow import run_notebook_ssh
 
 
 def _bridge_payload(bridge: BridgeProfile, *, healthy: bool | None = None) -> dict[str, object]:
-    payload = bridge.to_dict()
+    payload: dict[str, object] = {
+        "name": bridge.name,
+        "proxy_url": bridge.proxy_url,
+        "ssh_user": bridge.ssh_user,
+        "ssh_port": bridge.ssh_port,
+        "has_internet": bridge.has_internet,
+    }
+    if bridge.notebook_name:
+        payload["notebook_name"] = bridge.notebook_name
+    if bridge.workspace_name:
+        payload["workspace_name"] = bridge.workspace_name
+    if bridge.identity_file:
+        payload["identity_file"] = bridge.identity_file
+    if bridge.rtunnel_port is not None:
+        payload["rtunnel_port"] = bridge.rtunnel_port
     if healthy is not None:
         payload["healthy"] = healthy
     return payload

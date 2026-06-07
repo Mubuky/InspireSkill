@@ -9,7 +9,7 @@ from click.testing import CliRunner
 
 from inspire import config as config_module
 from inspire.bridge import tunnel as tunnel_module
-from inspire.cli.commands.notebook import connection_test_cmd as connection_test_cmd_module
+from inspire.cli.commands.notebook import connection as connection_module
 from inspire.cli.commands.notebook import notebook_commands as notebook_cmd_module
 from inspire.cli.commands.notebook import remote_exec as remote_exec_module
 from inspire.cli.commands.notebook import remote_shell as remote_shell_module
@@ -1876,53 +1876,7 @@ def test_run_notebook_ssh_reports_when_tunnel_not_ready(
     assert "Proxy readiness report:" in captured["hint"]
 
 
-def test_ssh_notebook_cache_hit_invokes_reconnect_with_notebook_kwarg(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import click
-    import inspire.accounts as accounts_mod
-    from inspire.cli.commands.notebook import remote_shell as remote_shell_module
-
-    captured: dict[str, str] = {}
-    fake_tunnel_config = tunnel_module.TunnelConfig()
-    fake_tunnel_config.add_bridge(
-        tunnel_module.BridgeProfile(
-            name="gpu-main",
-            proxy_url="https://proxy.example.com/proxy/31337/",
-        )
-    )
-
-    monkeypatch.setattr(accounts_mod, "current_account", lambda: None)
-    monkeypatch.setattr(
-        tunnel_module, "load_tunnel_config", lambda account=None: fake_tunnel_config
-    )
-    monkeypatch.setattr(
-        notebook_cmd_module,
-        "run_notebook_ssh",
-        lambda *args, **kwargs: (_ for _ in ()).throw(
-            AssertionError("should not bootstrap on cache hit")
-        ),
-    )
-
-    @click.command("ssh")
-    @click.argument("notebook", required=False)
-    @click.pass_context
-    def fake_reconnect(ctx: click.Context, notebook: Optional[str]) -> None:
-        captured["notebook"] = notebook or ""
-
-    monkeypatch.setattr(remote_shell_module, "bridge_ssh", fake_reconnect)
-
-    runner = CliRunner()
-    result = runner.invoke(
-        cli_main,
-        ["notebook", "ssh", "connect", "gpu-main", "--workspace", "Test Workspace"],
-    )
-
-    assert result.exit_code == EXIT_SUCCESS
-    assert captured["notebook"] == "gpu-main"
-
-
-def test_notebook_ssh_test_json_exposes_proxy_url_without_notebook_id(
+def test_notebook_connection_status_json_exposes_proxy_url_without_notebook_id(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     tunnel_config = tunnel_module.TunnelConfig()
@@ -1936,14 +1890,17 @@ def test_notebook_ssh_test_json_exposes_proxy_url_without_notebook_id(
         )
     )
 
-    monkeypatch.setattr(connection_test_cmd_module, "load_tunnel_config", lambda: tunnel_config)
+    monkeypatch.setattr(connection_module, "load_tunnel_config", lambda: tunnel_config)
     monkeypatch.setattr(
-        connection_test_cmd_module,
+        connection_module,
         "run_ssh_command",
         lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout="gpu-host\n", stderr=""),
     )
 
-    result = CliRunner().invoke(cli_main, ["--json", "notebook", "ssh", "test", "gpu-main"])
+    result = CliRunner().invoke(
+        cli_main,
+        ["--json", "notebook", "connection", "status", "gpu-main"],
+    )
 
     assert result.exit_code == EXIT_SUCCESS
     payload = json.loads(result.output)
@@ -2123,55 +2080,6 @@ def test_notebook_shell_without_default_path_alias_uses_login_home(
 
     runner = CliRunner()
     result = runner.invoke(cli_main, ["notebook", "shell", "gpu-main"])
-
-    assert result.exit_code == EXIT_SUCCESS
-    assert captured["bridge_name"] == "gpu-main"
-    assert captured["remote_command"] is None
-    assert "Working directory: $HOME" in result.output
-
-
-def test_notebook_ssh_cache_hit_without_default_path_alias_uses_login_home(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import inspire.accounts as accounts_mod
-
-    config = config_module.Config(username="", password="")
-    tunnel_config = tunnel_module.TunnelConfig()
-    tunnel_config.add_bridge(
-        tunnel_module.BridgeProfile(name="gpu-main", proxy_url="https://proxy.example.com")
-    )
-    captured: dict[str, object] = {}
-
-    monkeypatch.setattr(accounts_mod, "current_account", lambda: None)
-    monkeypatch.setattr(
-        config_module.Config,
-        "from_files_and_env",
-        classmethod(lambda cls, require_credentials=True: (config, {})),
-    )
-    monkeypatch.setattr(tunnel_module, "load_tunnel_config", lambda account=None: tunnel_config)
-    monkeypatch.setattr(remote_shell_module, "load_tunnel_config", lambda: tunnel_config)
-    monkeypatch.setattr(remote_shell_module, "is_tunnel_available", lambda *args, **kwargs: True)
-    monkeypatch.setattr(
-        notebook_cmd_module,
-        "run_notebook_ssh",
-        lambda *args, **kwargs: (_ for _ in ()).throw(
-            AssertionError("should not bootstrap on cache hit")
-        ),
-    )
-
-    def fake_get_ssh_command_args(bridge_name, config, remote_command=None):  # type: ignore[no-untyped-def]
-        captured["bridge_name"] = bridge_name
-        captured["remote_command"] = remote_command
-        return ["ssh", "root@localhost"]
-
-    monkeypatch.setattr(remote_shell_module, "get_ssh_command_args", fake_get_ssh_command_args)
-    monkeypatch.setattr(remote_shell_module.subprocess, "call", lambda args: 0)
-
-    runner = CliRunner()
-    result = runner.invoke(
-        cli_main,
-        ["notebook", "ssh", "connect", "gpu-main", "--workspace", "Test Workspace"],
-    )
 
     assert result.exit_code == EXIT_SUCCESS
     assert captured["bridge_name"] == "gpu-main"

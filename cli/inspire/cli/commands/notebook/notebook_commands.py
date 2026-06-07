@@ -48,7 +48,6 @@ from inspire.config import ConfigError
 from inspire.config.workspaces import (
     resolve_workspace_operation_scope,
     resolve_workspace_query_scope,
-    validate_workspace_operation_name,
 )
 from inspire.platform.web import browser_api as browser_api_module
 from inspire.platform.web import session as web_session_module
@@ -370,7 +369,7 @@ def delete_notebook_cmd(
     \b
     The instance disappears from the platform UI. This cannot be undone;
     if the notebook is still running, stop it first. The local cached SSH
-    connection is NOT removed — run `inspire notebook ssh forget <notebook>`
+    connection is NOT removed — run `inspire notebook connection forget <notebook>`
     to clean up.
 
     \b
@@ -833,145 +832,10 @@ def list_notebooks(
     _print_notebook_list(all_items, ctx.json_output)
 
 
-@click.command("connect")
-@click.argument("notebook")
-@click.option(
-    "--workspace",
-    required=False,
-    help="Workspace name. Optional for SSH; used to disambiguate duplicate notebook names.",
-)
-@click.option(
-    "--wait/--no-wait",
-    default=True,
-    help="Wait for notebook to reach RUNNING status",
-)
-@click.option(
-    "--pubkey",
-    type=click.Path(exists=True, dir_okay=False, path_type=str),
-    help=(
-        "SSH public key path to authorize (defaults to ~/.ssh/id_ed25519.pub or ~/.ssh/id_rsa.pub)"
-    ),
-)
-@click.option(
-    "--port",
-    type=click.IntRange(1, 65535),
-    default=31337,
-    show_default=True,
-    help="Advanced: connection service port inside notebook",
-)
-@click.option(
-    "--ssh-port",
-    type=click.IntRange(1, 65535),
-    default=22222,
-    show_default=True,
-    help="Advanced: SSH service port inside notebook",
-)
-@click.option(
-    "--command",
-    help=(
-        "Optional non-interactive remote command to run " "(if omitted, opens an interactive shell)"
-    ),
-)
-@click.option(
-    "--command-timeout",
-    type=click.IntRange(0),
-    default=None,
-    help="Timeout in seconds for --command execution (default: 300, 0 disables)",
-)
-@click.option(
-    "--debug-playwright",
-    is_flag=True,
-    help="Run browser automation with visible window for debugging",
-)
-@click.option(
-    "--timeout",
-    "setup_timeout",
-    type=click.IntRange(1),
-    default=300,
-    show_default=True,
-    help="Timeout in seconds for notebook connection setup",
-)
-@pass_context
-def ssh_notebook_cmd(
-    ctx: Context,
-    notebook: str,
-    workspace: str,
-    wait: bool,
-    pubkey: Optional[str],
-    port: int,
-    ssh_port: int,
-    command: Optional[str],
-    command_timeout: Optional[int],
-    debug_playwright: bool,
-    setup_timeout: int,
-) -> None:
-    """Create or refresh the cached SSH connection for a notebook.
-
-    The positional argument is the notebook name. The first call establishes
-    and caches the connection under that same name; later calls reconnect
-    automatically. One notebook keeps one cached SSH connection — there is no
-    separate alias concept.
-
-    \b
-    Examples:
-        inspire notebook ssh connect <notebook-name> --workspace CPU资源空间
-        inspire notebook ssh connect <notebook-name> --workspace CPU资源空间 --command "hostname"
-    """
-    from inspire.accounts import normalize_environment
-
-    normalize_environment()
-    if workspace:
-        try:
-            validate_workspace_operation_name(workspace)
-        except ConfigError as e:
-            _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
-            return
-
-    # Fast path: if a cached bridge already exists for this notebook
-    # name, hand off to the reconnect flow (no bootstrap needed).
-    if not command and not pubkey:
-        try:
-            from inspire.bridge.tunnel import TunnelError, load_tunnel_config
-
-            from .remote_shell import bridge_ssh as _reconnect
-
-            _cfg = load_tunnel_config()
-        except (FileNotFoundError, TunnelError, ImportError):
-            _cfg = None
-
-        if _cfg and notebook in _cfg.bridges:
-            click.get_current_context().invoke(_reconnect, notebook=notebook)
-            return
-
-    session = require_web_session(ctx, hint=WEB_AUTH_HINT)
-    config = load_config(ctx)
-    if workspace:
-        try:
-            resolve_workspace_operation_scope(config, workspace=workspace, session=session)
-        except ConfigError as e:
-            _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
-            return
-
-    run_notebook_ssh(
-        ctx,
-        notebook_id=notebook,
-        workspace=workspace,
-        wait=wait,
-        pubkey=pubkey,
-        port=port,
-        ssh_port=ssh_port,
-        command=command,
-        command_timeout=command_timeout,
-        debug_playwright=debug_playwright,
-        setup_timeout=setup_timeout,
-    )
-
-
 __all__ = [
     "create_notebook_cmd",
     "list_notebooks",
     "notebook_status",
-    "ssh_notebook_cmd",
     "start_notebook_cmd",
     "stop_notebook_cmd",
 ]

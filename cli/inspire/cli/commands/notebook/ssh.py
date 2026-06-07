@@ -8,17 +8,30 @@ import click
 
 from inspire.cli.context import Context, pass_context
 
-from .connection import connection_refresh as _refresh
-from .connection_test_cmd import tunnel_test as _connection_test
-from .forget_cmd import tunnel_remove as _forget
-from .notebook_commands import ssh_notebook_cmd
 from .notebook_ssh_flow import run_notebook_ssh
+
+
+_LEGACY_SSH_SUBCOMMANDS = {
+    "connect": "Use `inspire notebook ssh <name> --workspace <workspace>` to open SSH, "
+    "or `inspire notebook connection refresh <name> --workspace <workspace>` to "
+    "refresh the cache.",
+    "test": "Use `inspire notebook connection status <name>`.",
+    "refresh": "Use `inspire notebook connection refresh <name> --workspace <workspace>`.",
+    "forget": "Use `inspire notebook connection forget <name>`.",
+}
 
 
 class NotebookSSHGroup(click.Group):
     """Click group that treats unknown first tokens as notebook names."""
 
     def resolve_command(self, ctx: click.Context, args: list[str]):
+        if args and args[0] in _LEGACY_SSH_SUBCOMMANDS:
+            hint = _LEGACY_SSH_SUBCOMMANDS[args[0]]
+            raise click.UsageError(
+                f"`inspire notebook ssh {args[0]}` has been removed. {hint} "
+                f"If a notebook is literally named '{args[0]}', run "
+                f"`inspire notebook ssh open {args[0]}`."
+            )
         if args and args[0] not in self.commands and not args[0].startswith("-"):
             return "open", self.commands["open"], args
         return super().resolve_command(ctx, args)
@@ -104,16 +117,12 @@ def notebook_ssh() -> None:
 
     Use `inspire notebook ssh <notebook>` for an interactive shell, or
     `inspire notebook ssh <notebook> -- <command>` for a one-shot command.
-    Cached connection management remains available through compatibility
-    subcommands and the `inspire notebook connection` command group.
+    Cached connection management is available through the
+    `inspire notebook connection` command group.
     """
 
 
 notebook_ssh.add_command(_ssh_open, name="open")
-notebook_ssh.add_command(ssh_notebook_cmd, name="connect")
-notebook_ssh.add_command(_refresh, name="refresh")
-notebook_ssh.add_command(_forget, name="forget")
-notebook_ssh.add_command(_connection_test, name="test")
 
 
 __all__ = ["notebook_ssh"]

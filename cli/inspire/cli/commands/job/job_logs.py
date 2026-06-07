@@ -419,12 +419,12 @@ def _emit_no_tunnel_error(ctx: Context, *, bridge_name: Optional[str]) -> None:
         hint = (
             f"Cached notebook tunnel(s): {preview}. "
             "Pass --notebook <name> to target one explicitly, "
-            "or run `inspire notebook ssh connect <notebook-name> --workspace <workspace>` to bootstrap a new one."
+            "or run `inspire notebook connection refresh <notebook-name> --workspace <workspace>` to bootstrap a new one."
         )
     else:
         hint = (
             "No cached notebook tunnels found. "
-            "Run `inspire notebook ssh connect <notebook-name> --workspace <workspace>` to bootstrap one with shared-FS access."
+            "Run `inspire notebook connection refresh <notebook-name> --workspace <workspace>` to bootstrap one with shared-FS access."
         )
     label = f"bridge '{bridge_name}'" if bridge_name else "default bridge"
     _handle_error(
@@ -478,7 +478,7 @@ def _run_job_logs_single_job(
                     "NotebookTunnelNotFound",
                     f"No cached notebook tunnel for '{bridge_name}'.",
                     EXIT_GENERAL_ERROR,
-                    hint="Run `inspire notebook ssh connect <name> --workspace <workspace>` to create or refresh a notebook connection.",
+                    hint="Run `inspire notebook connection refresh <name> --workspace <workspace>` to create or refresh a notebook connection.",
                 )
             _emit_no_tunnel_error(ctx, bridge_name=bridge_name)
             return
@@ -754,7 +754,7 @@ def _run_job_logs_web_single_job(
     help=(
         "Notebook name whose cached SSH connection should be used. Required when more "
         "than one is cached and the default connection is ambiguous. "
-        "Run `inspire notebook ssh connect <notebook-name> --workspace <workspace>` first. "
+        "Run `inspire notebook connection refresh <notebook-name> --workspace <workspace>` first. "
         "No short alias — `-n` is reserved for --tail."
     ),
 )

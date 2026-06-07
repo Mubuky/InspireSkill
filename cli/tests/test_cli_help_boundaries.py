@@ -186,7 +186,7 @@ def test_notebook_top_command_is_removed() -> None:
     assert "No such command 'top'" in result.output
 
 
-def test_notebook_ssh_compat_commands_and_connection_group() -> None:
+def test_notebook_ssh_removed_compat_commands_and_connection_group() -> None:
     notebook_help = CliRunner().invoke(cli_main, ["notebook", "--help"])
     ssh_help = CliRunner().invoke(cli_main, ["notebook", "ssh", "--help"])
     connection_help = CliRunner().invoke(cli_main, ["notebook", "connection", "--help"])
@@ -203,7 +203,7 @@ def test_notebook_ssh_compat_commands_and_connection_group() -> None:
     assert ssh_help.exit_code == 0
     assert "Open SSH to a notebook or run a remote command" in ssh_help.output
     for subcommand in ("connect", "refresh", "forget", "test"):
-        assert f"\n  {subcommand} " in ssh_help.output
+        assert f"\n  {subcommand} " not in ssh_help.output
     for removed in ("list", "status", "exec", "shell", "scp", "install-deps"):
         assert f"\n  {removed} " not in ssh_help.output
 

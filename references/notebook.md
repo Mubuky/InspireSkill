@@ -67,7 +67,7 @@ inspire notebook ssh <name> --workspace CPU资源空间
 inspire notebook ssh <name> -- hostname
 ```
 
-`--workspace` 只用于首次解析或同名 notebook 消歧；连接缓存后，后续命令可直接按 notebook 名使用。需要显式管理缓存时，用 `inspire notebook connection list/status/refresh/forget/prune`。旧的 `inspire notebook ssh connect <name> --workspace <workspace>` 仍保留为兼容入口。
+`--workspace` 只用于首次解析或同名 notebook 消歧；连接缓存后，后续命令可直接按 notebook 名使用。需要显式管理缓存时，用 `inspire notebook connection list/status/refresh/forget/prune`。
 
 需要给原生 OpenSSH / scp / rsync / VS Code Remote SSH 使用时，输出配置片段：
 

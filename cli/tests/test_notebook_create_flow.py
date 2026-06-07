@@ -392,7 +392,7 @@ def test_create_notebook_and_report_accepts_id_response_without_human_raw_id(
     assert "Workspace: gpu" in out
     assert "Compute group: H200 Group" in out
     assert "inspire notebook events fresh-notebook" in out
-    assert "inspire notebook ssh connect fresh-notebook --workspace gpu" in out
+    assert "inspire notebook ssh fresh-notebook --workspace gpu" in out
     assert 'inspire notebook exec fresh-notebook "pwd"' in out
     assert "inspire notebook delete fresh-notebook --workspace gpu --yes" in out
     assert "nb-secret-1111" not in out

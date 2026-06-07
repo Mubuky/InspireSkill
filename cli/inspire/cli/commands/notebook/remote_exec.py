@@ -165,9 +165,9 @@ def try_exec_via_ssh_tunnel(
 
         if not str(bridge.notebook_id or "").strip():
             hint = (
-                "Run 'inspire notebook ssh test' to troubleshoot. "
+                "Run 'inspire notebook connection status <notebook>' to troubleshoot. "
                 "If needed, re-create the cached connection via "
-                "'inspire notebook ssh connect <notebook> --workspace <workspace>'."
+                "'inspire notebook connection refresh <notebook> --workspace <workspace>'."
             )
             return _emit_error(
                 ctx,
@@ -184,8 +184,9 @@ def try_exec_via_ssh_tunnel(
                 "TunnelError",
                 "SSH tunnel not available",
                 hint=(
-                    "Auto-rebuild retries exhausted. Run 'inspire notebook ssh test' and "
-                    "retry 'inspire notebook ssh connect <notebook> --workspace <workspace>'."
+                    "Auto-rebuild retries exhausted. Run "
+                    "'inspire notebook connection status <notebook>' and retry "
+                    "'inspire notebook connection refresh <notebook> --workspace <workspace>'."
                 ),
             )
 
@@ -308,14 +309,14 @@ def try_exec_via_ssh_tunnel(
                     ctx,
                     "ConfigError",
                     f"No cached notebook connection for '{bridge_name}'.",
-                    hint="Run `inspire notebook ssh connect <name> --workspace <workspace>` to create or refresh this notebook connection.",
+                    hint="Run `inspire notebook connection refresh <name> --workspace <workspace>` to create or refresh this notebook connection.",
                 )
             if bridge is None:
                 return _emit_error(
                     ctx,
                     "TunnelError",
                     "No cached notebook connection for SSH execution.",
-                    hint="Create one with: inspire notebook ssh connect <notebook> --workspace <workspace>",
+                    hint="Create one with: inspire notebook connection refresh <notebook> --workspace <workspace>",
                 )
 
             resolved_bridge_name = bridge.name
@@ -679,8 +680,8 @@ def exec_command(
 ) -> None:
     """Execute a command on a cached notebook.
 
-    Requires `inspire notebook ssh connect <notebook> --workspace <workspace>` first. NOTEBOOK is
-    the notebook name. Each call runs an independent remote shell command;
+    Requires `inspire notebook connection refresh <notebook> --workspace <workspace>`
+    first. NOTEBOOK is the notebook name. Each call runs an independent remote shell command;
     use one quoted command string when cwd, environment variables, or shell
     state must stay together.
 

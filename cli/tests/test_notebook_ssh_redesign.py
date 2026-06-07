@@ -68,22 +68,23 @@ def test_notebook_help_exposes_connection_and_openssh_commands() -> None:
         assert f"\n  {command} " in result.output
 
 
-def test_notebook_ssh_help_keeps_compatibility_commands() -> None:
+def test_notebook_ssh_help_omits_legacy_commands() -> None:
     result = CliRunner().invoke(cli_main, ["notebook", "ssh", "--help"])
 
     assert result.exit_code == EXIT_SUCCESS
     assert "Open SSH to a notebook or run a remote command" in result.output
     for subcommand in ("connect", "refresh", "forget", "test"):
-        assert f"\n  {subcommand} " in result.output
+        assert f"\n  {subcommand} " not in result.output
 
 
-def test_ssh_refresh_compat_entry_uses_connection_refresh_semantics() -> None:
-    result = CliRunner().invoke(cli_main, ["notebook", "ssh", "refresh", "--help"])
+def test_legacy_ssh_subcommands_are_removed() -> None:
+    runner = CliRunner()
 
-    assert result.exit_code == EXIT_SUCCESS
-    assert "Create or refresh the cached connection without opening SSH" in result.output
-    assert "--url" not in result.output
-    assert "--has-internet" not in result.output
+    for subcommand in ("connect", "refresh", "forget", "test"):
+        result = runner.invoke(cli_main, ["notebook", "ssh", subcommand, "--help"])
+
+        assert result.exit_code != EXIT_SUCCESS
+        assert f"`inspire notebook ssh {subcommand}` has been removed" in result.output
 
 
 def test_ssh_config_uses_cached_bridge_and_proxy_command(monkeypatch) -> None:  # noqa: ANN001

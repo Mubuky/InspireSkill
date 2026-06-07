@@ -426,7 +426,7 @@ def create_notebook(
     # The UI does NOT send: gpu_type (top-level).
     # ``allow_ssh: true`` is required so the platform exposes the in-container
     # rtunnel server (port 31337) on the proxy URL the CLI tunnels through;
-    # without it the proxy returns 404 and `inspire notebook ssh connect` cannot
+    # without it the proxy returns 404 and notebook SSH bootstrap cannot
     # complete its preflight. Empirically the field defaults to false when
     # omitted, regardless of image SSH tooling — verified 2026-04-25 against
     # pytorch-inspire-base on CPU资源-2.

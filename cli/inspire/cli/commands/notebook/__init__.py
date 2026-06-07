@@ -6,7 +6,7 @@ Usage:
     inspire notebook create --workspace <workspace> --project <project> \
         --group <full-group-name> --quota 1,20,200
     inspire notebook stop <name> --workspace <workspace>
-    inspire notebook ssh connect <notebook> --workspace <workspace>
+    inspire notebook ssh <notebook> --workspace <workspace>
     inspire notebook exec <notebook> "<cmd>"
     inspire notebook scp <notebook> <src> <dst>
 """

@@ -73,8 +73,8 @@ def bridge_scp(
 ) -> None:
     """Transfer files to/from a cached notebook via SCP.
 
-    Requires `inspire notebook ssh connect <notebook> --workspace <workspace>` first. NOTEBOOK is
-    the notebook name.
+    Requires `inspire notebook connection refresh <notebook> --workspace <workspace>`
+    first. NOTEBOOK is the notebook name.
     By default, uploads SOURCE (local) to DESTINATION (remote).
     Use --download to download SOURCE (remote) to DESTINATION (local).
     Remote paths may be absolute paths, aliases, or alias:sub/path values
@@ -117,14 +117,14 @@ def bridge_scp(
     tunnel_config = load_tunnel_config()
     if bridge and tunnel_config.get_bridge(bridge) is None:
         message = f"No cached notebook connection for '{bridge}'."
-        hint = "Run `inspire notebook ssh connect <name> --workspace <workspace>` to create or refresh this notebook connection."
+        hint = "Run `inspire notebook connection refresh <name> --workspace <workspace>` to create or refresh this notebook connection."
         _handle_error(ctx, "BridgeNotFound", message, EXIT_GENERAL_ERROR, hint=hint)
 
     if not is_tunnel_available(bridge_name=bridge, config=tunnel_config):
         hint = (
-            "Run 'inspire notebook ssh test' to troubleshoot. "
+            "Run 'inspire notebook connection status <notebook>' to troubleshoot. "
             "If needed, re-create the cached connection via "
-            "'inspire notebook ssh connect <notebook> --workspace <workspace>'."
+            "'inspire notebook connection refresh <notebook> --workspace <workspace>'."
         )
         _handle_error(ctx, "TunnelError", "SSH tunnel not available", EXIT_GENERAL_ERROR, hint=hint)
 

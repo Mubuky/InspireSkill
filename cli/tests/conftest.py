@@ -21,7 +21,7 @@ def _disable_update_check(monkeypatch):  # noqa: ANN001
 def _silence_normalize_environment(monkeypatch):  # noqa: ANN001
     """Stub `normalize_environment` to a no-op for the whole suite.
 
-    `inspire account add` and `inspire notebook ssh connect` call
+    `inspire account add` and `inspire notebook ssh` call
     `inspire.accounts.normalize_environment()` to quarantine pre-v3 unscoped
     files and check Playwright. In tests that path would touch the real
     `~/.inspire/` directory of whoever runs pytest. Tests that need to
