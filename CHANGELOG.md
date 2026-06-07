@@ -2,6 +2,39 @@
 
 本文件同步 GitHub Releases 正文格式；Release 页面是发布说明的标准口径。
 
+# v6.0.0
+
+## 更新内容
+
+### 破坏性变更
+
+- 完全删除仓库内 OpenAPI 客户端与配置入口；CLI 不再提供 `openapi_prefix`、`auth_endpoint`、`INSPIRE_OPENAPI_PREFIX` 或 `INSPIRE_AUTH_ENDPOINT`，平台交互统一走 Browser API / Web session。
+- 删除旧的 `inspire notebook ssh connect/test/refresh/forget` 兼容子命令。SSH 日常入口统一为 `inspire notebook ssh <name> [-- <command>]`；缓存管理统一使用 `inspire notebook connection list/status/refresh/forget/prune`。
+- 删除 `references/dev/openapi.md` 和已完成的 `references/dev/notebook-ssh-cli-redesign.md`，避免 Agent 继续按历史设计草稿或 OpenAPI 文档执行。
+
+### 新增
+
+- `inspire job create` 新增 `--exclude-node <NODE_NAME>`，batch job item 支持 `exclude_nodes`，用于提交训练任务时排除指定节点。
+- Notebook 创建支持前端同款 `--node <NODE_NAME>` 节点指定，并在创建 / 查询后输出 Web IDE、proxy URL、VS Code proxy suffix 等 name-only URL 辅助信息。
+- Browser API 开发文档补充 job / HPC v2 Action 接口、job instances、Jupyter / 终端代理和 notebook SSH bootstrap 关系。
+
+### 变更
+
+- Job create/stop/detail/list/instances 迁移到 Browser API v2 Action：`CreateJobConsole`、`StopJob`、`GetJob`、`ListJobs` 和 `ListJobInstances`。
+- HPC create/status/stop 迁移到 Browser API v2 Action：`CreateJobConsole`、`GetJob` 和 `StopJob`。
+- Job / HPC batch 提交流程改为复用 Browser API；`AuthManager` 仅保留账号缓存清理兼容 shim，`get_api()` 不再可用。
+- Notebook SSH、exec、scp、job logs 和 install-deps 的错误提示统一指向 `notebook ssh` 与 `notebook connection ...` 新入口。
+- `notebook connection list/status` 的 JSON payload 不再暴露 notebook / workspace 平台 handle，延续 Name-only 输出边界。
+
+### 验证
+
+- `uv lock --check`
+- `uv run pytest -q`
+- `uv run ruff check inspire tests`
+- `uv run mypy`
+- `uv build`
+- `git diff --check`
+
 # v5.2.5
 
 ## 更新内容
