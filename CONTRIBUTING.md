@@ -38,7 +38,7 @@ uv run pre-commit run --config ../.pre-commit-config.yaml --all-files
 
 平台事实以 live 查询为准。`list`、`status`、`events`、`metrics`、资源规格、资源可用量、项目和账号视图不能依赖本地缓存、旧截图、旧文档或历史推测。缓存只用于 Web session / auth、连接复用、日志传输等性能场景，不能作为 Agent 可见事实来源。
 
-Browser API / OpenAPI 文档只收录已经闭合的合同。没有验证请求体、响应形状、Referer、权限边界和 destructive 语义的端点，留在抓包输出或任务记录里，不写进正式 reference。
+Browser API 文档只收录已经闭合的合同。没有验证请求体、响应形状、Referer、权限边界和 destructive 语义的端点，留在抓包输出或任务记录里，不写进正式 reference。
 
 ## Agent 合同
 

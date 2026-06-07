@@ -1,8 +1,8 @@
 """Browser (web-session) APIs for projects.
 
-Projects are required for both training jobs and notebooks. The web UI exposes a
-project listing endpoint with quota information that is not part of the OpenAPI
-surface; this module contains the SSO-only implementation.
+Projects are required for both training jobs and notebooks. The web UI exposes
+project listing endpoints with quota information through the web-session API;
+this module contains the SSO-only implementation.
 """
 
 from __future__ import annotations
@@ -484,7 +484,7 @@ def select_project(
 
 
 # ---------------------------------------------------------------------------
-# Detail + owners (Browser-API only; not covered by OpenAPI)
+# Detail + owners (Browser API project management views)
 # ---------------------------------------------------------------------------
 
 

@@ -14,14 +14,13 @@ from inspire.cli.context import (
     pass_context,
 )
 from inspire.cli.formatters import human_formatter, json_formatter
-from inspire.cli.utils.auth import AuthManager, AuthenticationError
+from inspire.cli.utils.auth import AuthenticationError
 from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.config import Config, ConfigError
 from inspire.config.workload_profiles import apply_workload_profile, profile_required_message
 from inspire.cli.utils.id_resolver import reject_id_at_boundary, resolve_by_name
 from inspire.config.workspaces import select_workspace_id, workspace_label
-from inspire.platform.openapi import InspireAPIError
 from inspire.platform.web import browser_api as browser_api_module
 from inspire.platform.web.session import SessionExpiredError, get_web_session
 
@@ -130,11 +129,6 @@ def _project_label(config: Config, project_id: str, requested: Optional[str]) ->
     return "(project name unavailable)"
 
 
-def _extract_data(result: dict[str, Any]) -> dict[str, Any]:
-    data = result.get("data")
-    return data if isinstance(data, dict) else result
-
-
 def _looks_like_full_slurm_script(entrypoint: str) -> bool:
     stripped = entrypoint.lstrip()
     return stripped.startswith("#!") or "#SBATCH" in entrypoint
@@ -157,6 +151,53 @@ def _hpc_plan_payload(
         "workspace_name": workspace_label,
         "compute_group_name": compute_group_name,
     }
+
+
+def build_hpc_create_payload(
+    *,
+    name: str,
+    logic_compute_group_id: str,
+    project_id: str,
+    workspace_id: str,
+    image: str,
+    image_type: str,
+    entrypoint: str,
+    quota_id: str,
+    instance_count: int,
+    task_priority: int | None,
+    number_of_tasks: int,
+    cpus_per_task: int,
+    memory_per_cpu: int,
+    enable_hyper_threading: bool,
+    resource_spec_price: dict[str, Any],
+) -> dict[str, Any]:
+    """Build the current Web UI v2 HPC create payload."""
+    payload: dict[str, Any] = {
+        "job_name": name,
+        "logic_compute_group_id": logic_compute_group_id,
+        "project_id": project_id,
+        "workspace_id": workspace_id,
+        "enable_notification": False,
+        "sbatch_script": {
+            "number_of_tasks": int(number_of_tasks),
+            "cpus_per_task": int(cpus_per_task),
+            "memory_per_cpu": f"{int(memory_per_cpu)}G",
+            "enable_hyper_threading": bool(enable_hyper_threading),
+            "entrypoint": entrypoint,
+        },
+        "slurm_cluster_spec": {
+            "predef_quota_id": quota_id,
+            "cpu": int(resource_spec_price.get("cpu_count") or 0),
+            "mem_gi": int(resource_spec_price.get("memory_size_gib") or 0),
+            "image": image,
+            "image_type": image_type,
+            "instance_count": int(instance_count),
+            "spec_price": dict(resource_spec_price),
+        },
+    }
+    if task_priority is not None:
+        payload["task_priority"] = int(task_priority)
+    return payload
 
 
 def _format_hpc_list_rows(rows: list[dict[str, str]]) -> str:
@@ -443,12 +484,12 @@ def create_hpc(
             QuotaMatchError,
             QuotaParseError,
             SCHEDULE_TYPE_HPC,
+            build_resource_spec_price,
             parse_quota,
             resolve_quota,
         )
 
         config, _ = Config.from_files_and_env()
-        api = None if dry_run else AuthManager.get_api(config)
 
         fields = apply_workload_profile(
             profiles=getattr(config, "profiles", {}),
@@ -529,8 +570,9 @@ def create_hpc(
             _handle_error(ctx, "ValidationError", str(e), EXIT_CONFIG_ERROR)
             return
 
-        spec_id = resolved_quota.quota_id
+        quota_id = resolved_quota.quota_id
         resolved_compute_group_id = resolved_quota.logic_compute_group_id
+        resource_spec_price = build_resource_spec_price(quota=resolved_quota)
 
         # Slurm subdivision defaults: assume one task spans the whole node
         # unless the user explicitly carves it up. Total memory per task =
@@ -540,7 +582,7 @@ def create_hpc(
         if memory_per_cpu is None:
             memory_per_cpu = max(1, int(quota_spec.memory_gib) // max(1, int(cpus_per_task)))
 
-        create_kwargs = dict(
+        create_kwargs = build_hpc_create_payload(
             name=name,
             logic_compute_group_id=resolved_compute_group_id,
             project_id=resolved_project_id,
@@ -548,13 +590,14 @@ def create_hpc(
             image=final_image,
             image_type=image_type,
             entrypoint=entrypoint,
-            spec_id=spec_id,
+            quota_id=quota_id,
             instance_count=instance_count,
             task_priority=final_priority,
             number_of_tasks=number_of_tasks,
             cpus_per_task=cpus_per_task,
             memory_per_cpu=memory_per_cpu,
             enable_hyper_threading=enable_hyper_threading,
+            resource_spec_price=resource_spec_price,
         )
 
         project_text = _project_label(config, resolved_project_id, project)
@@ -582,25 +625,11 @@ def create_hpc(
             click.echo("No HPC job was submitted.")
             return
 
-        assert api is not None
-        result = api.create_hpc_job(
-            name=name,
-            logic_compute_group_id=resolved_compute_group_id,
-            project_id=resolved_project_id,
-            workspace_id=resolved_workspace_id,
-            image=final_image,
-            image_type=image_type,
-            entrypoint=entrypoint,
-            spec_id=spec_id,
-            instance_count=instance_count,
-            task_priority=final_priority,
-            number_of_tasks=number_of_tasks,
-            cpus_per_task=cpus_per_task,
-            memory_per_cpu=memory_per_cpu,
-            enable_hyper_threading=enable_hyper_threading,
+        data = browser_api_module.create_hpc_job(
+            payload=create_kwargs,
+            session=session,
         )
 
-        data = _extract_data(result)
         if ctx.json_output:
             click.echo(json_formatter.format_json(data))
             return
@@ -622,8 +651,6 @@ def create_hpc(
         _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
     except AuthenticationError as e:
         _handle_error(ctx, "AuthenticationError", str(e), EXIT_AUTH_ERROR)
-    except InspireAPIError as e:
-        _handle_error(ctx, "APIError", str(e), EXIT_API_ERROR)
     except Exception as e:
         _handle_error(ctx, "APIError", str(e), EXIT_API_ERROR)
 
@@ -637,7 +664,6 @@ def status_hpc(ctx: Context, name: str, workspace: str) -> None:
     name = _reject_hpc_name_at_boundary(ctx, name)
     try:
         config, _ = Config.from_files_and_env()
-        api = AuthManager.get_api(config)
         session = get_web_session()
         job_id = _resolve_hpc_name_in_workspace(
             ctx,
@@ -647,8 +673,7 @@ def status_hpc(ctx: Context, name: str, workspace: str) -> None:
             workspace=workspace,
             limit=10000,
         )
-        result = api.get_hpc_job_detail(job_id)
-        data = _extract_data(result)
+        data = browser_api_module.get_hpc_job_detail(job_id, session=session)
 
         if ctx.json_output:
             click.echo(json_formatter.format_json(data))
@@ -674,8 +699,6 @@ def status_hpc(ctx: Context, name: str, workspace: str) -> None:
         _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
     except AuthenticationError as e:
         _handle_error(ctx, "AuthenticationError", str(e), EXIT_AUTH_ERROR)
-    except InspireAPIError as e:
-        _handle_error(ctx, "APIError", str(e), EXIT_API_ERROR)
     except Exception as e:
         _handle_error(ctx, "APIError", str(e), EXIT_API_ERROR)
 
@@ -766,7 +789,7 @@ def hpc_id(ctx: Context, name: str, workspace: str, pick: Optional[int]) -> None
         _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
     except AuthenticationError as e:
         _handle_error(ctx, "AuthenticationError", str(e), EXIT_AUTH_ERROR)
-    except (SessionExpiredError, InspireAPIError, ValueError) as e:
+    except (SessionExpiredError, ValueError) as e:
         _handle_error(ctx, "APIError", str(e), EXIT_API_ERROR)
     except Exception as e:
         _handle_error(ctx, "APIError", str(e), EXIT_API_ERROR)
@@ -787,7 +810,6 @@ def stop_hpc(ctx: Context, name: str, workspace: str, pick: Optional[int]) -> No
     name = _reject_hpc_name_at_boundary(ctx, name)
     try:
         config, _ = Config.from_files_and_env()
-        api = AuthManager.get_api(config)
         session = get_web_session()
         job_id = _resolve_hpc_name_in_workspace(
             ctx,
@@ -798,7 +820,7 @@ def stop_hpc(ctx: Context, name: str, workspace: str, pick: Optional[int]) -> No
             limit=10000,
             pick=pick,
         )
-        api.stop_hpc_job(job_id)
+        browser_api_module.stop_hpc_job(job_id, session=session)
 
         if ctx.json_output:
             click.echo(json_formatter.format_json({"name": name, "stopped": True}))
@@ -809,8 +831,6 @@ def stop_hpc(ctx: Context, name: str, workspace: str, pick: Optional[int]) -> No
         _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
     except AuthenticationError as e:
         _handle_error(ctx, "AuthenticationError", str(e), EXIT_AUTH_ERROR)
-    except InspireAPIError as e:
-        _handle_error(ctx, "APIError", str(e), EXIT_API_ERROR)
     except Exception as e:
         _handle_error(ctx, "APIError", str(e), EXIT_API_ERROR)
 
@@ -874,7 +894,7 @@ def delete_hpc(ctx: Context, name: str, workspace: str, yes: bool, pick: Optiona
         _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
     except AuthenticationError as e:
         _handle_error(ctx, "AuthenticationError", str(e), EXIT_AUTH_ERROR)
-    except (SessionExpiredError, InspireAPIError) as e:
+    except SessionExpiredError as e:
         _handle_error(ctx, "APIError", str(e), EXIT_API_ERROR)
     except Exception as e:
         _handle_error(ctx, "APIError", str(e), EXIT_API_ERROR)

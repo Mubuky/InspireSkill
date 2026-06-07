@@ -20,7 +20,6 @@ from inspire.cli.context import (
 from inspire import config as config_module
 from inspire.bridge import tunnel as tunnel_module
 from inspire.cli.commands.notebook import notebook_commands as notebook_cmd_module
-from inspire.cli.utils import auth as auth_module
 from inspire.platform.web import browser_api as browser_api_module
 from inspire.platform.web import session as web_session_module
 from inspire.config import ConfigError
@@ -85,9 +84,9 @@ class DummyAPI:
         self.calls: Dict[str, Any] = {}
 
     # Job-related methods -------------------------------------------------
-    def create_training_job_smart(self, **kwargs: Any) -> Dict[str, Any]:
-        self.calls["create_training_job_smart"] = kwargs
-        return {"data": {"job_id": TEST_JOB_ID}}
+    def create_training_job(self, *, payload: dict[str, Any], session: object | None = None) -> Dict[str, Any]:
+        self.calls["create_training_job"] = {"payload": payload, "session": session}
+        return {"job_id": TEST_JOB_ID, "name": payload.get("name", "test-job")}
 
     def get_job_detail(self, job_id: str) -> Dict[str, Any]:
         self.calls.setdefault("get_job_detail", []).append(job_id)
@@ -100,8 +99,19 @@ class DummyAPI:
             }
         }
 
-    def stop_training_job(self, job_id: str) -> None:
-        self.calls.setdefault("stop_training_job", []).append(job_id)
+    def get_job_detail_v2(
+        self, job_id: str, session: object | None = None
+    ) -> Dict[str, Any]:
+        self.calls.setdefault("get_job_detail_v2", []).append({"job_id": job_id, "session": session})
+        return {
+            "job_id": job_id,
+            "name": "test-job",
+            "status": "SUCCEEDED",
+            "running_time_ms": "1000",
+        }
+
+    def stop_training_job(self, job_id: str, session: object | None = None) -> None:
+        self.calls.setdefault("stop_training_job", []).append({"job_id": job_id, "session": session})
 
     # Resource / nodes ----------------------------------------------------
     def list_cluster_nodes(
@@ -133,7 +143,7 @@ class DummyAPI:
 def patch_config_and_auth(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, include_compute_groups: bool = False
 ) -> DummyAPI:
-    """Patch Config.from_env and AuthManager.get_api to use local stubs.
+    """Patch config and Browser API helpers to use local stubs.
 
     Args:
         monkeypatch: pytest monkeypatch fixture
@@ -155,14 +165,6 @@ def patch_config_and_auth(
     )
 
     api = DummyAPI()
-
-    def fake_get_api(self_or_cls, cfg: Optional[config_module.Config] = None) -> DummyAPI:  # type: ignore[override]
-        # Ensure we were passed the same config object
-        assert cfg is config or cfg is None
-        return api
-
-    monkeypatch.setattr(auth_module.AuthManager, "get_api", fake_get_api)
-    auth_module.AuthManager.clear_cache()
 
     # Mock browser API calls for project selection
     class FakeWebSession:
@@ -197,6 +199,8 @@ def patch_config_and_auth(
     import importlib
 
     quota_resolver_module = importlib.import_module("inspire.cli.utils.quota_resolver")
+    config_check_module = importlib.import_module("inspire.cli.commands.config.check")
+    job_commands_module = importlib.import_module("inspire.cli.commands.job.job_commands")
     job_create_module = importlib.import_module("inspire.cli.commands.job.job_create")
     notebook_flow_module = importlib.import_module(
         "inspire.cli.commands.notebook.notebook_create_flow"
@@ -211,7 +215,10 @@ def patch_config_and_auth(
             cpu_count=spec.cpu_count,
             memory_gib=spec.memory_gib,
             gpu_type="H200" if spec.gpu_count > 0 else "",
-            raw_price={"cpu_info": {"cpu_type": "Test"}},
+            raw_price={
+                "cpu_info": {"cpu_type": "Test"},
+                "gpu_info": {"gpu_type": "NVIDIA_H200_SXM_141G"},
+            },
         )
 
     monkeypatch.setattr(quota_resolver_module, "resolve_quota", _fake_resolve_quota)
@@ -220,6 +227,8 @@ def patch_config_and_auth(
 
     # job create imports `get_web_session` by name, so patch that namespace.
     monkeypatch.setattr(job_create_module, "get_web_session", lambda: FakeWebSession())
+    monkeypatch.setattr(job_commands_module, "get_web_session", lambda: FakeWebSession())
+    monkeypatch.setattr(config_check_module, "get_web_session", lambda: FakeWebSession())
 
     test_project = browser_api_module.ProjectInfo(
         project_id="project-test-123",
@@ -239,6 +248,14 @@ def patch_config_and_auth(
         browser_api_module,
         "select_project",
         lambda projects, requested=None, **_: (test_project, None),
+    )
+    monkeypatch.setattr(browser_api_module, "create_training_job", api.create_training_job)
+    monkeypatch.setattr(browser_api_module, "get_job_detail_v2", api.get_job_detail_v2)
+    monkeypatch.setattr(browser_api_module, "stop_training_job", api.stop_training_job)
+    monkeypatch.setattr(
+        browser_api_module,
+        "get_current_user",
+        lambda session=None: {"id": "user-test", "username": "user"},
     )
 
     return api
@@ -332,7 +349,7 @@ def test_job_list_help_uses_workspace_name_not_raw_id_hint(
 
 
 def test_job_create_json_output(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    patch_config_and_auth(monkeypatch, tmp_path)
+    api = patch_config_and_auth(monkeypatch, tmp_path)
     runner = CliRunner()
 
     result = runner.invoke(
@@ -357,6 +374,10 @@ def test_job_create_json_output(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
             "registry.local/train:latest",
             "--nodes",
             "1",
+            "--exclude-node",
+            "qb-prod-gpu1736",
+            "--exclude-node",
+            "qb-prod-gpu1737",
         ],
     )
 
@@ -365,6 +386,11 @@ def test_job_create_json_output(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
     assert data["success"] is True
     assert data["data"]["name"] == "test-job"
     assert "job_id" not in data["data"]
+    create_payload = api.calls["create_training_job"]["payload"]
+    assert create_payload["framework_config"][0]["exclude_nodes"] == [
+        "qb-prod-gpu1736",
+        "qb-prod-gpu1737",
+    ]
 
 
 def test_wrap_in_bash():
@@ -484,7 +510,7 @@ def test_job_status_human_output_uses_name(monkeypatch: pytest.MonkeyPatch, tmp_
     monkeypatch.setattr(job_commands, "get_web_session", web_session_module.get_web_session)
     monkeypatch.setattr(
         job_commands.browser_api_module,
-        "get_job_detail",
+        "get_job_detail_v2",
         lambda job_id, *, session: {
             "job_id": job_id,
             "name": "test-job",
@@ -533,11 +559,15 @@ def test_job_status_not_found_sets_specific_exit_code(
     monkeypatch.setattr(job_commands, "_resolve_web_job_id", lambda **kwargs: TEST_JOB_ID)
     monkeypatch.setattr(job_commands, "get_web_session", web_session_module.get_web_session)
 
-    def failing_get_job_detail(job_id: str, *, session: object) -> Dict[str, Any]:
+    def failing_get_job_detail_v2(job_id: str, *, session: object) -> Dict[str, Any]:
         del job_id, session
         raise RuntimeError("Job not found")
 
-    monkeypatch.setattr(job_commands.browser_api_module, "get_job_detail", failing_get_job_detail)
+    monkeypatch.setattr(
+        job_commands.browser_api_module,
+        "get_job_detail_v2",
+        failing_get_job_detail_v2,
+    )
 
     runner = CliRunner()
     result = runner.invoke(
@@ -574,7 +604,7 @@ def test_job_wait_succeeds_and_exits_zero(monkeypatch: pytest.MonkeyPatch, tmp_p
     monkeypatch.setattr(job_commands, "get_web_session", web_session_module.get_web_session)
 
     # Ensure the job is immediately in a terminal state
-    def get_job_detail(job_id: str, *, session: object) -> Dict[str, Any]:
+    def get_job_detail_v2(job_id: str, *, session: object) -> Dict[str, Any]:
         del session
         return {
             "job_id": job_id,
@@ -583,7 +613,7 @@ def test_job_wait_succeeds_and_exits_zero(monkeypatch: pytest.MonkeyPatch, tmp_p
             "running_time_ms": "1000",
         }
 
-    monkeypatch.setattr(job_commands.browser_api_module, "get_job_detail", get_job_detail)
+    monkeypatch.setattr(job_commands.browser_api_module, "get_job_detail_v2", get_job_detail_v2)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -613,7 +643,7 @@ def test_job_wait_json_output_has_no_human_banner(
     monkeypatch.setattr(job_commands, "_resolve_web_job_id", lambda **kwargs: TEST_JOB_ID)
     monkeypatch.setattr(job_commands, "get_web_session", web_session_module.get_web_session)
 
-    def get_job_detail(job_id: str, *, session: object) -> Dict[str, Any]:
+    def get_job_detail_v2(job_id: str, *, session: object) -> Dict[str, Any]:
         del session
         return {
             "job_id": job_id,
@@ -622,7 +652,7 @@ def test_job_wait_json_output_has_no_human_banner(
             "running_time_ms": "1000",
         }
 
-    monkeypatch.setattr(job_commands.browser_api_module, "get_job_detail", get_job_detail)
+    monkeypatch.setattr(job_commands.browser_api_module, "get_job_detail_v2", get_job_detail_v2)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -1099,12 +1129,14 @@ def test_config_check_auth_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
         config_module.Config, "from_files_and_env", classmethod(fake_from_files_and_env)
     )
 
-    def fake_get_api(self_or_cls, cfg: Optional[config_module.Config] = None):  # type: ignore[override]
-        from inspire.cli.utils.auth import AuthenticationError
+    from inspire.cli.commands.config import check as config_check_module
 
-        raise AuthenticationError("bad credentials")
-
-    monkeypatch.setattr(auth_module.AuthManager, "get_api", fake_get_api)
+    monkeypatch.setattr(config_check_module, "get_web_session", lambda: object())
+    monkeypatch.setattr(
+        config_check_module.browser_api_module,
+        "get_current_user",
+        lambda session=None: (_ for _ in ()).throw(ValueError("bad credentials")),
+    )
 
     runner = CliRunner()
     result = runner.invoke(cli_main, ["config", "check"])
@@ -1159,8 +1191,15 @@ base_url = "https://my-inspire.internal"
     monkeypatch.setattr(
         config_module.Config, "get_config_paths", classmethod(fake_get_config_paths)
     )
+    from inspire.cli.commands.config import check as config_check_module
+
     monkeypatch.setenv("INSPIRE_BASE_URL", "https://env.example")
-    monkeypatch.setattr(auth_module.AuthManager, "get_api", lambda _cls, cfg=None: DummyAPI())
+    monkeypatch.setattr(config_check_module, "get_web_session", lambda: object())
+    monkeypatch.setattr(
+        config_check_module.browser_api_module,
+        "get_current_user",
+        lambda session=None: {"id": "user-test"},
+    )
 
     runner = CliRunner()
     result = runner.invoke(cli_main, ["--json", "config", "check"])
@@ -1195,7 +1234,14 @@ def test_config_check_accepts_local_json_alias(
     monkeypatch.setattr(
         config_module.Config, "get_config_paths", classmethod(fake_get_config_paths)
     )
-    monkeypatch.setattr(auth_module.AuthManager, "get_api", lambda _cls, cfg=None: DummyAPI())
+    from inspire.cli.commands.config import check as config_check_module
+
+    monkeypatch.setattr(config_check_module, "get_web_session", lambda: object())
+    monkeypatch.setattr(
+        config_check_module.browser_api_module,
+        "get_current_user",
+        lambda session=None: {"id": "user-test"},
+    )
 
     runner = CliRunner()
     result = runner.invoke(cli_main, ["--json", "config", "check"])
@@ -1225,8 +1271,12 @@ def test_config_check_rejects_placeholder_base_url(
     monkeypatch.setattr(
         config_module.Config, "get_config_paths", classmethod(fake_get_config_paths)
     )
+    from inspire.cli.commands.config import check as config_check_module
+
     monkeypatch.setattr(
-        auth_module.AuthManager, "get_api", lambda _cls, cfg=None: pytest.fail("should not auth")
+        config_check_module,
+        "get_web_session",
+        lambda: pytest.fail("should not auth"),
     )
 
     runner = CliRunner()
@@ -1262,8 +1312,12 @@ def test_config_check_requires_docker_registry(
     monkeypatch.setattr(
         config_module.Config, "get_config_paths", classmethod(fake_get_config_paths)
     )
+    from inspire.cli.commands.config import check as config_check_module
+
     monkeypatch.setattr(
-        auth_module.AuthManager, "get_api", lambda _cls, cfg=None: pytest.fail("should not auth")
+        config_check_module,
+        "get_web_session",
+        lambda: pytest.fail("should not auth"),
     )
 
     runner = CliRunner()
@@ -1300,8 +1354,12 @@ def test_config_check_rejects_top_level_project_base_url_key(
     monkeypatch.setattr(
         config_module.Config, "get_config_paths", classmethod(fake_get_config_paths)
     )
+    from inspire.cli.commands.config import check as config_check_module
+
     monkeypatch.setattr(
-        auth_module.AuthManager, "get_api", lambda _cls, cfg=None: pytest.fail("should not auth")
+        config_check_module,
+        "get_web_session",
+        lambda: pytest.fail("should not auth"),
     )
 
     runner = CliRunner()
@@ -1314,14 +1372,12 @@ def test_config_check_rejects_top_level_project_base_url_key(
     assert "[api]" in payload["error"]["message"]
 
 
-def test_config_check_allows_path_defaults_for_endpoint_fields(
+def test_config_check_allows_path_default_for_browser_api_prefix(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     config = make_test_config(tmp_path)
     config.base_url = "https://my-inspire.internal"
     config.docker_registry = TEST_DOCKER_REGISTRY
-    config.auth_endpoint = "/auth/token"
-    config.openapi_prefix = "/openapi/v1"
     config.browser_api_prefix = "/api/v1"
 
     def fake_from_files_and_env(cls, require_credentials: bool = True):  # type: ignore[override]
@@ -1336,7 +1392,14 @@ def test_config_check_allows_path_defaults_for_endpoint_fields(
     monkeypatch.setattr(
         config_module.Config, "get_config_paths", classmethod(fake_get_config_paths)
     )
-    monkeypatch.setattr(auth_module.AuthManager, "get_api", lambda _cls, cfg=None: DummyAPI())
+    from inspire.cli.commands.config import check as config_check_module
+
+    monkeypatch.setattr(config_check_module, "get_web_session", lambda: object())
+    monkeypatch.setattr(
+        config_check_module.browser_api_module,
+        "get_current_user",
+        lambda session=None: {"id": "user-test"},
+    )
 
     runner = CliRunner()
     result = runner.invoke(cli_main, ["config", "check"])

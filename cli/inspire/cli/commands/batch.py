@@ -24,7 +24,7 @@ from inspire.cli.context import (
 )
 from inspire.cli.formatters import human_formatter, json_formatter
 from inspire.cli.utils import job_submit
-from inspire.cli.utils.auth import AuthManager, AuthenticationError
+from inspire.cli.utils.auth import AuthenticationError
 from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.quota_resolver import (
     QuotaMatchError,
@@ -183,6 +183,27 @@ def _optional_str(item: dict[str, Any], key: str) -> str | None:
     return _require_str(item, key)
 
 
+def _optional_str_list(item: dict[str, Any], key: str) -> list[str]:
+    if key not in item or item[key] is None:
+        return []
+    value = item[key]
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            raise ConfigError(f"Batch item field {key} must not contain empty node names.")
+        return [stripped]
+    if not isinstance(value, list):
+        raise ConfigError(f"Batch item field {key} must be a string or an array of strings.")
+    result: list[str] = []
+    for index, raw in enumerate(value):
+        if not isinstance(raw, str) or not raw.strip():
+            raise ConfigError(
+                f"Batch item field {key}[{index}] must be a non-empty string."
+            )
+        result.append(raw.strip())
+    return result
+
+
 def _optional_bool(item: dict[str, Any], key: str, *, default: bool = False) -> bool:
     if key not in item or item[key] is None:
         return default
@@ -330,6 +351,7 @@ def _prepare_training_item(
         project_name=selected.name,
         auto_fault_tolerance=_optional_bool(item, "auto_fault_tolerance", default=False),
         fault_tolerance_max_retry=10 if fault_retry is None else fault_retry,
+        exclude_nodes=_optional_str_list(item, "exclude_nodes"),
     )
 
 
@@ -339,6 +361,7 @@ def _prepare_hpc_item(
     config: Config,
     session: Any,
 ) -> dict[str, Any]:
+    from inspire.cli.commands.hpc.hpc_commands import build_hpc_create_payload
     from inspire.cli.commands.hpc.hpc_commands import _looks_like_full_slurm_script
     from inspire.cli.commands.hpc.hpc_commands import _resolve_project_id
 
@@ -367,22 +390,23 @@ def _prepare_hpc_item(
     memory_per_cpu = _optional_int(item, "memory_per_cpu", min_value=1)
     if memory_per_cpu is None:
         memory_per_cpu = max(1, int(quota_spec.memory_gib) // max(1, int(cpus_per_task)))
-    return {
-        "name": _require_str(item, "name"),
-        "logic_compute_group_id": resolved_quota.logic_compute_group_id,
-        "project_id": _resolve_project_id(config, _require_condition_str(item, "project", kind="hpc")),
-        "workspace_id": workspace_id,
-        "image": _require_condition_str(item, "image", kind="hpc"),
-        "image_type": _optional_str(item, "image_type") or "SOURCE_PRIVATE",
-        "entrypoint": entrypoint,
-        "spec_id": resolved_quota.quota_id,
-        "instance_count": _optional_int(item, "instance_count", min_value=1) or 1,
-        "task_priority": _optional_int(item, "priority", min_value=1) or 10,
-        "number_of_tasks": _optional_int(item, "number_of_tasks", min_value=1) or 1,
-        "cpus_per_task": int(cpus_per_task),
-        "memory_per_cpu": int(memory_per_cpu),
-        "enable_hyper_threading": _optional_bool(item, "enable_hyper_threading", default=False),
-    }
+    return build_hpc_create_payload(
+        name=_require_str(item, "name"),
+        logic_compute_group_id=resolved_quota.logic_compute_group_id,
+        project_id=_resolve_project_id(config, _require_condition_str(item, "project", kind="hpc")),
+        workspace_id=workspace_id,
+        image=_require_condition_str(item, "image", kind="hpc"),
+        image_type=_optional_str(item, "image_type") or "SOURCE_PRIVATE",
+        entrypoint=entrypoint,
+        quota_id=resolved_quota.quota_id,
+        instance_count=_optional_int(item, "instance_count", min_value=1) or 1,
+        task_priority=_optional_int(item, "priority", min_value=1) or 10,
+        number_of_tasks=_optional_int(item, "number_of_tasks", min_value=1) or 1,
+        cpus_per_task=int(cpus_per_task),
+        memory_per_cpu=int(memory_per_cpu),
+        enable_hyper_threading=_optional_bool(item, "enable_hyper_threading", default=False),
+        resource_spec_price=build_resource_spec_price(quota=resolved_quota),
+    )
 
 def _project_request_value(config: Config, requested: str) -> str:
     if requested.startswith("project-"):
@@ -816,7 +840,8 @@ def job_batch(ctx: Context, config_path: Path, dry_run: bool) -> None:
     Required fields after expansion:
         name, command, quota, workspace, project, group, image
         Optional fields use create-command defaults: priority, framework,
-        nodes, max_time, auto_fault_tolerance, fault_tolerance_max_retry
+        nodes, max_time, auto_fault_tolerance, fault_tolerance_max_retry,
+        exclude_nodes
 
     \b
     Examples:
@@ -829,7 +854,6 @@ def job_batch(ctx: Context, config_path: Path, dry_run: bool) -> None:
         items = _expanded_items(data, item_key="jobs")
         config, _ = Config.from_files_and_env()
         session = get_web_session()
-        api = None if dry_run else AuthManager.get_api(config)
 
         outputs: list[dict[str, Any]] = []
         for item in items:
@@ -850,8 +874,11 @@ def job_batch(ctx: Context, config_path: Path, dry_run: bool) -> None:
                 payload["matrix"] = item.get("_matrix", {})
                 outputs.append(payload)
             else:
-                assert api is not None
-                result = api.create_training_job_smart(**plan.create_kwargs)
+                data = browser_api_module.create_training_job(
+                    payload=plan.create_kwargs,
+                    session=session,
+                )
+                result = {"code": 0, "data": data}
                 outputs.append(
                     {"kind": "training", "name": plan.create_kwargs["name"], "result": result}
                 )
@@ -890,7 +917,6 @@ def hpc_batch(ctx: Context, config_path: Path, dry_run: bool) -> None:
         items = _expanded_items(data, item_key="jobs")
         config, _ = Config.from_files_and_env()
         session = get_web_session()
-        api = None if dry_run else AuthManager.get_api(config)
 
         outputs: list[dict[str, Any]] = []
         for item in items:
@@ -907,15 +933,18 @@ def hpc_batch(ctx: Context, config_path: Path, dry_run: bool) -> None:
                     {
                         "dry_run": True,
                         "kind": "hpc",
-                        "name": create_kwargs["name"],
+                        "name": create_kwargs["job_name"],
                         "create_kwargs": create_kwargs,
                         "matrix": item.get("_matrix", {}),
                     }
                 )
             else:
-                assert api is not None
-                result = api.create_hpc_job(**create_kwargs)
-                outputs.append({"kind": "hpc", "name": create_kwargs["name"], "result": result})
+                data = browser_api_module.create_hpc_job(
+                    payload=create_kwargs,
+                    session=session,
+                )
+                result = {"code": 0, "data": data}
+                outputs.append({"kind": "hpc", "name": create_kwargs["job_name"], "result": result})
         _emit_batch_result(ctx, dry_run=dry_run, outputs=outputs, command_name="hpc")
     except Exception as e:
         _handle_batch_exception(ctx, e)

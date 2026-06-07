@@ -1,7 +1,7 @@
 """Cluster resource metrics (time-series) queries.
 
 Backs the web UI "资源视图" tab: `POST /api/v1/cluster_metric/resource_metric_by_time`.
-Browser-API only — no OpenAPI equivalent.
+Browser API time-series endpoint used by notebook/job/HPC/serving/Ray pages.
 
 The UI fans out one request per metric_type (confirmed empirically 2026-04:
 sending a list of 5 metric types in one call only returns results for the

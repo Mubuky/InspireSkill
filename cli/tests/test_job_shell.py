@@ -19,7 +19,7 @@ class _FakeSession:
     cookies = None
 
 
-def test_list_job_instances_uses_job_id_camel_case(monkeypatch) -> None:  # noqa: ANN001
+def test_list_job_instances_uses_v2_action_api(monkeypatch) -> None:  # noqa: ANN001
     captured = {}
 
     def fake_request_json(session, method, path, *, referer, body=None, timeout=30):  # noqa: ANN001
@@ -33,7 +33,7 @@ def test_list_job_instances_uses_job_id_camel_case(monkeypatch) -> None:  # noqa
                 "timeout": timeout,
             }
         )
-        return {"code": 0, "data": {"items": [], "total": 0}}
+        return {"ResponseMetadata": {"Action": "ListJobInstances"}, "Result": {"items": [], "total": 0}}
 
     monkeypatch.setattr(jobs_module, "_request_json", fake_request_json)
 
@@ -46,8 +46,8 @@ def test_list_job_instances_uses_job_id_camel_case(monkeypatch) -> None:  # noqa
     assert items == []
     assert total == 0
     assert captured["method"] == "POST"
-    assert captured["path"].endswith("/train_job/instance_list")
-    assert captured["body"] == {"jobId": "job-abc", "page_num": 1, "page_size": 7}
+    assert captured["path"] == "/api/v2/train?Action=ListJobInstances"
+    assert captured["body"] == {"job_id": "job-abc", "page_num": 1, "page_size": 7}
 
 
 def test_build_remote_cmd_url_and_headers(monkeypatch) -> None:  # noqa: ANN001

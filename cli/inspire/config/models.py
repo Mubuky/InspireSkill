@@ -62,9 +62,7 @@ class Config:
     force_proxy: bool = False
 
     # API path prefixes (None = use code defaults)
-    openapi_prefix: Optional[str] = None
     browser_api_prefix: Optional[str] = None
-    auth_endpoint: Optional[str] = None
     docker_registry: Optional[str] = None
 
     # Proxy settings ([proxy] in TOML)

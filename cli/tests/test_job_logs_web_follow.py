@@ -21,7 +21,7 @@ def _patch_web_resolution(monkeypatch) -> _FakeSession:  # noqa: ANN001
     monkeypatch.setattr(job_logs, "_close_web_client", lambda: None)
     monkeypatch.setattr(
         job_logs.browser_api_module,
-        "get_job_detail",
+        "get_job_detail_v2",
         lambda job_id, *, session: {"created_at": "1000"},
     )
     monkeypatch.setattr(

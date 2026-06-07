@@ -45,6 +45,8 @@ inspire job logs <name>-train --workspace 分布式训练空间 --follow
 
 `job create` 本身不解析 `me:<repo>`；在启动命令里使用相对 `me` 的路径，或让脚本自己切到正确目录。需要先操作共享盘时，用 notebook 的 `exec --cwd me:<repo>`。
 
+需要避开已知坏节点或复现调度问题时，`job create` 可重复传 `--exclude-node <NODE_NAME>`。这对应前端高级选项里的“排除节点”：候选节点来自所选 compute group 的 Ready 节点列表，语义是不要把 job 放到这些节点上，不是像 notebook `--node` 那样固定到某个节点。
+
 ## 4. 优先级
 
 `--priority` 是 1 到 10 的数字，平台映射为三档：

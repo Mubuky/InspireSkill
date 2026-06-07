@@ -78,7 +78,7 @@ uv run inspire hpc create --help
 
 | 场景 | 手册 |
 | --- | --- |
-| 对照平台接口 | [references/dev/openapi.md](references/dev/openapi.md)、[references/dev/browser-api.md](references/dev/browser-api.md) |
+| 对照平台接口 | [references/dev/browser-api.md](references/dev/browser-api.md) |
 
 ## 5. 项目上下文
 

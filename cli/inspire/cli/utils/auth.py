@@ -1,109 +1,33 @@
-"""Authentication management for Inspire CLI.
+"""Compatibility shims for authentication-related CLI imports."""
 
-Provides authenticated API client with token caching.
-"""
+from __future__ import annotations
 
-import time
-from typing import Optional
 
-from inspire.platform.openapi import AuthenticationError, InspireAPI, InspireConfig
-from inspire.config import Config
+class AuthenticationError(Exception):
+    """Raised when the active web session cannot authenticate a request."""
 
 
 class AuthManager:
-    """Manages authentication and provides API client instances.
+    """Compatibility facade kept for account/session cache invalidation.
 
-    Caches tokens for reuse within a session (tokens expire after ~1 hour).
+    Account switching still imports this class to clear old process-local
+    state, so keep the tiny facade while all real requests use Browser API
+    helpers backed by the web session.
     """
 
-    _token: Optional[str] = None
-    _expires_at: float = 0
-    _api: Optional[InspireAPI] = None
-    _cache_key: Optional[tuple[object, ...]] = None
-
-    @classmethod
-    def _build_cache_key(cls, config: Config) -> tuple[object, ...]:
-        try:
-            from inspire.accounts import current_account
-
-            account = current_account()
-        except Exception:
-            account = None
-        return (
-            account,
-            config.username,
-            config.base_url,
-            config.openapi_prefix,
-            config.auth_endpoint,
-            config.requests_http_proxy,
-            config.requests_https_proxy,
-        )
-
-    @classmethod
-    def get_api(cls, config: Optional[Config] = None) -> InspireAPI:
-        """Get an authenticated API client.
-
-        Args:
-            config: Configuration to use. If None, reads from environment.
-
-        Returns:
-            Authenticated InspireAPI instance
-
-        Raises:
-            ConfigError: If required environment variables are missing
-            AuthenticationError: If authentication fails
-        """
-        if config is None:
-            config = Config.from_env()
-
-        cache_key = cls._build_cache_key(config)
-
-        # Check if we have a valid cached token for this exact account/config.
-        if (
-            cls._api is not None
-            and cls._token
-            and cls._cache_key == cache_key
-            and time.time() < cls._expires_at
-        ):
-            return cls._api
-
-        # Create new API client
-        api_config = InspireConfig(
-            base_url=config.base_url,
-            timeout=config.timeout,
-            max_retries=config.max_retries,
-            retry_delay=config.retry_delay,
-            verify_ssl=not config.skip_ssl_verify,
-            force_proxy=config.force_proxy,
-            openapi_prefix=config.openapi_prefix,
-            auth_endpoint=config.auth_endpoint,
-            docker_registry=config.docker_registry,
-            compute_groups=config.compute_groups,
-            requests_http_proxy=config.requests_http_proxy,
-            requests_https_proxy=config.requests_https_proxy,
-        )
-        api = InspireAPI(api_config)
-
-        # Authenticate
-        try:
-            api.authenticate(config.username, config.password)
-        except AuthenticationError as e:
-            raise AuthenticationError(f"Authentication failed: {e}")
-        except Exception as e:
-            raise AuthenticationError(f"Authentication request failed: {e}")
-
-        # Cache the token (expire 10 minutes early for safety)
-        cls._token = api.token
-        cls._expires_at = time.time() + 3000  # ~50 minutes
-        cls._api = api
-        cls._cache_key = cache_key
-
-        return api
+    _api = None
+    _token = None
+    _expires_at = None
+    _cache_key = None
 
     @classmethod
     def clear_cache(cls) -> None:
-        """Clear cached authentication."""
-        cls._token = None
-        cls._expires_at = 0
         cls._api = None
+        cls._token = None
+        cls._expires_at = None
         cls._cache_key = None
+
+    @classmethod
+    def get_api(cls, *args, **kwargs):  # noqa: ANN001
+        del args, kwargs
+        raise AuthenticationError("Token API clients have been removed; use Browser API helpers.")

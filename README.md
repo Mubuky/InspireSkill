@@ -227,8 +227,7 @@ SKILL.md 装完是一份**通用 playbook**。日常 workspace 基本就是 `CPU
 - [**SKILL.md**](SKILL.md) — 日常使用入口：CLI help 查询方式、按需加载索引和项目上下文字段。
 - [references/setup/install-and-config.md](references/setup/install-and-config.md) — 安装、更新、账号初始化和项目初始化。
 - [references/setup/proxy-setup.md](references/setup/proxy-setup.md) — Clash Verge 7897 分流配置和账号级代理衔接。
-- [references/dev/openapi.md](references/dev/openapi.md) — CLI 维护参考：公开提交接口合约。
-- [references/dev/browser-api.md](references/dev/browser-api.md) — CLI 维护参考：网页会话接口合约。
+- [references/dev/browser-api.md](references/dev/browser-api.md) — CLI 维护参考：网页会话接口和当前前端请求合约。
 - [references/resources-and-paths.md](references/resources-and-paths.md) — 实时资源、规格三元组、共享盘作用域、存储池和项目路径。
 - [references/notebook.md](references/notebook.md) — Notebook 创建、连接、远程执行、传文件、基底环境准备和容器内 HTTP 服务暴露。
 - [references/compute-workloads.md](references/compute-workloads.md) — GPU job、CPU HPC、Ray、serving 的适用边界、调度语义和示例。

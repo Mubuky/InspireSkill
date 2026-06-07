@@ -10,11 +10,14 @@ from inspire.platform.web.session import WebSession, get_web_session
 
 __all__ = [
     "HPCJobInfo",
+    "create_hpc_job",
     "delete_hpc_job",
+    "get_hpc_job_detail",
     "list_hpc_job_instances",
     "list_hpc_jobs",
     "list_hpc_job_events",
     "list_hpc_job_logs",
+    "stop_hpc_job",
 ]
 
 
@@ -52,6 +55,104 @@ class HPCJobInfo:
             compute_group_name=data.get("logic_compute_group_name", ""),
             workspace_id=data.get("workspace_id", ""),
         )
+
+
+def _v2_result(data: dict[str, Any]) -> dict[str, Any]:
+    metadata = data.get("ResponseMetadata")
+    if isinstance(metadata, dict):
+        error = metadata.get("Error")
+        if isinstance(error, dict):
+            code = error.get("Code") or "Error"
+            message = error.get("Message") or "unknown error"
+            raise ValueError(f"API error: {code}: {message}")
+    elif data.get("code") not in (None, 0):
+        raise ValueError(f"API error: {data.get('message')}")
+
+    payload = data.get("Result")
+    if isinstance(payload, dict):
+        return payload
+    if payload is None:
+        legacy_payload = data.get("data")
+        if isinstance(legacy_payload, dict):
+            return legacy_payload
+    return {}
+
+
+def create_hpc_job(
+    *,
+    payload: dict[str, Any],
+    session: Optional[WebSession] = None,
+) -> dict[str, Any]:
+    """Create an HPC job via the current Web UI v2 Action API."""
+    if session is None:
+        session = get_web_session()
+    data = _request_json(
+        session,
+        "POST",
+        "/api/v2/hpc?Action=CreateJobConsole",
+        referer=f"{_get_base_url()}/jobs/hpc",
+        body=payload,
+        timeout=60,
+    )
+    try:
+        return _v2_result(data)
+    except ValueError as exc:
+        message = str(exc).lower()
+        if "unknown field" not in message or "task" not in message:
+            raise
+        retry_payload = dict(payload)
+        retry_payload.pop("task_priority", None)
+        data = _request_json(
+            session,
+            "POST",
+            "/api/v2/hpc?Action=CreateJobConsole",
+            referer=f"{_get_base_url()}/jobs/hpc",
+            body=retry_payload,
+            timeout=60,
+        )
+        return _v2_result(data)
+
+
+def get_hpc_job_detail(
+    job_id: str,
+    session: Optional[WebSession] = None,
+) -> dict[str, Any]:
+    """Fetch an HPC job via the current Web UI v2 Action API."""
+    job_id = str(job_id or "").strip()
+    if not job_id:
+        raise ValueError("job_id is required")
+    if session is None:
+        session = get_web_session()
+    data = _request_json(
+        session,
+        "POST",
+        "/api/v2/hpc?Action=GetJob",
+        referer=f"{_get_base_url()}/jobs/hpcDetail/{job_id}",
+        body={"job_id": job_id},
+        timeout=30,
+    )
+    return _v2_result(data)
+
+
+def stop_hpc_job(
+    job_id: str,
+    session: Optional[WebSession] = None,
+) -> dict[str, Any]:
+    """Stop an HPC job via the current Web UI v2 Action API."""
+    job_id = str(job_id or "").strip()
+    if not job_id:
+        raise ValueError("job_id is required")
+    if session is None:
+        session = get_web_session()
+    data = _request_json(
+        session,
+        "POST",
+        "/api/v2/hpc?Action=StopJob",
+        referer=f"{_get_base_url()}/jobs/hpc",
+        body={"job_id": job_id},
+        timeout=30,
+    )
+    return _v2_result(data)
 
 
 def list_hpc_jobs(
@@ -266,9 +367,8 @@ def delete_hpc_job(
 
     Endpoint: ``DELETE /api/v1/hpc_jobs/{id}`` (REST-style, same shape as
     notebook / image delete). Confirmed empirically via probe on 2026-04-21;
-    ``POST /hpc_jobs/delete`` returns 404. Browser-API only (no OpenAPI
-    equivalent). Destructive: the entry disappears from the UI — if the
-    job is still running, ``stop`` it first.
+    ``POST /hpc_jobs/delete`` returns 404. Destructive: the entry disappears
+    from the UI — if the job is still running, ``stop`` it first.
     """
     if session is None:
         session = get_web_session()

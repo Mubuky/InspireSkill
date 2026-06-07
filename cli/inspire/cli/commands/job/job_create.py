@@ -9,14 +9,12 @@ import click
 from inspire.cli.context import (
     Context,
     EXIT_API_ERROR,
-    EXIT_AUTH_ERROR,
     EXIT_CONFIG_ERROR,
     EXIT_VALIDATION_ERROR,
     pass_context,
 )
 from inspire.cli.formatters import human_formatter, json_formatter
 from inspire.cli.utils import job_submit
-from inspire.cli.utils.auth import AuthManager, AuthenticationError
 from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.cli.utils.quota_resolver import (
@@ -50,11 +48,11 @@ def run_job_create(
     dry_run: bool = False,
     auto_fault_tolerance: Optional[bool] = None,
     fault_tolerance_max_retry: Optional[int] = None,
+    exclude_nodes: tuple[str, ...] | None = None,
 ) -> None:
     """Run the job creation flow."""
     try:
         config, _ = Config.from_files_and_env()
-        api = None if dry_run else AuthManager.get_api(config)
 
         fields = apply_workload_profile(
             profiles=getattr(config, "profiles", {}),
@@ -214,10 +212,13 @@ def run_job_create(
                 project_name=selected.name,
                 auto_fault_tolerance=auto_fault_tolerance,
                 fault_tolerance_max_retry=fault_tolerance_max_retry,
+                exclude_nodes=exclude_nodes,
             )
         except ValueError as e:
             _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
             return
+
+        plan_exclude_nodes = job_submit.training_plan_exclude_nodes(plan)
 
         if dry_run:
             if ctx.json_output:
@@ -234,6 +235,8 @@ def run_job_create(
                 click.echo(f"Priority: {priority}")
             if nodes > 1:
                 click.echo(f"Nodes: {nodes}")
+            if plan_exclude_nodes:
+                click.echo(f"Exclude nodes: {scrub_raw_ids(', '.join(plan_exclude_nodes))}")
             click.echo(f"Image: {scrub_raw_ids(image)}")
             click.echo(f"Command: {scrub_raw_ids(plan.wrapped_command)}")
             if plan.log_path:
@@ -241,9 +244,8 @@ def run_job_create(
             click.echo("No job was submitted.")
             return
 
-        assert api is not None
         submission = job_submit.submit_training_job(
-            api,
+            session=session,
             config=config,
             name=name,
             command=command,
@@ -258,6 +260,7 @@ def run_job_create(
             project_name=selected.name,
             auto_fault_tolerance=auto_fault_tolerance,
             fault_tolerance_max_retry=fault_tolerance_max_retry,
+            exclude_nodes=exclude_nodes,
         )
 
         wrapped_command = submission.wrapped_command
@@ -280,6 +283,8 @@ def run_job_create(
                 click.echo(f"Priority: {priority}")
             if nodes > 1:
                 click.echo(f"Nodes:    {nodes}")
+            if plan_exclude_nodes:
+                click.echo(f"Exclude nodes: {scrub_raw_ids(', '.join(plan_exclude_nodes))}")
             if auto_fault_tolerance:
                 click.echo(f"Fault tolerance: enabled (max retry: {fault_tolerance_max_retry or 10})")
             max_cmd_len = 80
@@ -310,8 +315,6 @@ def run_job_create(
 
     except ConfigError as e:
         _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
-    except AuthenticationError as e:
-        _handle_error(ctx, "AuthenticationError", str(e), EXIT_AUTH_ERROR)
     except Exception as e:
         _handle_error(ctx, "APIError", str(e), EXIT_API_ERROR)
 
@@ -406,6 +409,16 @@ def run_job_create(
     help="Number of nodes for multi-node training.",
 )
 @click.option(
+    "--exclude-node",
+    "exclude_nodes",
+    multiple=True,
+    metavar="NODE_NAME",
+    help=(
+        "Exclude a Ready node from placement for this job. Repeat for multiple nodes. "
+        "This is not node pinning."
+    ),
+)
+@click.option(
     "--dry-run",
     is_flag=True,
     help=(
@@ -430,6 +443,7 @@ def create(
     image: Optional[str],
     project: Optional[str],
     nodes: Optional[int],
+    exclude_nodes: tuple[str, ...],
     dry_run: bool,
 ) -> None:
     """Create a GPU batch job.
@@ -472,4 +486,5 @@ def create(
         dry_run=dry_run,
         auto_fault_tolerance=auto_fault_tolerance,
         fault_tolerance_max_retry=fault_tolerance_max_retry,
+        exclude_nodes=exclude_nodes,
     )

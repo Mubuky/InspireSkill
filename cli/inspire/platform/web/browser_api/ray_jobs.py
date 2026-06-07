@@ -2,9 +2,9 @@
 
 The web UI exposes Ray-cluster job management under ``/api/v1/ray_job/*`` for
 users running hybrid CPU-decode / GPU-inference streaming pipelines (what the
-UI labels "弹性计算"). Because this endpoint family is web-session only —
-there is no OpenAPI equivalent — we hit it the same way the SPA does, with
-stored Playwright cookies and a matching ``Referer``.
+UI labels "弹性计算"). This endpoint family is web-session only, so we hit it
+the same way the SPA does, with stored Playwright cookies and a matching
+``Referer``.
 
 Create payload shape was reverse-engineered from the SPA's own submit handler
 (``/assets/constant.BP_zw-df.js``). Wire surprises worth remembering:

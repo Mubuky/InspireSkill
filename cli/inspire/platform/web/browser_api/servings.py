@@ -511,7 +511,7 @@ def create_serving(
 
     The payload mirrors the current `/jobs/modelDeployment` form. In
     particular, images are sent by `mirror_id`, and resource specs are sent as
-    a nested `resource_spec_price` proto-style object rather than an OpenAPI
+    a nested `resource_spec_price` proto-style object rather than a flat
     `spec_id`.
     """
     if session is None:

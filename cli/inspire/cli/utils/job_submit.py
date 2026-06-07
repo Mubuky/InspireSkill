@@ -7,13 +7,13 @@ import re
 import shlex
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
 
 from inspire.platform.web import browser_api as browser_api_module
 from inspire.platform.web import session as web_session_module
 from inspire.platform.web.browser_api import ProjectInfo
 from inspire.config import Config, ConfigError, build_env_exports, default_remote_cwd
-from inspire.cli.utils.quota_resolver import ResolvedQuota
+from inspire.cli.utils.quota_resolver import ResolvedQuota, build_resource_spec_price
 
 
 @dataclass(frozen=True)
@@ -178,6 +178,34 @@ def _quota_display(quota: ResolvedQuota) -> str:
     return f"{quota.cpu_count}xCPU"
 
 
+def normalize_exclude_nodes(exclude_nodes: Iterable[str] | None) -> list[str]:
+    """Normalize the Web UI's exclude_nodes create option."""
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for raw_node in exclude_nodes or []:
+        node = str(raw_node).strip()
+        if not node:
+            raise ValueError("exclude_nodes entries must be non-empty node names.")
+        if node not in seen:
+            normalized.append(node)
+            seen.add(node)
+    return normalized
+
+
+def training_plan_exclude_nodes(plan: JobSubmissionPlan) -> list[str]:
+    """Return excluded node names from a training create plan."""
+    framework_config = plan.create_kwargs.get("framework_config")
+    if not isinstance(framework_config, list) or not framework_config:
+        return []
+    first = framework_config[0]
+    if not isinstance(first, dict):
+        return []
+    nodes = first.get("exclude_nodes")
+    if isinstance(nodes, list):
+        return [str(node) for node in nodes]
+    return []
+
+
 def build_training_job_plan(
     *,
     config: Config,
@@ -194,6 +222,7 @@ def build_training_job_plan(
     project_name: Optional[str] = None,
     auto_fault_tolerance: Optional[bool] = None,
     fault_tolerance_max_retry: Optional[int] = None,
+    exclude_nodes: Iterable[str] | None = None,
 ) -> JobSubmissionPlan:
     if not image:
         raise ValueError("--image is required.")
@@ -209,20 +238,28 @@ def build_training_job_plan(
 
     max_time_ms = str(int(max_time_hours * 3600 * 1000))
 
+    resource_spec_price = build_resource_spec_price(quota=quota)
+    framework_config: dict[str, Any] = {
+        "image_type": "SOURCE_PRIVATE",
+        "image": image,
+        "instance_count": int(nodes),
+        "quota_id": quota.quota_id,
+        "resource_spec_price": resource_spec_price,
+        "cpu": quota.cpu_count,
+        "gpu_count": quota.gpu_count,
+        "mem_gi": quota.memory_gib,
+    }
+
     create_kwargs: dict[str, Any] = dict(
         name=name,
         command=final_command,
         framework=framework,
         project_id=project_id,
         workspace_id=workspace_id,
-        image=image,
+        logic_compute_group_id=quota.logic_compute_group_id,
         task_priority=priority,
-        instance_count=nodes,
         max_running_time_ms=max_time_ms,
-        spec_id_override=quota.quota_id,
-        compute_group_id_override=quota.logic_compute_group_id,
-        auto_fault_tolerance=auto_fault_tolerance,
-        fault_tolerance_max_retry=fault_tolerance_max_retry,
+        framework_config=[framework_config],
     )
 
     if config.shm_size is not None:
@@ -231,7 +268,21 @@ def build_training_job_plan(
             raise ValueError(
                 "Shared memory size must be >= 1 (set INSPIRE_SHM_SIZE or job.shm_size)."
             )
-        create_kwargs["shm_gi"] = shm_size
+        framework_config["shm_gi"] = shm_size
+
+    normalized_exclude_nodes = normalize_exclude_nodes(exclude_nodes)
+    if normalized_exclude_nodes:
+        framework_config["exclude_nodes"] = normalized_exclude_nodes
+
+    if auto_fault_tolerance is True:
+        if fault_tolerance_max_retry is not None and fault_tolerance_max_retry < 1:
+            raise ValueError(
+                "fault_tolerance_max_retry must be >= 1 when auto_fault_tolerance is enabled"
+            )
+        create_kwargs["auto_fault_tolerance"] = True
+        create_kwargs["fault_tolerance_max_retry"] = (
+            fault_tolerance_max_retry if fault_tolerance_max_retry is not None else 10
+        )
 
     return JobSubmissionPlan(
         create_kwargs=create_kwargs,
@@ -268,8 +319,8 @@ def training_plan_payload(plan: JobSubmissionPlan) -> dict[str, Any]:
 
 
 def submit_training_job(
-    api,  # noqa: ANN001
     *,
+    session: Any,
     config: Config,
     name: str,
     command: str,
@@ -284,6 +335,7 @@ def submit_training_job(
     project_name: Optional[str] = None,
     auto_fault_tolerance: Optional[bool] = None,
     fault_tolerance_max_retry: Optional[int] = None,
+    exclude_nodes: Iterable[str] | None = None,
 ) -> JobSubmission:
     plan = build_training_job_plan(
         config=config,
@@ -300,11 +352,15 @@ def submit_training_job(
         project_name=project_name,
         auto_fault_tolerance=auto_fault_tolerance,
         fault_tolerance_max_retry=fault_tolerance_max_retry,
+        exclude_nodes=exclude_nodes,
     )
 
-    result = api.create_training_job_smart(**plan.create_kwargs)
-    data = result.get("data", {}) if isinstance(result, dict) else {}
-    job_id = data.get("job_id")
+    data = browser_api_module.create_training_job(
+        payload=plan.create_kwargs,
+        session=session,
+    )
+    result = {"code": 0, "data": data}
+    job_id = data.get("job_id") or data.get("id")
 
     return JobSubmission(
         job_id=job_id,
@@ -322,9 +378,11 @@ __all__ = [
     "build_training_job_plan",
     "build_remote_logged_command",
     "derive_remote_log_glob",
+    "normalize_exclude_nodes",
     "sanitize_job_name_for_filename",
     "select_project_for_workspace",
     "submit_training_job",
+    "training_plan_exclude_nodes",
     "training_plan_payload",
     "wrap_in_bash",
 ]

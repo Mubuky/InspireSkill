@@ -8,7 +8,6 @@ from click.testing import CliRunner
 
 from inspire import config as config_module
 from inspire.cli.main import main as cli_main
-from inspire.cli.utils import auth as auth_module
 from inspire.cli.utils.quota_resolver import ResolvedQuota
 from inspire.platform.web import browser_api as browser_api_module
 
@@ -18,13 +17,19 @@ class DummyAPI:
         self.training_calls: list[dict[str, Any]] = []
         self.hpc_calls: list[dict[str, Any]] = []
 
-    def create_training_job_smart(self, **kwargs: Any) -> dict[str, Any]:
-        self.training_calls.append(kwargs)
-        return {"data": {"job_id": f"job-{len(self.training_calls)}", "name": kwargs["name"]}}
+    def create_training_job(
+        self, *, payload: dict[str, Any], session: object | None = None
+    ) -> dict[str, Any]:
+        del session
+        self.training_calls.append(payload)
+        return {"job_id": f"job-{len(self.training_calls)}", "name": payload["name"]}
 
-    def create_hpc_job(self, **kwargs: Any) -> dict[str, Any]:
-        self.hpc_calls.append(kwargs)
-        return {"data": {"job_id": f"hpc-job-{len(self.hpc_calls)}", "name": kwargs["name"]}}
+    def create_hpc_job(
+        self, *, payload: dict[str, Any], session: object | None = None
+    ) -> dict[str, Any]:
+        del session
+        self.hpc_calls.append(payload)
+        return {"job_id": f"hpc-job-{len(self.hpc_calls)}", "name": payload["job_name"]}
 
 
 class FakeWebSession:
@@ -69,8 +74,8 @@ def _patch_submit_deps(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Dummy
     )
 
     api = DummyAPI()
-    monkeypatch.setattr(auth_module.AuthManager, "get_api", lambda cfg=None: api)
-    auth_module.AuthManager.clear_cache()
+    monkeypatch.setattr(browser_api_module, "create_training_job", api.create_training_job)
+    monkeypatch.setattr(browser_api_module, "create_hpc_job", api.create_hpc_job)
 
     project = browser_api_module.ProjectInfo(
         project_id="project-12345678-1234-1234-1234-123456789abc",
@@ -114,7 +119,10 @@ def _patch_submit_deps(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Dummy
             cpu_count=spec.cpu_count,
             memory_gib=spec.memory_gib,
             gpu_type="H200" if spec.gpu_count else "",
-            raw_price={},
+            raw_price={
+                "cpu_info": {"cpu_type": "Test"},
+                "gpu_info": {"gpu_type": "NVIDIA_H200_SXM_141G"},
+            },
         )
 
     batch_module = importlib.import_module("inspire.cli.commands.batch")
@@ -166,6 +174,12 @@ def test_job_create_dry_run_resolves_plan_without_create_api(
             "registry.local/train:latest",
             "--nodes",
             "1",
+            "--exclude-node",
+            "qb-prod-gpu1736",
+            "--exclude-node",
+            "qb-prod-gpu1736",
+            "--exclude-node",
+            "qb-prod-gpu1737",
             "--dry-run",
         ],
     )
@@ -175,6 +189,10 @@ def test_job_create_dry_run_resolves_plan_without_create_api(
     assert payload["success"] is True
     assert payload["data"]["dry_run"] is True
     assert payload["data"]["create_kwargs"]["name"] == "dry-job"
+    assert payload["data"]["create_kwargs"]["framework_config"][0]["exclude_nodes"] == [
+        "qb-prod-gpu1736",
+        "qb-prod-gpu1737",
+    ]
     assert payload["data"]["project_name"] == "Project One"
     assert "project_id" not in payload["data"]["create_kwargs"]
     assert api.training_calls == []
@@ -242,7 +260,7 @@ def test_job_create_profile_fills_condition_fields(
     payload = json.loads(result.output)
     create_kwargs = payload["data"]["create_kwargs"]
     assert create_kwargs["name"] == "profile-job"
-    assert create_kwargs["image"] == "registry.local/train:latest"
+    assert create_kwargs["framework_config"][0]["image"] == "registry.local/train:latest"
     assert payload["data"]["project_name"] == "Project One"
     assert "project_id" not in create_kwargs
     assert api.training_calls == []
@@ -305,6 +323,7 @@ def test_batch_matrix_dry_run_expands_json_without_submit(
                     "max_time": 24,
                     "auto_fault_tolerance": False,
                     "fault_tolerance_max_retry": 0,
+                    "exclude_nodes": ["qb-prod-gpu17{seed}"],
                 },
                 "matrix": {"seed": [1, 2]},
                 "jobs": [
@@ -328,7 +347,15 @@ def test_batch_matrix_dry_run_expands_json_without_submit(
     items = payload["data"]["items"]
     assert [item["create_kwargs"]["name"] for item in items] == ["train-s1", "train-s2"]
     assert "--seed 2" in items[1]["create_kwargs"]["command"]
-    assert items[0]["create_kwargs"]["image"] == "registry.batch/train:latest"
+    assert items[0]["create_kwargs"]["framework_config"][0]["image"] == (
+        "registry.batch/train:latest"
+    )
+    assert items[0]["create_kwargs"]["framework_config"][0]["exclude_nodes"] == [
+        "qb-prod-gpu171"
+    ]
+    assert items[1]["create_kwargs"]["framework_config"][0]["exclude_nodes"] == [
+        "qb-prod-gpu172"
+    ]
     assert items[0]["create_kwargs"]["task_priority"] == 7
     assert api.training_calls == []
 
@@ -392,7 +419,9 @@ command = "python train.py --lr {lr}"
     assert result.exit_code == 0, result.output
     assert "Submitted 2 job batch item(s)" in result.output
     assert [call["name"] for call in api.training_calls] == ["train-1e-4", "train-2e-4"]
-    assert {call["image"] for call in api.training_calls} == {"registry.batch/train:latest"}
+    assert {call["framework_config"][0]["image"] for call in api.training_calls} == {
+        "registry.batch/train:latest"
+    }
     assert {call["task_priority"] for call in api.training_calls} == {7}
 
 

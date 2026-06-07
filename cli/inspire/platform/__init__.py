@@ -1,1 +1,1 @@
-"""Platform integrations (OpenAPI, web/SSO endpoints)."""
+"""Platform integrations for web/SSO-backed platform endpoints."""

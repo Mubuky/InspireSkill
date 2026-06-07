@@ -17,9 +17,11 @@ from .availability import (
 )
 from .jobs import (
     JobInfo,
+    create_training_job,
     delete_job,
     get_current_user,
     get_job_detail,
+    get_job_detail_v2,
     get_train_job_workdir,
     list_job_events,
     list_job_instances,
@@ -27,6 +29,7 @@ from .jobs import (
     list_job_users,
     list_jobs,
     list_train_job_logs,
+    stop_training_job,
 )
 from .files import (
     FileDirectoryInfo,
@@ -39,11 +42,14 @@ from .files import (
 )
 from .hpc_jobs import (
     HPCJobInfo,
+    create_hpc_job,
     delete_hpc_job,
+    get_hpc_job_detail,
     list_hpc_job_instances,
     list_hpc_jobs,
     list_hpc_job_events,
     list_hpc_job_logs,
+    stop_hpc_job,
 )
 from .ray_jobs import (
     RayJobInfo,
@@ -162,9 +168,11 @@ from .servings import (
 __all__ = [
     # Jobs / users
     "JobInfo",
+    "create_training_job",
     "delete_job",
     "get_current_user",
     "get_job_detail",
+    "get_job_detail_v2",
     "get_train_job_workdir",
     "list_job_events",
     "list_job_instances",
@@ -172,6 +180,7 @@ __all__ = [
     "list_job_users",
     "list_jobs",
     "list_train_job_logs",
+    "stop_training_job",
     # Files
     "FileDirectoryInfo",
     "SystemStorageInfo",
@@ -182,11 +191,14 @@ __all__ = [
     "list_system_storage_types",
     # HPC jobs
     "HPCJobInfo",
+    "create_hpc_job",
     "delete_hpc_job",
+    "get_hpc_job_detail",
     "list_hpc_job_instances",
     "list_hpc_jobs",
     "list_hpc_job_events",
     "list_hpc_job_logs",
+    "stop_hpc_job",
     # Ray jobs (弹性计算 — CPU decode + GPU inference streaming pipelines)
     "RayJobInfo",
     "create_ray_job",

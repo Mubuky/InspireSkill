@@ -1,7 +1,7 @@
 """Browser (web-session) APIs for jobs and users.
 
-The web UI exposes job listing endpoints (and related user listings) that are
-not part of the OpenAPI surface. These endpoints require a web-session cookie.
+The web UI exposes job endpoints through the browser session; these helpers
+require a web-session cookie.
 """
 
 from __future__ import annotations
@@ -14,9 +14,11 @@ from inspire.platform.web.session import WebSession, get_web_session
 
 __all__ = [
     "JobInfo",
+    "create_training_job",
     "delete_job",
     "get_current_user",
     "get_job_detail",
+    "get_job_detail_v2",
     "get_train_job_workdir",
     "list_job_instances",
     "list_job_events",
@@ -24,6 +26,7 @@ __all__ = [
     "list_train_job_logs",
     "list_job_users",
     "list_jobs",
+    "stop_training_job",
 ]
 
 
@@ -73,6 +76,91 @@ class JobInfo:
         )
 
 
+def _v2_result(data: dict[str, Any]) -> dict[str, Any]:
+    metadata = data.get("ResponseMetadata")
+    if isinstance(metadata, dict):
+        error = metadata.get("Error")
+        if isinstance(error, dict):
+            code = error.get("Code") or "Error"
+            message = error.get("Message") or "unknown error"
+            raise ValueError(f"API error: {code}: {message}")
+    elif data.get("code") not in (None, 0):
+        raise ValueError(f"API error: {data.get('message')}")
+
+    payload = data.get("Result")
+    if isinstance(payload, dict):
+        return payload
+    if payload is None:
+        legacy_payload = data.get("data")
+        if isinstance(legacy_payload, dict):
+            return legacy_payload
+    return {}
+
+
+def create_training_job(
+    *,
+    payload: dict[str, Any],
+    session: Optional[WebSession] = None,
+) -> dict[str, Any]:
+    """Create a distributed-training job via the current Web UI v2 Action API."""
+    if session is None:
+        session = get_web_session()
+
+    data = _request_json(
+        session,
+        "POST",
+        "/api/v2/train?Action=CreateJobConsole",
+        referer=f"{_get_base_url()}/jobs/distributedTraining",
+        body=payload,
+        timeout=60,
+    )
+    return _v2_result(data)
+
+
+def stop_training_job(
+    job_id: str,
+    session: Optional[WebSession] = None,
+) -> dict[str, Any]:
+    """Stop a distributed-training job via the current Web UI v2 Action API."""
+    job_id = str(job_id or "").strip()
+    if not job_id:
+        raise ValueError("job_id is required")
+    if session is None:
+        session = get_web_session()
+
+    data = _request_json(
+        session,
+        "POST",
+        "/api/v2/train?Action=StopJob",
+        referer=f"{_get_base_url()}/jobs/distributedTraining",
+        body={"job_id": job_id},
+        timeout=30,
+    )
+    return _v2_result(data)
+
+
+def get_job_detail_v2(
+    job_id: str,
+    session: Optional[WebSession] = None,
+) -> dict[str, Any]:
+    """Fetch a distributed-training job via the current Web UI v2 Action API."""
+    job_id = str(job_id or "").strip()
+    if not job_id:
+        raise ValueError("job_id is required")
+    if session is None:
+        session = get_web_session()
+
+    data = _request_json(
+        session,
+        "POST",
+        "/api/v2/train?Action=GetJob",
+        referer=f"{_get_base_url()}/jobs/distributedTrainingDetail/{job_id}",
+        body={"job_id": job_id},
+        timeout=30,
+    )
+    return _v2_result(data)
+
+
 def list_jobs(
     workspace_id: Optional[str] = None,
     created_by: Optional[str] = None,
@@ -109,17 +197,15 @@ def list_jobs(
     data = _request_json(
         session,
         "POST",
-        _browser_api_path("/train_job/list"),
+        "/api/v2/train?Action=ListJobs",
         referer=f"{_get_base_url()}/jobs/distributedTraining",
         body=body,
         timeout=30,
     )
 
-    if data.get("code") != 0:
-        raise ValueError(f"API error: {data.get('message')}")
-
-    jobs_data = data.get("data", {}).get("jobs", [])
-    total = data.get("data", {}).get("total", 0)
+    payload = _v2_result(data)
+    jobs_data = payload.get("jobs", [])
+    total = payload.get("total", 0)
 
     jobs = [JobInfo.from_api_response(j) for j in jobs_data]
     return jobs, total
@@ -187,16 +273,13 @@ def list_job_instances(
     data = _request_json(
         session,
         "POST",
-        _browser_api_path("/train_job/instance_list"),
+        "/api/v2/train?Action=ListJobInstances",
         referer=f"{_get_base_url()}/jobs/distributedTrainingDetail/{job_id}",
-        body={"jobId": job_id, "page_num": 1, "page_size": limit},
+        body={"job_id": job_id, "page_num": 1, "page_size": limit},
         timeout=30,
     )
 
-    if data.get("code") != 0:
-        raise ValueError(f"API error: {data.get('message')}")
-
-    payload = data.get("data") if isinstance(data, dict) else None
+    payload = _v2_result(data)
     if not isinstance(payload, dict):
         return [], 0
     items = payload.get("items") or []
@@ -417,8 +500,7 @@ def delete_job(
 ) -> dict:
     """Permanently delete a training job entry from the platform.
 
-    Browser-API only; the OpenAPI surface stops at `stop`. Endpoint:
-    ``POST /api/v1/train_job/delete`` with body ``{"job_id": <id>}``. The
+    Endpoint: ``POST /api/v1/train_job/delete`` with body ``{"job_id": <id>}``. The
     exact body key is inferred from the parallel ``/train_job/*`` endpoints
     (``detail``/``workdir`` both use ``job_id``); confirm via
     ``inspire --debug`` on a rejected call. Destructive: the job entry

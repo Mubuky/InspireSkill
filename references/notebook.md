@@ -51,7 +51,7 @@ inspire notebook create --workspace 分布式训练空间 --group <GPU_GROUP_FUL
 
 需要复用同一组条件时，用 `inspire notebook profile set <name> ...` 保存，并在 create 中显式传 `--profile <name>`。
 
-需要把 notebook 固定到某个节点时，`inspire notebook create` 可传 `--node <NODE_NAME>`。这里的值是计算组里的节点名，例如 `qb-prod-gpu1736`，不是平台 handle；节点必须属于已选 `--group`，不匹配时由平台拒绝。日常创建建议让调度器自动放置，只有在排查坏节点、复现实验或平台同学明确指定节点时才手动 pin。当前 notebook create 走 Web UI 同款 Browser API `/notebook/create` payload，因此可以携带网页创建表单里的 `node_id`；这不是旧 OpenAPI 的能力。
+需要把 notebook 固定到某个节点时，`inspire notebook create` 可传 `--node <NODE_NAME>`。这里的值是计算组里的节点名，例如 `qb-prod-gpu1736`，不是平台 handle；节点必须属于已选 `--group`，不匹配时由平台拒绝。日常创建建议让调度器自动放置，只有在排查坏节点、复现实验或平台同学明确指定节点时才手动 pin。当前 notebook create 走 Web UI 同款 Browser API `/notebook/create` payload，因此可以携带前端/后端 create body 里的 `node_id`。
 
 ## 4. 连接、`shell` 与 `exec`
 

@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import pytest
 from click.testing import CliRunner
@@ -8,7 +8,6 @@ from click.testing import CliRunner
 from inspire import config as config_module
 from inspire.cli.context import EXIT_CONFIG_ERROR
 from inspire.cli.main import main as cli_main
-from inspire.cli.utils import auth as auth_module
 from inspire.platform.web.browser_api.hpc_jobs import HPCJobInfo
 
 
@@ -16,15 +15,20 @@ class DummyHPCAPI:
     def __init__(self) -> None:
         self.calls: dict[str, Any] = {}
 
-    def create_hpc_job(self, **kwargs: Any) -> dict[str, Any]:
-        self.calls["create_hpc_job"] = kwargs
-        return {"data": {"job_id": "hpc-job-123", "status": "QUEUING"}}
+    def create_hpc_job(
+        self, *, payload: dict[str, Any], session: object | None = None
+    ) -> dict[str, Any]:
+        del session
+        self.calls["create_hpc_job"] = payload
+        return {"job_id": "hpc-job-123", "status": "QUEUING"}
 
-    def get_hpc_job_detail(self, job_id: str) -> dict[str, Any]:
+    def get_hpc_job_detail(self, job_id: str, session: object | None = None) -> dict[str, Any]:
+        del session
         self.calls["get_hpc_job_detail"] = job_id
-        return {"data": {"job_id": job_id, "name": "hpc-demo", "status": "RUNNING"}}
+        return {"job_id": job_id, "name": "hpc-demo", "status": "RUNNING"}
 
-    def stop_hpc_job(self, job_id: str) -> bool:
+    def stop_hpc_job(self, job_id: str, session: object | None = None) -> bool:
+        del session
         self.calls["stop_hpc_job"] = job_id
         return True
 
@@ -53,16 +57,6 @@ def patch_hpc_config_and_auth(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -
 
     api = DummyHPCAPI()
 
-    def fake_get_api(
-        self_or_cls,
-        cfg: Optional[config_module.Config] = None,
-    ) -> DummyHPCAPI:  # type: ignore[override]
-        assert cfg is config or cfg is None
-        return api
-
-    monkeypatch.setattr(auth_module.AuthManager, "get_api", fake_get_api)
-    auth_module.AuthManager.clear_cache()
-
     # Stub session + quota resolver so the test never hits the real platform.
     import importlib
 
@@ -82,6 +76,21 @@ def patch_hpc_config_and_auth(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -
         hpc_mod.browser_api_module,
         "get_current_user",
         lambda session=None: {"id": "user-1"},
+    )
+    monkeypatch.setattr(
+        hpc_mod.browser_api_module,
+        "create_hpc_job",
+        lambda *, payload, session=None: api.create_hpc_job(payload=payload, session=session),
+    )
+    monkeypatch.setattr(
+        hpc_mod.browser_api_module,
+        "get_hpc_job_detail",
+        lambda job_id, session=None: api.get_hpc_job_detail(job_id, session=session),
+    )
+    monkeypatch.setattr(
+        hpc_mod.browser_api_module,
+        "stop_hpc_job",
+        lambda job_id, session=None: api.stop_hpc_job(job_id, session=session),
     )
 
     def _fake_resolve_quota(*, spec, workspace_id, session=None, **_):  # noqa: ANN001
@@ -139,15 +148,16 @@ def test_hpc_create_json_uses_alias_resolution(
     assert payload["data"]["status"] == "QUEUING"
 
     call = api.calls["create_hpc_job"]
+    assert call["job_name"] == "hpc-demo"
     assert call["project_id"] == "project-alias"
     assert call["workspace_id"] == "ws-00000000-0000-0000-0000-000000000002"
-    assert call["image"] == "registry.local/hpc:latest"
-    # spec_id resolved by the (stubbed) quota resolver from --quota 0,32,256
-    assert call["spec_id"] == "spec-test-default"
     assert call["logic_compute_group_id"] == "lcg-123"
+    assert call["slurm_cluster_spec"]["image"] == "registry.local/hpc:latest"
+    assert call["slurm_cluster_spec"]["predef_quota_id"] == "spec-test-default"
+    assert call["slurm_cluster_spec"]["spec_price"]["logic_compute_group_id"] == "lcg-123"
     # Slurm-level knobs are forwarded as-is, independent of the node spec.
-    assert call["cpus_per_task"] == 8
-    assert call["memory_per_cpu"] == 4
+    assert call["sbatch_script"]["cpus_per_task"] == 8
+    assert call["sbatch_script"]["memory_per_cpu"] == "4G"
 
 
 def test_hpc_create_slurm_knobs_default_from_quota(
@@ -181,8 +191,8 @@ def test_hpc_create_slurm_knobs_default_from_quota(
     assert result.exit_code == 0, result.output
     call = api.calls["create_hpc_job"]
     # Defaults: cpus_per_task = quota.cpu, memory_per_cpu = mem // cpu
-    assert call["cpus_per_task"] == 32
-    assert call["memory_per_cpu"] == 8
+    assert call["sbatch_script"]["cpus_per_task"] == 32
+    assert call["sbatch_script"]["memory_per_cpu"] == "8G"
 
 
 def test_hpc_create_help_highlights_slurm_body() -> None:
@@ -299,15 +309,13 @@ def test_hpc_status_human_output_shows_priority_fields(
     from inspire.cli.commands.hpc import hpc_commands as hpc_mod
 
     monkeypatch.setattr(hpc_mod, "_resolve_hpc_name_in_workspace", lambda *a, **kw: "hpc-job-123")
-    api.get_hpc_job_detail = lambda job_id: {
-        "data": {
-            "job_id": job_id,
-            "name": "hpc-demo",
-            "status": "RUNNING",
-            "priority": 7,
-            "priority_name": "7",
-            "priority_level": "HIGH",
-        }
+    api.get_hpc_job_detail = lambda job_id, session=None: {
+        "job_id": job_id,
+        "name": "hpc-demo",
+        "status": "RUNNING",
+        "priority": 7,
+        "priority_name": "7",
+        "priority_level": "HIGH",
     }
     runner = CliRunner()
 

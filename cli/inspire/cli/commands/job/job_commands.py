@@ -25,7 +25,7 @@ from inspire.cli.context import (
     pass_context,
 )
 from inspire.cli.formatters import human_formatter, json_formatter
-from inspire.cli.utils.auth import AuthManager, AuthenticationError
+from inspire.cli.utils.auth import AuthenticationError
 from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.id_resolver import is_full_uuid, is_partial_id
 from inspire.cli.utils.job_shell import (
@@ -912,7 +912,7 @@ def status(
         )
         try:
             session = get_web_session()
-            job_data = browser_api_module.get_job_detail(job_id, session=session)
+            job_data = browser_api_module.get_job_detail_v2(job_id, session=session)
         finally:
             _close_web_client()
 
@@ -1029,9 +1029,8 @@ def stop(ctx: Context, job: str, workspace: Optional[str], pick: Optional[int]) 
             pick=pick,
             workspace_must_be_single=True,
         )
-        api = AuthManager.get_api(config)
-
-        api.stop_training_job(job_id)
+        session = get_web_session()
+        browser_api_module.stop_training_job(job_id, session=session)
 
         if ctx.json_output:
             click.echo(
@@ -1196,7 +1195,7 @@ def wait(
             try:
                 try:
                     session = get_web_session()
-                    job_data = browser_api_module.get_job_detail(job_id, session=session)
+                    job_data = browser_api_module.get_job_detail_v2(job_id, session=session)
                 finally:
                     _close_web_client()
                 current_status = job_data.get("status", "UNKNOWN")
@@ -1277,7 +1276,7 @@ def show_command(
         )
         try:
             session = get_web_session()
-            job_data = browser_api_module.get_job_detail(job_id, session=session)
+            job_data = browser_api_module.get_job_detail_v2(job_id, session=session)
         finally:
             _close_web_client()
         source = "web"

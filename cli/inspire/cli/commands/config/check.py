@@ -17,7 +17,6 @@ from inspire.cli.context import (
     pass_context,
 )
 from inspire.cli.formatters import human_formatter, json_formatter
-from inspire.cli.utils.auth import AuthManager, AuthenticationError
 from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.config import (
@@ -25,6 +24,8 @@ from inspire.config import (
     ConfigError,
     SOURCE_DEFAULT,
 )
+from inspire.platform.web import browser_api as browser_api_module
+from inspire.platform.web.session import SessionExpiredError, get_web_session
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -135,7 +136,7 @@ def _format_placeholder_issue_message(issues: list[dict[str, str]]) -> str:
             f"{issue['value']} [source: {issue['source']}]"
         )
     lines.append("Use real host values in config files or environment variables.")
-    lines.append("Path-only defaults such as /auth/token are allowed.")
+    lines.append("Path-only API prefixes are allowed.")
     return "\n".join(lines)
 
 
@@ -228,8 +229,9 @@ def check_config(ctx: Context) -> None:
         auth_error = None
 
         try:
-            AuthManager.get_api(cfg)
-        except AuthenticationError as e:
+            session = get_web_session()
+            browser_api_module.get_current_user(session=session)
+        except (SessionExpiredError, ValueError) as e:
             auth_ok = False
             auth_error = str(e)
 

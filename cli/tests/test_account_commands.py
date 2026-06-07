@@ -406,50 +406,20 @@ class TestAccountUseCommand:
             assert (alice_dir / name).read_text() == f"alice:{name}\n"
             assert (bob_dir / name).read_text() == f"bob:{name}\n"
 
-    def test_auth_manager_cache_is_account_sensitive(
-        self, home: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        from inspire.cli.utils import auth as auth_module
-        from inspire.cli.utils.auth import AuthManager
+    def test_token_api_getter_is_removed(self, home: Path) -> None:
+        from inspire.cli.utils.auth import AuthManager, AuthenticationError
         from inspire.config import Config
 
-        created: list[object] = []
-
-        class FakeAPI:
-            def __init__(self, api_config) -> None:  # noqa: ANN001
-                self.config = api_config
-                self.token = ""
-                created.append(self)
-
-            def authenticate(self, username: str, password: str) -> None:
-                self.token = f"token:{username}:{password}"
-
-        monkeypatch.setattr(auth_module, "InspireAPI", FakeAPI)
         storage.create_account(
             "alice",
             '[auth]\nusername = "alice-user"\npassword = "alice-pw"\n'
             '[api]\nbase_url = "https://alice.example"\n',
         )
-        storage.create_account(
-            "bob",
-            '[auth]\nusername = "bob-user"\npassword = "bob-pw"\n'
-            '[api]\nbase_url = "https://bob.example"\n',
-        )
-
         storage.set_current_account("alice")
-        alice_cfg, _ = Config.from_files_and_env(require_credentials=True)
-        alice_api = AuthManager.get_api(alice_cfg)
-        assert alice_api.token == "token:alice-user:alice-pw"
+        cfg, _ = Config.from_files_and_env(require_credentials=True)
 
-        storage.set_current_account("bob")
-        bob_cfg, _ = Config.from_files_and_env(require_credentials=True)
-        bob_api = AuthManager.get_api(bob_cfg)
-        bob_api_again = AuthManager.get_api(bob_cfg)
-
-        assert bob_api is not alice_api
-        assert bob_api.token == "token:bob-user:bob-pw"
-        assert bob_api_again is bob_api
-        assert len(created) == 2
+        with pytest.raises(AuthenticationError, match="Browser API helpers"):
+            AuthManager.get_api(cfg)
 
     def test_rtunnel_state_cache_lives_under_active_account(
         self, home: Path

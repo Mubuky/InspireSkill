@@ -30,7 +30,6 @@ from inspire.cli.context import (
     pass_context,
 )
 from inspire.cli.formatters import json_formatter
-from inspire.cli.utils.auth import AuthManager
 from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.job_submit import derive_remote_log_glob
 from inspire.cli.utils.raw_ids import scrub_raw_ids
@@ -239,7 +238,7 @@ def _follow_logs_via_ssh(
     original_level = api_logger.level
     api_logger.setLevel(logging.CRITICAL)
 
-    api = AuthManager.get_api(config)
+    session = get_web_session()
     terminal_statuses = {
         "SUCCEEDED",
         "FAILED",
@@ -333,8 +332,7 @@ def _follow_logs_via_ssh(
             if current_time - last_status_check >= status_check_interval:
                 last_status_check = current_time
                 try:
-                    status_result = api.get_job_detail(job_id)
-                    job_data = status_result.get("data", {})
+                    job_data = browser_api_module.get_job_detail_v2(job_id, session=session)
                     current_status = job_data.get("status", "UNKNOWN")
 
                     if current_status in terminal_statuses:
@@ -638,7 +636,7 @@ def _run_job_logs_web_single_job(
 
         try:
             session = get_web_session()
-            job_data = browser_api_module.get_job_detail(job_id, session=session)
+            job_data = browser_api_module.get_job_detail_v2(job_id, session=session)
             if instance_ids:
                 pod_names = [
                     str(instance_id or "").strip()

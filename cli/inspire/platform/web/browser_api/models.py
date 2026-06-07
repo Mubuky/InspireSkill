@@ -1,8 +1,8 @@
 """Browser API wrappers for the model registry.
 
-Reverse-engineered from the current `/jobs/modelService` page. No OpenAPI
-counterpart exists, so model registry browsing and registration are Browser
-API-only. See `cli/scripts/reverse_capture/` for the capture methodology.
+Reverse-engineered from the current `/jobs/modelService` page. Model registry
+browsing and registration use the web-session Browser API. See
+`cli/scripts/reverse_capture/` for the capture methodology.
 
 Wire-format notes:
 - `POST /api/v1/model/list` body
