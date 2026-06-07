@@ -1,89 +1,74 @@
-# 安装、更新与初始化
+# 安装、配置与 SII Proxy
 
-安装、更新、账号配置、项目初始化或代理 setup 时，先查本手册。平台任务运行、notebook、job、HPC、Ray、serving 和镜像操作看对应业务手册。
+安装、更新、账号配置、项目初始化和本机 SII proxy setup 都看这一份。平台任务运行看 notebook / compute workloads / resources 等业务手册；这里不维护命令清单，命令表面以 CLI help 为准。
 
-## 1. 平台支持
+## 1. 安装
 
-macOS + Linux 是一等公民。Windows Agent 请用 WSL2；CLI 依赖 SSH、rsync、GPFS 目录约定和 POSIX 文件权限，Windows 原生不在 roadmap。
+macOS + Linux 是一等公民。Windows Agent 用 WSL2；Windows 原生命令行不支持。
 
-## 2. 安装
-
-前置：`bash`、`curl`、`tar`、Python 3.10+，以及 `uv`（推荐）或 `pipx` 任一。两个都没装就先装 `uv`：
+前置只需要 `bash`、`curl`、`tar`、Python 3.10+，以及 `uv` 或 `pipx` 任一。没有 `uv` 时先装：
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-然后一行装好 InspireSkill：
+安装 InspireSkill：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/realZillionX/InspireSkill/main/scripts/install.sh | bash
 ```
 
-不需要把仓库克隆到本地。脚本会：
-
-1. 从 PyPI 用 `uv tool install` / `pipx install` 安装 `inspire-skill`。
-2. 确保 `~/.local/bin` 在 PATH 上。
-3. 探测本机 harness，并把 `SKILL.md` 与 `references/` 安装到对应 skill 目录。
-4. macOS 上安装每日静默版本检查的 launchd agent。
-
-可选参数：
+脚本会从 PyPI 安装 `inspire-skill`，把 `SKILL.md` 和 `references/` 刷到已探测到的 Agent harness，并在 macOS 上安装每日静默版本检查。常用参数：
 
 ```bash
-curl -fsSL .../install.sh | bash -s -- --harness claude
-curl -fsSL .../install.sh | bash -s -- --harness claude,codex
-curl -fsSL .../install.sh | bash -s -- --harness antigravity
-curl -fsSL .../install.sh | bash -s -- --harness cursor
-curl -fsSL .../install.sh | bash -s -- --harness qoder
-curl -fsSL .../install.sh | bash -s -- --no-cli
-curl -fsSL .../install.sh | bash -s -- --no-schedule
+curl -fsSL https://raw.githubusercontent.com/realZillionX/InspireSkill/main/scripts/install.sh | bash -s -- --harness claude,codex
+curl -fsSL https://raw.githubusercontent.com/realZillionX/InspireSkill/main/scripts/install.sh | bash -s -- --harness antigravity,cursor,qoder
+curl -fsSL https://raw.githubusercontent.com/realZillionX/InspireSkill/main/scripts/install.sh | bash -s -- --no-cli
+curl -fsSL https://raw.githubusercontent.com/realZillionX/InspireSkill/main/scripts/install.sh | bash -s -- --no-schedule
 ```
 
-安装后检查：
-
-- 装完后 `inspire: command not found`：运行 `exec $SHELL` 或开新终端。
-- `installer failed` / 包索引超时：先确认本机网络和代理；必要时在工具配置或 shell profile 中持久设置 Python 包索引，再重跑安装脚本。不要把一次性环境变量前缀写进任务命令示例。
-- `Playwright does not support chromium on ...` 或 `Executable doesn't exist at ~/.cache/ms-playwright/...`：说明当前全局 `inspire` 使用环境的浏览器 runtime 不完整。直接重跑安装脚本，或运行 `inspire update --cli-only`，安装 / 更新流程会重新准备并验证 Playwright Chromium。
-- Notebook SSH 命令面检查：`inspire notebook ssh --help` 应显示 `ssh <notebook>` 主入口；`inspire notebook connection --help` 管理连接缓存；`inspire notebook ssh-config --help` 输出原生 OpenSSH 配置片段。
-- 同一台机器已经装过：直接重跑安装脚本，脚本是幂等的。
-
-## 3. 更新
+安装后只查这些：
 
 ```bash
-inspire update                # CLI 包 + SKILL/references 一起升到最新
-inspire update --check        # 只检查，不动
-inspire update --cli-only     # 仅升 CLI 包与运行时
-inspire update --skill-only   # 仅刷 SKILL.md / references/
+inspire --version
+inspire --help
+inspire update --check
 ```
 
-`inspire update` 会自动识别当前安装由 `uv tool` 还是 `pipx` 管理，并调用对应升级命令。
-如果默认 PyPI 因网络或镜像问题超时，命令会自动尝试常见 PyPI 镜像。网络受限环境可提前检查 Clash 虚拟/TUN 网卡，或持久配置 `UV_DEFAULT_INDEX` / `PIP_INDEX_URL`。
-成功升级 CLI 后，命令会读取 GitHub Releases，并显示旧版本到新版本之间的 `## 更新内容` 摘要；`--silent` 和 `--skill-only` 不输出这段版本更新摘要。
+如果 `inspire: command not found`，开新终端或运行 `exec $SHELL`。如果 Playwright Chromium 缺失，直接重跑安装脚本或运行 `inspire update --cli-only`；安装 / 更新流程会修全局 CLI 的浏览器运行时。
 
-从 v3.0.3 之前的版本升级时，先重跑一次安装脚本：
+## 2. 更新
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/realZillionX/InspireSkill/main/scripts/install.sh | bash
+inspire update
+inspire update --check
+inspire update --cli-only
+inspire update --skill-only
 ```
 
-落到 v3.0.3 之后，后续 patch 直接 `inspire update`。
+`inspire update` 会自动识别 `uv tool` / `pipx` 安装来源，升级 CLI 包，刷新 harness skill，并显示 GitHub Releases 的更新摘要。`--cli-only` 只升 CLI 包与运行时；`--skill-only` 只刷 `SKILL.md` 和 `references/`。
 
-## 4. 账号级初始化
+## 3. 账号配置
 
 账号配置和仓库无关，任意目录运行：
 
 ```bash
 inspire account add <name>
 inspire config show --compact
+inspire config check
 ```
 
-`inspire account add` 会询问平台登录 username、password、base URL、代理和是否设为活动账号。这里的 username 必须是登录 ID（手机号、学号 / 工号或邮箱等），不是网页右上角显示的中文姓名。结果写入 `~/.inspire/accounts/<name>/config.toml`，包含身份、`base_url`、代理等。
+`inspire account add` 会询问平台登录 username、password、base URL 和代理。username 必须是登录 ID，不是网页右上角中文显示名。配置写入 `~/.inspire/accounts/<name>/config.toml`。
 
-如果在启智 Notebook 容器内安装 InspireSkill，CLI 不会继承打开该 Notebook 时浏览器里的 SSO 登录态，仍需要用账号密码生成自己的 Web session。Notebook 内可运行，但 `inspire config show --compact` 里的 `INSPIRE_USERNAME` 也必须是登录 ID；如果误填成显示名，重新运行 `inspire init --username <login-id>` 或重建账号配置。
+不常驻 SII、但本机 Clash Verge 能转发 `*.sii.edu.cn` 时，代理填本机 mixed port：
 
-账号配置不包含远端工作目录。远端路径通过项目级 `[path_aliases]` 管理，`inspire init` 会按平台返回的共享盘个人目录名写入个人 alias，例如 `me`、`global-me` 以及按存储池区分的 `ssd.me` / `hdd.me` / `qb-ilm2.me`；公共 alias `public` 不依赖个人目录名。
+```text
+http://127.0.0.1:7897
+```
 
-## 5. 项目级初始化
+CLI 不需要 shell 里的 `http_proxy`、`INSPIRE_FORCE_PROXY`、`INSPIRE_PLAYWRIGHT_PROXY` 之类一次性环境变量；账号级 proxy 就是标准入口。
+
+## 4. 项目初始化
 
 每个本地仓库各做一次：
 
@@ -93,14 +78,7 @@ inspire init
 inspire resources availability --workspace all --include-cpu
 ```
 
-`inspire init` 会发现可用项目、workspace、compute group 和远端存储池，并写入：
-
-- 账号级发现结果：`~/.inspire/accounts/<name>/config.toml`
-- 当前仓库项目上下文：`./.inspire/accounts/<name>/config.toml`
-
-CLI 会拒绝账号 config.toml 中出现 `[paths]`，避免项目级路径污染所有仓库。
-
-初始化后，远端命令和传文件优先使用 alias：
+`inspire init` 会把当前仓库的项目上下文写入 `./.inspire/accounts/<account>/config.toml`，并发现远端 path alias。远端工作目录不要写成账号级默认值；用 alias：
 
 ```bash
 inspire notebook exec <name> --cwd me "pwd"
@@ -108,7 +86,7 @@ inspire notebook exec <name> --cwd me:<repo> "git pull"
 inspire notebook scp <name> ./config.yaml me:<repo>/config.yaml
 ```
 
-## 6. 多账号
+多账号只用这些命令：
 
 ```bash
 inspire account add <name2>
@@ -116,8 +94,124 @@ inspire account use <name>
 inspire account current
 ```
 
-每个账号的 config、notebook SSH 连接缓存、Notebook rtunnel proxy state 和 Web session 登录缓存都放在 `~/.inspire/accounts/<name>/` 下；活动账号由 `~/.inspire/current` 选择。`inspire account use <name>` 只切换指针并刷新当前进程里的账号敏感缓存，不删除被切走账号的本地缓存；需要删除账号目录时才用 `inspire account remove <name>`。连接缓存通过 `inspire notebook connection list/status/refresh/forget/prune` 管理；`connection forget/prune` 只影响 Inspire 运行时缓存，不会修改用户的 `~/.ssh/config`。
+账号目录、Web session、Notebook SSH 连接缓存和 rtunnel proxy state 都在 `~/.inspire/accounts/<name>/` 下。连接缓存用 `inspire notebook connection list/status/refresh/forget/prune` 管理。
 
-## 7. 代理 setup
+## 5. SII Proxy
 
-不常驻 SII 的科研人员通常需要让本机代理同时转发公网和 `*.sii.edu.cn` 流量。Clash Verge 示例和账号级代理衔接见 [proxy-setup.md](proxy-setup.md)。
+Clash Verge 的目标只有一个：非 SII 直连网络访问 `*.sii.edu.cn` 时走专门的 SII proxy；其它流量继续走订阅原有规则。
+
+Clash Verge Rev 的脚本常见路径：
+
+```text
+~/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev/profiles/Script.js
+```
+
+把 mixed port 设为 `7897`，再在 `Script.js` 里保留下面这种最小注入。`<...>` 必须替换为组织分发的真实 SII proxy host、user、password；不要提交真实凭据。
+
+```javascript
+var SII_PROXY_GROUP_NAME = "SII Proxy";
+var SII_PROXIES = [
+  {
+    name: "SII Proxy 1",
+    type: "socks5",
+    server: "<sii-proxy-host-1>",
+    port: 10808,
+    username: "<sii-proxy-user-1>",
+    password: "<sii-proxy-password-1>",
+    tls: false,
+    udp: true,
+    "skip-cert-verify": true
+  },
+  {
+    name: "SII Proxy 2",
+    type: "socks5",
+    server: "<sii-proxy-host-2>",
+    port: 10808,
+    username: "<sii-proxy-user-2>",
+    password: "<sii-proxy-password-2>",
+    tls: false,
+    udp: true,
+    "skip-cert-verify": true
+  }
+];
+
+var SII_PROXY_GROUP = {
+  name: SII_PROXY_GROUP_NAME,
+  type: "fallback",
+  proxies: ["SII Proxy 1", "SII Proxy 2"],
+  url: "https://qz.sii.edu.cn",
+  interval: 300
+};
+
+var SII_MANAGED_PROXY_NAMES = {
+  "SII Proxy 1": 1,
+  "SII Proxy 2": 1
+};
+
+function ensureArray(v) {
+  return Array.isArray(v) ? v : [];
+}
+
+function forceUnshift(rules, rule) {
+  var idx = rules.indexOf(rule);
+  if (idx !== -1) rules.splice(idx, 1);
+  rules.unshift(rule);
+}
+
+function upsertProxy(proxies, newProxy) {
+  var out = [];
+  for (var i = 0; i < proxies.length; i++) {
+    if (proxies[i] && proxies[i].name === newProxy.name) continue;
+    out.push(proxies[i]);
+  }
+  out.push(newProxy);
+  return out;
+}
+
+function removeProxyNames(proxies, names) {
+  var out = [];
+  for (var i = 0; i < proxies.length; i++) {
+    var p = proxies[i];
+    if (p && p.name && names[p.name]) continue;
+    out.push(p);
+  }
+  return out;
+}
+
+function resetSiiProxy(config) {
+  config.proxies = removeProxyNames(ensureArray(config.proxies), SII_MANAGED_PROXY_NAMES);
+  config["proxy-groups"] = ensureArray(config["proxy-groups"]).filter(function(group) {
+    return group && group.name !== SII_PROXY_GROUP_NAME;
+  });
+}
+
+function injectSiiProxy(config) {
+  config.proxies = ensureArray(config.proxies);
+  for (var i = 0; i < SII_PROXIES.length; i++) {
+    config.proxies = upsertProxy(config.proxies, SII_PROXIES[i]);
+  }
+
+  config["proxy-groups"] = ensureArray(config["proxy-groups"]);
+  config["proxy-groups"].unshift(SII_PROXY_GROUP);
+
+  var rules = ensureArray(config.rules);
+  forceUnshift(rules, "DOMAIN-SUFFIX,sii.edu.cn," + SII_PROXY_GROUP_NAME);
+  config.rules = rules;
+}
+
+function main(config, profileName) {
+  resetSiiProxy(config);
+  injectSiiProxy(config);
+  return config;
+}
+```
+
+验证只看三件事：
+
+```bash
+lsof -iTCP:7897 -sTCP:LISTEN
+curl -sS -o /dev/null -w "sii: %{http_code}\n" -x http://127.0.0.1:7897 https://qz.sii.edu.cn
+inspire config check
+```
+
+如果 `qz.sii.edu.cn` 失败，先查 Clash Verge 规则里是否有 `DOMAIN-SUFFIX,sii.edu.cn,SII Proxy`，再查 `SII Proxy` 组里的节点是否可用，最后查 `inspire config show --compact` 里的账号级 proxy 是否是 `http://127.0.0.1:7897`。

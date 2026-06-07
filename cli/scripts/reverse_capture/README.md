@@ -31,7 +31,7 @@ cd cli
 uv run playwright install chromium
 ```
 
-代理：`INSPIRE_PLAYWRIGHT_PROXY` 环境变量或 `--proxy` 参数（默认 `http://127.0.0.1:7897`，与 `references/setup/proxy-setup.md` 对齐）。
+代理：`INSPIRE_PLAYWRIGHT_PROXY` 环境变量或 `--proxy` 参数（默认 `http://127.0.0.1:7897`，与 `references/setup/install-and-config.md` 的 SII proxy setup 对齐）。
 
 ## 典型跑法
 

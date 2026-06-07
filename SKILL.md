@@ -72,7 +72,7 @@ uv run inspire hpc create --help
 | 一个项目从环境准备、数据处理推进到训练 | [references/workflows.md](references/workflows.md) |
 | 浏览、注册、保存、调整可见性或清理镜像 | [references/image-management.md](references/image-management.md) |
 | 浏览或注册模型仓库条目，判断 model registry 和 serving 的关系 | [references/model.md](references/model.md) |
-| 安装、更新、账号、项目初始化、代理 setup | [references/setup/install-and-config.md](references/setup/install-and-config.md)、[references/setup/proxy-setup.md](references/setup/proxy-setup.md) |
+| 安装、更新、账号、项目初始化、SII proxy setup | [references/setup/install-and-config.md](references/setup/install-and-config.md) |
 
 开发者手册只在维护 CLI 封装、排查平台接口合约，或 Agent 明确要求看接口时读取：
 

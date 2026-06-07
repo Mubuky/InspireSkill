@@ -204,7 +204,7 @@ SKILL.md 装完是一份**通用 playbook**。日常 workspace 基本就是 `CPU
 
 ## 代理配置
 
-不常驻 SII 的科研人员通常需要让本机代理同时转发公网和 `*.sii.edu.cn` 流量。仓库提供一份**可选**的 Clash Verge `7897` mixed-port 分流模板，见 [references/setup/proxy-setup.md](references/setup/proxy-setup.md)；但 CLI 本身不绑定 7897。代理地址通过 `inspire account add` 写入账号配置，并可用 `inspire config show --compact` 核对。
+不常驻 SII 的科研人员通常需要让本机代理转发 `*.sii.edu.cn` 流量。Clash Verge `7897` mixed-port 的 SII proxy 最小配置见 [references/setup/install-and-config.md](references/setup/install-and-config.md)；但 CLI 本身不绑定 7897。代理地址通过 `inspire account add` 写入账号配置，并可用 `inspire config show --compact` 核对。
 
 > 凭据（host / user / password）**从实验室或组织管理员获取**，不要提交到任何公开仓库或聊天记录。
 
@@ -225,8 +225,7 @@ SKILL.md 装完是一份**通用 playbook**。日常 workspace 基本就是 `CPU
 ## 文档索引
 
 - [**SKILL.md**](SKILL.md) — 日常使用入口：CLI help 查询方式、按需加载索引和项目上下文字段。
-- [references/setup/install-and-config.md](references/setup/install-and-config.md) — 安装、更新、账号初始化和项目初始化。
-- [references/setup/proxy-setup.md](references/setup/proxy-setup.md) — Clash Verge 7897 分流配置和账号级代理衔接。
+- [references/setup/install-and-config.md](references/setup/install-and-config.md) — 安装、更新、账号初始化、项目初始化和 SII proxy setup。
 - [references/dev/browser-api.md](references/dev/browser-api.md) — CLI 维护参考：网页会话接口和当前前端请求合约。
 - [references/resources-and-paths.md](references/resources-and-paths.md) — 实时资源、规格三元组、共享盘作用域、存储池和项目路径。
 - [references/notebook.md](references/notebook.md) — Notebook 创建、连接、远程执行、传文件、基底环境准备和容器内 HTTP 服务暴露。
