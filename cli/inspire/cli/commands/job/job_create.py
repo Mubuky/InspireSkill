@@ -27,7 +27,6 @@ from inspire.cli.utils.quota_resolver import (
 from inspire.config import Config, ConfigError
 from inspire.config.workload_profiles import apply_workload_profile, profile_required_message
 from inspire.config.workspaces import select_workspace_id, workspace_label
-from inspire.job_defaults import DEFAULT_TRAINING_MAX_TIME_HOURS
 from inspire.platform.web.session import get_web_session
 
 def run_job_create(
@@ -38,7 +37,7 @@ def run_job_create(
     command: str,
     framework: str,
     priority: int | None,
-    max_time: float,
+    max_time: Optional[float],
     workspace: str | None,
     image: str | None,
     project: str | None,
@@ -374,9 +373,11 @@ def run_job_create(
 @click.option(
     "--max-time",
     type=click.FloatRange(min=0, min_open=True),
-    default=DEFAULT_TRAINING_MAX_TIME_HOURS,
-    show_default=True,
-    help="Max runtime in hours",
+    default=None,
+    help=(
+        "Max runtime in hours. Omit for no time limit (the platform will not "
+        "kill the job on a timer). The platform caps this at ~24 days when set."
+    ),
 )
 @click.option("--workspace", help="Workspace name. Required unless supplied by --profile.")
 @click.option(
@@ -436,7 +437,7 @@ def create(
     priority: Optional[int],
     auto_fault_tolerance: Optional[bool],
     fault_tolerance_max_retry: Optional[int],
-    max_time: float,
+    max_time: Optional[float],
     workspace: Optional[str],
     profile_name: Optional[str],
     group: Optional[str],

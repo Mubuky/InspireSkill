@@ -46,7 +46,6 @@ from inspire.config.workload_profiles import (
     profile_required_message,
 )
 from inspire.config.workspaces import select_workspace_id, workspace_label
-from inspire.job_defaults import DEFAULT_TRAINING_MAX_TIME_HOURS
 from inspire.platform.web import browser_api as browser_api_module
 from inspire.platform.web.browser_api import NotebookFailedError
 from inspire.platform.web.session import get_web_session
@@ -347,7 +346,7 @@ def _prepare_training_item(
         image=_require_condition_str(item, "image", kind="job"),
         priority=_optional_int(item, "priority", min_value=1) or 10,
         nodes=_optional_int(item, "nodes", min_value=1) or 1,
-        max_time_hours=_optional_max_time_hours(item) or DEFAULT_TRAINING_MAX_TIME_HOURS,
+        max_time_hours=_optional_max_time_hours(item),
         project_name=selected.name,
         auto_fault_tolerance=_optional_bool(item, "auto_fault_tolerance", default=False),
         fault_tolerance_max_retry=10 if fault_retry is None else fault_retry,
