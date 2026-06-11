@@ -1,18 +1,23 @@
-"""Project TOML layer.
+"""Project TOML layers.
 
-The per-account TOML layer now covers what ``_apply_global_layer`` used to
-handle — see ``load_account_layer.py``. This module only loads the
-per-repo, per-account ``./.inspire/accounts/<account>/config.toml`` on top
-of the already-applied account layer.
+Project configuration is split into two repo-local layers:
+
+* shared project config: ``./.inspire/config.toml``
+* account override: ``./.inspire/accounts/<account>/config.toml``
+
+The shared layer holds facts that normally apply to the repository regardless
+of which local account is active. The account override is applied on top only
+when an account-specific file exists.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from inspire.config.models import SOURCE_PROJECT, ConfigError
 from inspire.config.toml import (
-    _find_project_config,
+    _find_project_configs,
     _flatten_toml,
     _load_toml,
     _toml_key_to_field,
@@ -29,16 +34,38 @@ def _apply_project_layer(
     sources: dict[str, str],
     account: str | None = None,
 ) -> _ProjectLayerState:
-    project_config_path = _find_project_config(account) if account else _find_project_config()
+    shared_path, account_path = _find_project_configs(account)
+    project_config_path = account_path or shared_path
     layer_state = _ProjectLayerState(
         project_config_path=project_config_path,
         project_projects={},
         project_defaults={},
         project_context={},
+        shared_project_config_path=shared_path,
+        account_project_config_path=account_path,
+        project_config_paths=[path for path in (shared_path, account_path) if path is not None],
     )
-    if not project_config_path:
+    if not layer_state.project_config_paths:
         return layer_state
 
+    for path in layer_state.project_config_paths:
+        _apply_one_project_file(
+            config_dict=config_dict,
+            sources=sources,
+            layer_state=layer_state,
+            project_config_path=path,
+        )
+
+    return layer_state
+
+
+def _apply_one_project_file(
+    *,
+    config_dict: dict[str, Any],
+    sources: dict[str, str],
+    layer_state: _ProjectLayerState,
+    project_config_path: Path,
+) -> None:
     project_raw = _load_toml(project_config_path)
 
     # Legacy structural sections are silently ignored at project level too —
@@ -46,29 +73,29 @@ def _apply_project_layer(
     project_raw.pop("accounts", None)
 
     cli_section = project_raw.pop("cli", {})
-    prefer_source = cli_section.get("prefer_source", "env")
-    if prefer_source not in ("env", "toml"):
-        raise ConfigError(
-            f"Invalid prefer_source value: '{prefer_source}'\n"
-            "Must be 'env' or 'toml' in [cli] section of project config."
-        )
-    layer_state.prefer_source = prefer_source
+    prefer_source = cli_section.get("prefer_source")
+    if prefer_source is not None:
+        if prefer_source not in ("env", "toml"):
+            raise ConfigError(
+                f"Invalid prefer_source value: '{prefer_source}'\n"
+                "Must be 'env' or 'toml' in [cli] section of project config."
+            )
+        layer_state.prefer_source = prefer_source
 
     project_compute_groups = project_raw.pop("compute_groups", [])
     project_remote_env = {str(k): str(v) for k, v in project_raw.pop("remote_env", {}).items()}
     project_path_aliases = normalize_path_alias_map(project_raw.pop("path_aliases", {}))
     project_profiles = normalize_workload_profiles(project_raw.pop("profiles", {}))
     project_projects = _parse_alias_map(project_raw.pop("projects", {}))
-    layer_state.project_projects = project_projects
 
     raw_defaults = project_raw.pop("defaults", {})
     if isinstance(raw_defaults, dict):
-        layer_state.project_defaults = raw_defaults
+        layer_state.project_defaults.update(raw_defaults)
     raw_context = project_raw.pop("context", {})
     if isinstance(raw_context, dict):
         # [context].account has no meaning under the per-account layout.
         raw_context.pop("account", None)
-        layer_state.project_context = raw_context
+        layer_state.project_context.update(raw_context)
 
     project_raw.pop("workspaces", None)
 
@@ -132,7 +159,7 @@ def _apply_project_layer(
         merged_projects.update(project_projects)
         config_dict["projects"] = merged_projects
         sources["projects"] = SOURCE_PROJECT
-    return layer_state
+        layer_state.project_projects.update(project_projects)
 
 
 __all__ = ["_apply_project_layer"]

@@ -2,6 +2,36 @@
 
 本文件同步 GitHub Releases 正文格式；Release 页面是发布说明的标准口径。
 
+# v6.0.4
+
+## 更新内容
+
+### 新增
+
+- 新增仓库共享项目配置层 `./.inspire/config.toml`，并继续支持账号项目覆盖层 `./.inspire/accounts/<account>/config.toml`；配置加载顺序变为账号配置、共享项目配置、账号项目覆盖、环境变量。
+- 新增项目 dotenv 支持：`inspire --env-file <path> ...` 可显式加载 dotenv，`[cli].env_file` 可在共享项目配置中声明默认 dotenv，真实父进程环境变量仍保持最高优先级。
+- 新增 `inspire config env use <path>`，用于把仓库级 dotenv 路径登记到共享项目配置；`inspire init --scope project --env-file <path>` 可在项目初始化时同步登记。
+
+### 修复
+
+- 修复 notebook rtunnel / SSH refresh 和 fast path 的连接恢复细节，避免已有连接缓存、proxy command 和 websocket terminal 路径在刷新后漂移。
+- 修复 job 创建流程的回归问题，保持 job create payload、资源条件和命令包装的一致性。
+- 完善 notebook 连接类命令的多账号 target cache 行为，账号 alias rename 后同步更新 remembered notebook target。
+
+### 文档
+
+- 删除未发布状态的多账号命令上下文开发设计草案，避免正式包继续携带规划文档。
+- 更新安装配置、路径边界和 Skill 文档，明确共享项目配置、账号项目覆盖和 dotenv 登记的边界。
+
+### 验证
+
+- `uv lock --check`
+- `uv run pytest -q`
+- `uv run ruff check inspire tests`
+- `uv run mypy`
+- `uv build`
+- `git diff --check`
+
 # v6.0.3
 
 ## 更新内容

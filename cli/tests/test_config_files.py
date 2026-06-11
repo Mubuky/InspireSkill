@@ -16,6 +16,7 @@ from inspire.config import (
     SOURCE_GLOBAL,
     SOURCE_PROJECT,
     SOURCE_ENV,
+    SOURCE_ENV_FILE,
     PROJECT_CONFIG_DIR,
     CONFIG_FILENAME,
 )
@@ -509,6 +510,104 @@ class TestAccountConfigLayer:
         assert "project    CI-情境智能" in result.output
         assert "workspace  CPU资源空间" in result.output
 
+    def test_shared_project_config_loads_with_active_account(
+        self,
+        home: Path,
+        clean_env: None,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        self._write_account_config(
+            home,
+            "alice",
+            '[auth]\nusername = "alice-platform"\npassword = "pw"\n',
+        )
+        monkeypatch.delenv("INSP_GITHUB_REPO", raising=False)
+        shared_config = tmp_path / ".inspire" / "config.toml"
+        shared_config.parent.mkdir(parents=True)
+        shared_config.write_text(
+            '[github]\nrepo = "owner/shared"\n'
+            '[path_aliases]\npublic = "/inspire/ssd/project/topic/public/"\n',
+            encoding="utf-8",
+        )
+
+        cfg, sources = Config.from_files_and_env(require_credentials=False)
+
+        assert cfg.github_repo == "owner/shared"
+        assert cfg.path_aliases["public"] == "/inspire/ssd/project/topic/public/"
+        assert sources["github_repo"] == SOURCE_PROJECT
+        assert getattr(cfg, "_shared_project_config_path") == shared_config
+        assert getattr(cfg, "_account_project_config_path") is None
+
+    def test_account_project_config_overrides_shared_project_config(
+        self,
+        home: Path,
+        clean_env: None,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        self._write_account_config(
+            home,
+            "alice",
+            '[auth]\nusername = "alice-platform"\npassword = "pw"\n',
+        )
+        monkeypatch.delenv("INSP_GITHUB_REPO", raising=False)
+        shared_config = tmp_path / ".inspire" / "config.toml"
+        shared_config.parent.mkdir(parents=True)
+        shared_config.write_text(
+            '[github]\nrepo = "owner/shared"\n'
+            '[path_aliases]\n'
+            'me = "/inspire/ssd/project/topic/shared/"\n'
+            'public = "/inspire/ssd/project/topic/public/"\n',
+            encoding="utf-8",
+        )
+        account_config = self._write_project_account_config(
+            tmp_path,
+            "alice",
+            '[github]\nrepo = "owner/account"\n'
+            '[path_aliases]\nme = "/inspire/ssd/project/topic/alice/"\n',
+        )
+
+        cfg, sources = Config.from_files_and_env(require_credentials=False)
+
+        assert cfg.github_repo == "owner/account"
+        assert cfg.path_aliases["me"] == "/inspire/ssd/project/topic/alice/"
+        assert cfg.path_aliases["public"] == "/inspire/ssd/project/topic/public/"
+        assert sources["github_repo"] == SOURCE_PROJECT
+        assert getattr(cfg, "_shared_project_config_path") == shared_config
+        assert getattr(cfg, "_account_project_config_path") == account_config
+
+    def test_account_project_config_without_cli_keeps_shared_prefer_source(
+        self,
+        home: Path,
+        clean_env: None,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        self._write_account_config(
+            home,
+            "alice",
+            '[auth]\nusername = "alice-platform"\npassword = "pw"\n',
+        )
+        monkeypatch.setenv("INSP_GITHUB_REPO", "owner/from-env")
+        shared_config = tmp_path / ".inspire" / "config.toml"
+        shared_config.parent.mkdir(parents=True)
+        shared_config.write_text(
+            '[cli]\nprefer_source = "toml"\n[github]\nrepo = "owner/from-shared"\n',
+            encoding="utf-8",
+        )
+        self._write_project_account_config(
+            tmp_path,
+            "alice",
+            '[path_aliases]\nme = "/inspire/ssd/project/topic/alice/"\n',
+        )
+
+        cfg, sources = Config.from_files_and_env(require_credentials=False)
+
+        assert cfg.github_repo == "owner/from-shared"
+        assert cfg.prefer_source == "toml"
+        assert sources["github_repo"] == SOURCE_PROJECT
+
     def test_project_config_rejects_account_scope_keys(
         self, home: Path, clean_env: None, tmp_path: Path
     ) -> None:
@@ -962,6 +1061,23 @@ class TestInitCommand:
         assert "repo = \"owner/repo\"" in content
         assert "log_pattern" in content
         Config.from_files_and_env(require_credentials=False)
+
+    def test_init_project_env_file_writes_shared_project_config(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clean_env: None
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+
+        result = CliRunner().invoke(
+            init,
+            ["--template", "--scope", "project", "--force", "--env-file", ".env"],
+        )
+
+        assert result.exit_code == 0, result.output
+        account_project_config = self._project_config_path(tmp_path)
+        shared_project_config = tmp_path / ".inspire" / "config.toml"
+        assert account_project_config.exists()
+        assert shared_project_config.exists()
+        assert '[cli]\nenv_file = ".env"' in shared_project_config.read_text(encoding="utf-8")
 
     def test_init_template_flag_creates_template(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -1795,6 +1911,70 @@ class TestConfigEnvCommand:
         assert output_file.exists()
         content = output_file.read_text()
         assert "INSPIRE_USERNAME" in content
+
+    def test_config_env_use_writes_shared_project_config(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+
+        result = CliRunner().invoke(config_command, ["env", "use", ".env"])
+
+        assert result.exit_code == 0, result.output
+        shared_config = tmp_path / ".inspire" / "config.toml"
+        assert shared_config.exists()
+        assert '[cli]\nenv_file = ".env"' in shared_config.read_text(encoding="utf-8")
+
+    def test_cli_loads_project_env_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        fake_home = tmp_path / "__home"
+        fake_home.mkdir()
+        monkeypatch.setattr(Path, "home", lambda: fake_home)
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.delenv("INSP_GITHUB_REPO", raising=False)
+        monkeypatch.delenv("INSPIRE_TIMEOUT", raising=False)
+
+        (tmp_path / ".env").write_text(
+            'INSP_GITHUB_REPO="owner/from-dotenv"\nINSPIRE_TIMEOUT=123\n',
+            encoding="utf-8",
+        )
+        project_config = tmp_path / ".inspire" / "config.toml"
+        project_config.parent.mkdir()
+        project_config.write_text('[cli]\nenv_file = ".env"\n', encoding="utf-8")
+
+        result = CliRunner().invoke(cli_main, ["config", "show", "--format", "json"])
+
+        assert result.exit_code == 0, result.output
+        data = json.loads(result.output)
+        assert data["env_file"] == str(tmp_path / ".env")
+        assert data["values"]["INSP_GITHUB_REPO"]["value"] == "owner/from-dotenv"
+        assert data["values"]["INSP_GITHUB_REPO"]["source"] == SOURCE_ENV_FILE
+        assert data["values"]["INSPIRE_TIMEOUT"]["value"] == "123"
+        assert data["values"]["INSPIRE_TIMEOUT"]["source"] == SOURCE_ENV_FILE
+
+    def test_real_env_overrides_project_env_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        fake_home = tmp_path / "__home"
+        fake_home.mkdir()
+        monkeypatch.setattr(Path, "home", lambda: fake_home)
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("INSP_GITHUB_REPO", "owner/from-real-env")
+
+        (tmp_path / ".env").write_text(
+            'INSP_GITHUB_REPO="owner/from-dotenv"\n',
+            encoding="utf-8",
+        )
+        project_config = tmp_path / ".inspire" / "config.toml"
+        project_config.parent.mkdir()
+        project_config.write_text('[cli]\nenv_file = ".env"\n', encoding="utf-8")
+
+        result = CliRunner().invoke(cli_main, ["config", "show", "--format", "json"])
+
+        assert result.exit_code == 0, result.output
+        data = json.loads(result.output)
+        assert data["values"]["INSP_GITHUB_REPO"]["value"] == "owner/from-real-env"
+        assert data["values"]["INSP_GITHUB_REPO"]["source"] == SOURCE_ENV
 
 
 # ===========================================================================

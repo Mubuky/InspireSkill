@@ -2,12 +2,13 @@
 
 Layer order (later wins):
 
-    defaults → account file → project file → project context → env → fallbacks
+    defaults → account file → shared project file → account project file
+    → project context → env → fallbacks
 
 Identity (username / password / base_url / proxy) lives in the active
-account's ``~/.inspire/accounts/<name>/config.toml``. Per-repo state
-(``[context].project``, ``[path_aliases]``, …) lives in
-``./.inspire/accounts/<name>/config.toml`` for the active account.
+account's ``~/.inspire/accounts/<name>/config.toml``. Repo-wide project
+state lives in ``./.inspire/config.toml`` and account-specific project
+overrides live in ``./.inspire/accounts/<name>/config.toml``.
 Without an active account, identity fields
 stay empty; callers that pass ``require_credentials=True`` will get a
 ``ConfigError`` pointing at ``inspire account add``.
@@ -29,6 +30,7 @@ from .load_runtime import (
     _apply_password_and_token_fallbacks,
     _validate_required_config,
 )
+
 
 def config_from_files_and_env(
     *,
@@ -76,12 +78,15 @@ def config_from_files_and_env(
     config = Config(**config_dict)
     config._global_config_path = account_config_path  # type: ignore[attr-defined]
     config._project_config_path = project_layer_state.project_config_path  # type: ignore[attr-defined]
+    config._shared_project_config_path = project_layer_state.shared_project_config_path  # type: ignore[attr-defined]
+    config._account_project_config_path = project_layer_state.account_project_config_path  # type: ignore[attr-defined]
+    config._project_config_paths = project_layer_state.project_config_paths  # type: ignore[attr-defined]
     config._sources = sources  # type: ignore[attr-defined]
 
     return config, sources
 
 
-def get_config_paths() -> tuple[Path | None, Path | None]:
+def get_config_paths(account: str | None = None) -> tuple[Path | None, Path | None]:
     """Return (account_config_path_if_any, project_config_path_if_any).
 
     The first slot historically held the legacy global path; it now holds
@@ -91,8 +96,8 @@ def get_config_paths() -> tuple[Path | None, Path | None]:
     """
     from .load_account_layer import _resolve_account_config_path
 
-    account_path = _resolve_account_config_path()
-    project_path = _find_project_config()
+    account_path = _resolve_account_config_path(account)
+    project_path = _find_project_config(account)
     return account_path, project_path
 
 

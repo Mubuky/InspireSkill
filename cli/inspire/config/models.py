@@ -21,6 +21,7 @@ SOURCE_DEFAULT = "default"
 SOURCE_GLOBAL = "global"
 SOURCE_PROJECT = "project"
 SOURCE_ENV = "env"
+SOURCE_ENV_FILE = "env-file"
 
 
 @dataclass
@@ -180,7 +181,7 @@ class Config:
         return config_from_files_and_env(require_credentials=require_credentials, account=account)
 
     @classmethod
-    def get_config_paths(cls) -> tuple[Path | None, Path | None]:
+    def get_config_paths(cls, account: str | None = None) -> tuple[Path | None, Path | None]:
         from inspire.config.load import get_config_paths
 
-        return get_config_paths()
+        return get_config_paths(account=account)

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +16,7 @@ _DEFAULTS_FIELD_MAP = {
     "project_order": "project_order",
 }
 
+
 @dataclass
 class _ProjectLayerState:
     project_config_path: Path | None
@@ -23,6 +24,9 @@ class _ProjectLayerState:
     project_defaults: dict[str, Any]
     project_context: dict[str, Any]
     prefer_source: str = "env"
+    shared_project_config_path: Path | None = None
+    account_project_config_path: Path | None = None
+    project_config_paths: list[Path] = field(default_factory=list)
 
 
 def _default_config_values() -> dict[str, Any]:

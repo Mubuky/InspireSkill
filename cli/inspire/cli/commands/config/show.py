@@ -23,6 +23,7 @@ from inspire.config import (
     ConfigOption,
     SOURCE_DEFAULT,
     SOURCE_ENV,
+    SOURCE_ENV_FILE,
     SOURCE_GLOBAL,
     SOURCE_PROJECT,
     get_categories,
@@ -38,6 +39,7 @@ SOURCE_LABELS: dict[str, tuple[str, str]] = {
     SOURCE_GLOBAL: ("global", "cyan"),
     SOURCE_PROJECT: ("project", "green"),
     SOURCE_ENV: ("env", "yellow"),
+    SOURCE_ENV_FILE: ("env-file", "magenta"),
 }
 
 # ---------------------------------------------------------------------------
@@ -94,6 +96,26 @@ def _show_table(
         click.echo(
             f"  Project: {_project_config_write_path()} " + click.style("(not found)", fg="white")
         )
+    shared_project_path = getattr(cfg, "_shared_project_config_path", None)
+    account_project_path = getattr(cfg, "_account_project_config_path", None)
+    if shared_project_path:
+        click.echo(
+            f"  Project shared:  {shared_project_path} "
+            + click.style("(found)", fg="green")
+        )
+    if account_project_path:
+        click.echo(
+            f"  Project account: {account_project_path} "
+            + click.style("(found)", fg="green")
+        )
+    try:
+        from inspire.cli.env_bootstrap import loaded_env_file_path
+
+        env_file = loaded_env_file_path()
+    except Exception:
+        env_file = None
+    if env_file:
+        click.echo(f"  Env file: {env_file} " + click.style("(loaded)", fg="magenta"))
 
     prefer_source = getattr(cfg, "prefer_source", "env")
     if prefer_source == "toml":
@@ -168,10 +190,27 @@ def _show_json(
         "config_files": {
             "global": str(global_path) if global_path else None,
             "project": str(project_path) if project_path else None,
+            "project_shared": (
+                str(getattr(cfg, "_shared_project_config_path", None))
+                if getattr(cfg, "_shared_project_config_path", None)
+                else None
+            ),
+            "project_account": (
+                str(getattr(cfg, "_account_project_config_path", None))
+                if getattr(cfg, "_account_project_config_path", None)
+                else None
+            ),
         },
         "prefer_source": getattr(cfg, "prefer_source", "env"),
         "values": {},
     }
+    try:
+        from inspire.cli.env_bootstrap import loaded_env_file_path
+
+        env_file = loaded_env_file_path()
+    except Exception:
+        env_file = None
+    result["env_file"] = str(env_file) if env_file else None
 
     categories = get_categories()
     if filter_category:

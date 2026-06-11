@@ -27,6 +27,7 @@ from inspire.cli.commands.account.add import (
     EXAMPLE_PROXY,
     _render_config as _render_account_config,
 )
+from inspire.cli.env_bootstrap import write_shared_project_env_file
 from inspire.config import Config
 from inspire.config.toml import _project_config_write_path
 
@@ -209,6 +210,11 @@ def _bootstrap_first_account_if_needed(
         "prompt and the platform-heuristic guess). Used by discovery."
     ),
 )
+@click.option(
+    "--env-file",
+    default=None,
+    help="Register a repo-wide dotenv file in shared project config (project scope only).",
+)
 @pass_context
 def init(
     ctx: Context,
@@ -219,6 +225,7 @@ def init(
     username: str | None,
     base_url: str | None,
     select_project_name: str | None,
+    env_file: str | None,
 ) -> None:
     """Initialize Inspire CLI configuration.
 
@@ -230,6 +237,7 @@ def init(
     `--scope project` also discovers platform catalogs, then writes this
     repository's project context and path-alias overrides to
     ./.inspire/accounts/<account>/config.toml.
+    `--env-file` records repo-wide dotenv loading in ./.inspire/config.toml.
 
     `--template` writes a placeholder config. `--no-discover` forces
     environment-variable detection / smart init into one config file instead
@@ -260,6 +268,7 @@ def init(
       inspire init --template --scope project
       inspire init --no-discover --scope project
       inspire init --no-discover --scope global
+      inspire init --scope project --env-file .env
     """
     effective_json = ctx.json_output
     warnings: list[str] = []
@@ -274,7 +283,18 @@ def init(
         if not effective_json:
             click.echo(click.style(f"Warning: {msg}", fg="yellow"))
 
+    def _register_env_file() -> Path | None:
+        if not env_file:
+            return None
+        path = write_shared_project_env_file(env_file)
+        if not effective_json:
+            click.echo(click.style(f"Registered project env file in {path}", fg="green"))
+        return path
+
     try:
+        if env_file and not project_flag:
+            raise ValueError("--env-file is only supported with `inspire init --scope project`.")
+
         bootstrapped_account = False
         if run_discovery:
             bootstrapped_account = _bootstrap_first_account_if_needed(
@@ -309,6 +329,9 @@ def init(
                 cli_base_url=base_url,
                 cli_select_project=select_project_name,
             )
+            env_file_config_path = _register_env_file()
+            if env_file_config_path is not None and env_file_config_path not in discover_target_paths:
+                discover_target_paths.append(env_file_config_path)
 
             emit_init_json(
                 mode="discover",
@@ -335,9 +358,13 @@ def init(
                 click.echo("Creating template config with placeholders.\n")
 
             run_init_action(_init_template_mode, effective_json, global_flag, project_flag, force)
+            env_file_config_path = _register_env_file()
+            target_paths = [global_path] if global_flag else [project_path]
+            if env_file_config_path is not None and env_file_config_path not in target_paths:
+                target_paths.append(env_file_config_path)
             emit_init_json(
                 mode="template",
-                target_paths=[global_path] if global_flag else [project_path],
+                target_paths=target_paths,
                 before=before,
                 detected=[],
                 warnings=warnings,
@@ -369,7 +396,7 @@ def init(
             run_init_action(
                 _init_smart_mode, effective_json, detected, global_flag, project_flag, force
             )
-            target_paths: list[Path]
+            target_paths = []
             if global_flag:
                 has_global = any(opt.scope == "global" for opt, _ in detected)
                 target_paths = [global_path] if has_global else []
@@ -384,6 +411,9 @@ def init(
                     target_paths.append(global_path)
                 if has_project:
                     target_paths.append(project_path)
+            env_file_config_path = _register_env_file()
+            if env_file_config_path is not None and env_file_config_path not in target_paths:
+                target_paths.append(env_file_config_path)
             emit_init_json(
                 mode="smart",
                 target_paths=target_paths,
@@ -402,9 +432,13 @@ def init(
             click.echo("No environment variables detected. Creating template config.\n")
 
         run_init_action(_init_template_mode, effective_json, global_flag, project_flag, force)
+        env_file_config_path = _register_env_file()
+        target_paths = [global_path] if global_flag else [project_path]
+        if env_file_config_path is not None and env_file_config_path not in target_paths:
+            target_paths.append(env_file_config_path)
         emit_init_json(
             mode="template",
-            target_paths=[global_path] if global_flag else [project_path],
+            target_paths=target_paths,
             before=before,
             detected=[],
             warnings=warnings,

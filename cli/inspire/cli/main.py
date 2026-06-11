@@ -10,6 +10,8 @@ Usage:
 
 import logging
 import sys
+from pathlib import Path
+
 import click
 
 from inspire import __version__
@@ -36,6 +38,7 @@ from inspire.cli.commands import (
     user,
 )
 from inspire.cli.utils.update_notice import maybe_notify_update, maybe_spawn_check
+from inspire.cli.env_bootstrap import bootstrap_env_file
 
 
 @click.group()
@@ -51,8 +54,25 @@ from inspire.cli.utils.update_notice import maybe_notify_update, maybe_spawn_che
     is_flag=True,
     help="Enable debug logging",
 )
+@click.option(
+    "--env-file",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Load variables from this dotenv file before running.",
+)
+@click.option(
+    "--no-env-file",
+    is_flag=True,
+    help="Do not load the project-declared dotenv file.",
+)
 @pass_context
-def main(ctx: Context, json_output: bool, debug: bool) -> None:
+def main(
+    ctx: Context,
+    json_output: bool,
+    debug: bool,
+    env_file: Path | None,
+    no_env_file: bool,
+) -> None:
     """Inspire Training Platform CLI.
 
     Use Inspire from the local terminal: configure accounts, inspect live
@@ -93,6 +113,8 @@ def main(ctx: Context, json_output: bool, debug: bool) -> None:
     """
     ctx.json_output = json_output
     ctx.debug = debug
+
+    bootstrap_env_file(env_file=env_file, disabled=no_env_file)
 
     if debug:
         ctx.debug_report_path = configure_debug_logging(argv=sys.argv)

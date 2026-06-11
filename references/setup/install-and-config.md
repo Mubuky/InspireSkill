@@ -86,13 +86,29 @@ cd /path/to/your-repo
 inspire init --scope project
 ```
 
-`inspire init --scope project` 会把当前仓库的项目上下文写入 `./.inspire/accounts/<account>/config.toml`，并把发现到的远端 path alias 作为项目级覆盖写入同一个文件。不要维护单独的“远端工作目录”字段；用 alias：
+项目配置分两层：`./.inspire/config.toml` 是仓库共享层，适合记录所有账号共用的 `[cli]` 设置；`./.inspire/accounts/<account>/config.toml` 是账号项目覆盖层。`inspire init --scope project` 会把当前仓库的项目上下文和发现到的远端 path alias 写入账号项目覆盖层。不要维护单独的“远端工作目录”字段；用 alias：
 
 ```bash
 inspire notebook exec <name> --cwd me "pwd"
 inspire notebook exec <name> --cwd me:<repo> "git pull"
 inspire notebook scp <name> ./config.yaml me:<repo>/config.yaml
 ```
+
+如果本仓库需要让 Agent 运行 `inspire ...` 时稳定加载项目 `.env`，先生成模板再登记到共享项目配置：
+
+```bash
+inspire config env --output .env.example
+cp .env.example .env
+inspire config env use .env
+```
+
+也可以在项目初始化时顺手登记：
+
+```bash
+inspire init --scope project --env-file .env
+```
+
+登记后写入的是 `./.inspire/config.toml` 的 `[cli].env_file`，不是某个账号目录；真实父进程环境变量仍然优先于 `.env`。
 
 多账号只用这些命令：
 

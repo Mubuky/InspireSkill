@@ -6,10 +6,7 @@ from pathlib import Path
 
 import click
 
-from inspire.cli.context import (
-    Context,
-    pass_context,
-)
+from inspire.cli.env_bootstrap import write_shared_project_env_file
 from inspire.config import (
     get_categories,
     get_options_by_category,
@@ -20,35 +17,7 @@ from inspire.config import (
 # ---------------------------------------------------------------------------
 
 
-@click.command("env")
-@click.option(
-    "--template",
-    "-t",
-    type=click.Choice(["full", "minimal"]),
-    default="minimal",
-    help="Template type: full (all options) or minimal (essential only)",
-)
-@click.option(
-    "--output",
-    "-o",
-    "output_file",
-    type=click.Path(),
-    help="Write to file instead of stdout",
-)
-@pass_context
-def generate_env(ctx: Context, template: str, output_file: str | None) -> None:
-    """Generate .env template file.
-
-    Creates a template with all configuration options as environment variables.
-
-    \b
-    Examples:
-        inspire config env
-        inspire config env --template full
-        inspire config env --output .env.example
-    """
-    _ = ctx  # unused (but consistent signature with other commands)
-
+def _render_env_template(template: str) -> str:
     lines: list[str] = []
     lines.append("# Inspire CLI Environment Variables")
     lines.append("# Generated template - customize values as needed")
@@ -85,7 +54,42 @@ def generate_env(ctx: Context, template: str, output_file: str | None) -> None:
 
         lines.append("")
 
-    content = "\n".join(lines)
+    return "\n".join(lines)
+
+
+@click.group("env", invoke_without_command=True)
+@click.option(
+    "--template",
+    "-t",
+    type=click.Choice(["full", "minimal"]),
+    default="minimal",
+    help="Template type: full (all options) or minimal (essential only)",
+)
+@click.option(
+    "--output",
+    "-o",
+    "output_file",
+    type=click.Path(),
+    help="Write to file instead of stdout",
+)
+@click.pass_context
+def generate_env(click_ctx: click.Context, template: str, output_file: str | None) -> None:
+    """Generate or register dotenv files.
+
+    Without a subcommand, creates a template with all configuration options as
+    environment variables.
+
+    \b
+    Examples:
+        inspire config env
+        inspire config env --template full
+        inspire config env --output .env.example
+        inspire config env use .env
+    """
+    if click_ctx.invoked_subcommand is not None:
+        return
+
+    content = _render_env_template(template)
 
     if output_file:
         output_path = Path(output_file)
@@ -93,3 +97,12 @@ def generate_env(ctx: Context, template: str, output_file: str | None) -> None:
         click.echo(click.style(f"Created {output_path}", fg="green"))
     else:
         click.echo(content)
+
+
+@generate_env.command("use")
+@click.argument("env_file")
+def use_env_file(env_file: str) -> None:
+    """Register a repo-wide dotenv file in shared project config."""
+    config_path = write_shared_project_env_file(env_file)
+    click.echo(click.style(f"Updated {config_path}", fg="green"))
+    click.echo(f"Registered project env file: {env_file}")

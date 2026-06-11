@@ -43,8 +43,10 @@ def _home_search_boundary() -> Path | None:
         return None
 
 
-def _find_project_config(account: str | None = None) -> Path | None:
-    account = _active_project_config_account(account)
+def _find_project_config_by_account(account: str | None) -> Path | None:
+    """Return ``./.inspire/accounts/<account>/config.toml`` if it exists."""
+    if not account:
+        return None
     current = Path.cwd()
     home = _home_search_boundary()
     while current != current.parent:
@@ -57,28 +59,78 @@ def _find_project_config(account: str | None = None) -> Path | None:
     return None
 
 
-def _project_config_write_path() -> Path:
-    """Return the project config path to write for the active account.
+def _find_shared_project_config() -> Path | None:
+    """Return ``./.inspire/config.toml`` if it exists."""
+    current = Path.cwd()
+    home = _home_search_boundary()
+    while current != current.parent:
+        if home is not None and current.resolve() == home:
+            break
+        config_path = _project_config_path_for_root(current, None)
+        if config_path.exists():
+            return config_path
+        current = current.parent
+    return None
 
-    Reads only use the active account's config path when an account is
-    selected. For writes, if the repo already has a ``.inspire`` directory in
-    an ancestor, place the account-scoped config there instead of creating a
-    nested ``.inspire`` directory from a subdirectory command.
+
+def _find_project_configs(account: str | None = None) -> tuple[Path | None, Path | None]:
+    """Return ``(shared_project_config, account_project_config)`` for this repo."""
+    account_name = _active_project_config_account(account)
+    return _find_shared_project_config(), _find_project_config_by_account(account_name)
+
+
+def _find_project_config(account: str | None = None) -> Path | None:
+    """Return the most specific project config path, falling back to shared.
+
+    This keeps the historical single-path helper useful while the loader can
+    now read both layers: ``./.inspire/config.toml`` first and then
+    ``./.inspire/accounts/<account>/config.toml`` as an override.
     """
-    existing = _find_project_config()
-    if existing:
-        return existing
+    shared_path, account_path = _find_project_configs(account)
+    return account_path or shared_path
 
-    account = _active_project_config_account()
+
+def _project_root_for_existing_inspire_dir() -> Path | None:
     current = Path.cwd()
     home = _home_search_boundary()
     while current != current.parent:
         if home is not None and current.resolve() == home:
             break
         if (current / PROJECT_CONFIG_DIR).exists():
-            return _project_config_path_for_root(current, account)
+            return current
         current = current.parent
-    return _project_config_path_for_root(Path.cwd(), account)
+    return None
+
+
+def _project_config_write_path(
+    account: str | None = None,
+    *,
+    shared: bool = False,
+) -> Path:
+    """Return the project config path to write.
+
+    By default this returns the account override path for the active or
+    explicit account. With ``shared=True`` it returns the repo-wide
+    ``./.inspire/config.toml`` path. If the command is run from a subdirectory
+    under an existing ``.inspire`` root, writes land at that root instead of
+    creating a nested config.
+    """
+    if shared:
+        existing_shared = _find_shared_project_config()
+        if existing_shared:
+            return existing_shared
+        root = _project_root_for_existing_inspire_dir() or Path.cwd()
+        return _project_config_path_for_root(root, None)
+
+    account_name = _active_project_config_account(account)
+    existing_account = _find_project_config_by_account(account_name)
+    if existing_account:
+        return existing_account
+    if account_name is None:
+        return _project_config_write_path(shared=True)
+
+    root = _project_root_for_existing_inspire_dir() or Path.cwd()
+    return _project_config_path_for_root(root, account_name)
 
 
 def _load_toml(path: Path) -> dict[str, Any]:

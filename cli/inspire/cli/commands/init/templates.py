@@ -44,8 +44,9 @@ ACCOUNT_CONFIG_TEMPLATE = """# Inspire CLI Account Configuration
 #
 # Account-level values are shared by every repository that uses this account.
 # `inspire init` discovery may also write account-level default path aliases
-# here. Per-repository overrides such as github.repo and workload profiles
-# belong in ./.inspire/accounts/<account>/config.toml.
+# here. Repo-wide project settings live in ./.inspire/config.toml; account-
+# specific project overrides such as personal path aliases live in
+# ./.inspire/accounts/<account>/config.toml.
 #
 # Values here are overridden by environment variables.
 # Sensitive values (passwords, tokens) should use env vars.
@@ -93,7 +94,9 @@ retry_pause = 2.0
 PROJECT_CONFIG_TEMPLATE = """# Inspire CLI Project Configuration
 # Location: {location_comment}
 #
-# Project-level values live in this repository for the active account.
+# Project-level values live in this repository for the active account override.
+# Repo-wide project settings, such as [cli].env_file, live in
+# ./.inspire/config.toml.
 # Account identity, API, and proxy settings belong in
 # ~/.inspire/accounts/<account>/config.toml.
 #

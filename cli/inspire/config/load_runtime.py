@@ -5,8 +5,17 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from inspire.config.models import SOURCE_ENV, SOURCE_PROJECT, ConfigError
+from inspire.config.models import SOURCE_ENV, SOURCE_ENV_FILE, SOURCE_PROJECT, ConfigError
 from inspire.config.schema import CONFIG_OPTIONS
+
+
+def _env_source_for(key: str) -> str:
+    try:
+        from inspire.cli.env_bootstrap import is_env_file_key
+
+        return SOURCE_ENV_FILE if is_env_file_key(key) else SOURCE_ENV
+    except Exception:
+        return SOURCE_ENV
 
 
 def _apply_env_layer(
@@ -21,9 +30,11 @@ def _apply_env_layer(
         if option.env_var == "INSPIRE_PASSWORD":
             continue
 
+        source_key = option.env_var
         value = os.getenv(option.env_var)
         if value is None and option.env_var == "INSP_LOG_CACHE_DIR":
             value = os.getenv("INSPIRE_LOG_CACHE_DIR")
+            source_key = "INSPIRE_LOG_CACHE_DIR"
         if value is None:
             continue
 
@@ -44,7 +55,7 @@ def _apply_env_layer(
             continue
 
         config_dict[field_name] = new_value
-        sources[field_name] = SOURCE_ENV
+        sources[field_name] = _env_source_for(source_key)
 
     return env_password
 
@@ -62,13 +73,13 @@ def _apply_password_and_token_fallbacks(
     """
     if not config_dict.get("password") and env_password:
         config_dict["password"] = env_password
-        sources["password"] = SOURCE_ENV
+        sources["password"] = _env_source_for("INSPIRE_PASSWORD")
 
     if not config_dict.get("github_token"):
         github_token_fallback = os.getenv("GITHUB_TOKEN")
         if github_token_fallback:
             config_dict["github_token"] = github_token_fallback
-            sources["github_token"] = SOURCE_ENV
+            sources["github_token"] = _env_source_for("GITHUB_TOKEN")
 
 
 def _validate_required_config(
