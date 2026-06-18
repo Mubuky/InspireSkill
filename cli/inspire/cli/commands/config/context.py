@@ -23,7 +23,7 @@ from inspire.cli.context import (
     pass_context,
 )
 from inspire.cli.formatters import json_formatter
-from inspire.cli.formatters.table import display_width, render_table
+from inspire.cli.formatters.table import column_width, render_table
 from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.config import Config, ConfigError
@@ -119,9 +119,6 @@ def _collect_context(cfg: Config) -> dict[str, Any]:
 
 
 def _render_human(data: dict[str, Any]) -> None:
-    def width(header: str, values: list[str], *, max_width: int) -> int:
-        return min(max(display_width(header), *(display_width(value) for value in values), 1), max_width)
-
     active = data["active"]
     click.echo(click.style("Active", bold=True))
     click.echo(f"  account    {active['account'] or '(not set)'}")
@@ -139,8 +136,8 @@ def _render_human(data: dict[str, Any]) -> None:
                     ("Name", "Path"),
                     project_rows,
                     [
-                        width("Name", [row[0] for row in project_rows], max_width=48),
-                        width("Path", [row[1] for row in project_rows], max_width=72),
+                        column_width("Name", [row[0] for row in project_rows], max_width=48),
+                        column_width("Path", [row[1] for row in project_rows], max_width=72),
                     ],
                     line_char="─",
                 )
@@ -157,7 +154,7 @@ def _render_human(data: dict[str, Any]) -> None:
                 render_table(
                     ("Name",),
                     workspace_rows,
-                    [width("Name", workspaces, max_width=48)],
+                    [column_width("Name", workspaces, max_width=48)],
                     line_char="─",
                 )
             )
@@ -184,9 +181,13 @@ def _render_human(data: dict[str, Any]) -> None:
                     ("Name", "GPU", "Workspace"),
                     group_rows,
                     [
-                        width("Name", [row[0] for row in group_rows], max_width=48),
-                        width("GPU", [row[1] for row in group_rows], max_width=16),
-                        width("Workspace", [row[2] for row in group_rows], max_width=48),
+                        column_width("Name", [row[0] for row in group_rows], max_width=48),
+                        column_width("GPU", [row[1] for row in group_rows], max_width=16),
+                        column_width(
+                            "Workspace",
+                            [row[2] for row in group_rows],
+                            max_width=48,
+                        ),
                     ],
                     line_char="─",
                 )
@@ -203,7 +204,7 @@ def _render_human(data: dict[str, Any]) -> None:
                 render_table(
                     ("Name",),
                     account_rows,
-                    [width("Name", accounts, max_width=48)],
+                    [column_width("Name", accounts, max_width=48)],
                     line_char="─",
                 )
             )

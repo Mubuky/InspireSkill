@@ -175,7 +175,7 @@ def _with_workspace_display_name(item: dict, workspace_name: str) -> dict:
     "--shm-size",
     type=click.IntRange(1),
     default=None,
-    help="Shared memory size in GB (default: INSPIRE_SHM_SIZE/job.shm_size, else 32)",
+    help="Shared memory size in GiB (default: INSPIRE_SHM_SIZE/job.shm_size, else 32)",
 )
 @click.option(
     "--auto-stop/--no-auto-stop",

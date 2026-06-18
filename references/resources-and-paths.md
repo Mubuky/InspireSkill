@@ -36,13 +36,13 @@
 
 `resources availability`、`resources nodes` 和各 workload 的 `quota` 是资源事实入口；具体参数和输出以 help 为准。
 
-`Low Pri` 表示低优任务占用的可抢占 GPU；判断高优任务（priority 5-10）时不要只看 `Available`，提交后仍以 events 为准。
+`Available` 是平台上当前未被占用的 GPU，`Low Pri` 是低优任务占用、可被高优任务抢占的 GPU，`High Pri` 是 `Available + Low Pri`。判断高优任务（priority 5-10）时不要只看 `Available`，但 `High Pri` 也只是可抢占容量上限；提交后仍以 events 为准。
 
 ## 4. Quota 语义
 
 `--quota` / `-q` 是 `gpu,cpu,mem` 三元组，`mem` 以 GiB 计。GPU 型号不写进三元组，而由 workspace + compute group 决定。
 
-`mem` 表示实例常规内存规格，不是 shared memory。GPU job 的 `/dev/shm` / IPC 空间用 `--shm-size <GiB>` 控制，且不能超过所选 quota 的 `mem`；需要项目级默认时用 `INSPIRE_SHM_SIZE` 或 `[job] shm_size`。
+`mem` 表示实例常规内存规格，不是 shared memory。GPU job 的 `/dev/shm` / IPC 空间用 `--shm-size <GiB>` 控制，且不能超过所选 quota 的 `mem`；需要项目级默认时用 `INSPIRE_SHM_SIZE` 或 `[job] shm_size`。`job create --dry-run` 和 `job list/status` 会显示解析后的 shared memory，方便确认命令行参数和配置默认最终是否生效。
 
 三元组必须在当前可见规格里唯一匹配。如果多个 compute group 有同一组三元组，先用查询命令按 group 关键词收窄，再在 create 或 profile 中写完整 group 名称。
 

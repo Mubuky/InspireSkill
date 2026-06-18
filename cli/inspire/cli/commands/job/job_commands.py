@@ -25,7 +25,7 @@ from inspire.cli.context import (
     pass_context,
 )
 from inspire.cli.formatters import human_formatter, json_formatter
-from inspire.cli.formatters.table import display_width, render_table
+from inspire.cli.formatters.table import column_width, render_table
 from inspire.cli.utils.auth import AuthenticationError
 from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.id_resolver import is_full_uuid, is_partial_id
@@ -213,6 +213,9 @@ def _job_info_to_row(job, *, workspace_name: str = "") -> dict:  # noqa: ANN001
         "compute_group_name": job.compute_group_name or "",
         "gpu_type": job.gpu_type or "",
         "gpu_count": job.gpu_count,
+        "cpu_count": getattr(job, "cpu_count", 0),
+        "memory_gib": getattr(job, "memory_gib", 0),
+        "shm_gib": getattr(job, "shm_gib", None),
         "instance_count": job.instance_count,
         "priority": job.priority,
         "workspace_id": job.workspace_id or "",
@@ -509,11 +512,35 @@ def _format_job_list(rows: list[dict]) -> str:
     if not rows:
         return "No jobs found."
 
+    def positive_int(value: object) -> int:
+        try:
+            return max(0, int(float(str(value))))
+        except (TypeError, ValueError):
+            return 0
+
+    def resource_text(row: dict) -> str:
+        parts: list[str] = []
+        gpu_count = positive_int(row.get("gpu_count"))
+        gpu_type = str(row.get("gpu_type") or "GPU").replace("NVIDIA ", "")
+        if gpu_count > 0:
+            parts.append(f"{gpu_count}x{gpu_type}")
+        cpu_count = positive_int(row.get("cpu_count"))
+        if cpu_count > 0:
+            parts.append(f"{cpu_count}C")
+        memory_gib = positive_int(row.get("memory_gib"))
+        if memory_gib > 0:
+            parts.append(f"{memory_gib}G")
+        shm_gib = positive_int(row.get("shm_gib"))
+        if shm_gib > 0:
+            parts.append(f"shm{shm_gib}G")
+        return " ".join(parts) or "-"
+
     rendered_rows = [
         {
             **r,
             "name": scrub_raw_ids(r.get("name", "")),
             "status": scrub_raw_ids(r.get("status", "")),
+            "resource": scrub_raw_ids(resource_text(r)),
             "created_at": scrub_raw_ids(human_formatter.format_epoch(r.get("created_at"))),
             "workspace_name": scrub_raw_ids(r.get("workspace_name", "")),
             "created_by_name": scrub_raw_ids(r.get("created_by_name", "")),
@@ -521,13 +548,11 @@ def _format_job_list(rows: list[dict]) -> str:
         for r in rows
     ]
 
-    def width(header: str, values: list[str], *, max_width: int) -> int:
-        return min(max(display_width(header), *(display_width(value) for value in values), 1), max_width)
-
     table_rows = [
         (
             str(row["name"]),
             str(row["status"]),
+            str(row["resource"]),
             str(row["created_at"]),
             str(row.get("workspace_name") or ""),
             str(row.get("created_by_name") or ""),
@@ -535,17 +560,18 @@ def _format_job_list(rows: list[dict]) -> str:
         for row in rendered_rows
     ]
     widths = [
-        width("Name", [row[0] for row in table_rows], max_width=120),
-        width("Status", [row[1] for row in table_rows], max_width=16),
-        width("Created", [row[2] for row in table_rows], max_width=19),
-        width("Workspace", [row[3] for row in table_rows], max_width=24),
-        width("Created By", [row[4] for row in table_rows], max_width=16),
+        column_width("Name", [row[0] for row in table_rows], max_width=120),
+        column_width("Status", [row[1] for row in table_rows], max_width=16),
+        column_width("Resource", [row[2] for row in table_rows], max_width=32),
+        column_width("Created", [row[3] for row in table_rows], max_width=19),
+        column_width("Workspace", [row[4] for row in table_rows], max_width=24),
+        column_width("Created By", [row[5] for row in table_rows], max_width=16),
     ]
 
     lines = [
         "Jobs",
         *render_table(
-            ("Name", "Status", "Created", "Workspace", "Created By"),
+            ("Name", "Status", "Resource", "Created", "Workspace", "Created By"),
             table_rows,
             widths,
             line_char="─",

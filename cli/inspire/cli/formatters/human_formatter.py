@@ -9,7 +9,7 @@ import sys
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from inspire.cli.formatters.table import display_width, render_table
+from inspire.cli.formatters.table import column_width, render_table
 from inspire.cli.utils.raw_ids import scrub_raw_ids
 
 # ---------------------------------------------------------------------------
@@ -63,10 +63,7 @@ def print_error(message: str, hint: Optional[str] = None) -> None:
 
 
 def _column_width(header: str, values: list[str], *, max_width: int | None = None) -> int:
-    width = max(display_width(header), *(display_width(value) for value in values), 1)
-    if max_width is not None:
-        return min(width, max_width)
-    return width
+    return column_width(header, values, max_width=max_width)
 
 
 # ---------------------------------------------------------------------------
@@ -330,26 +327,23 @@ def format_image_list(images: List[Dict[str, Any]]) -> str:
             }
         )
 
-    name_w = max(len("Name"), *(len(r["name"]) for r in rendered))
-    version_w = max(len("Version"), *(len(r["version"]) for r in rendered))
-    source_w = max(len("Source"), *(len(r["source"]) for r in rendered))
-    status_w = max(len("Status"), *(len(r["status"]) for r in rendered))
-    framework_w = max(len("Framework"), *(len(r["framework"]) for r in rendered))
-
-    header = (
-        f"{'Name':<{name_w}}  {'Version':<{version_w}}  "
-        f"{'Source':<{source_w}}  {'Status':<{status_w}}  {'Framework':<{framework_w}}"
+    table_rows = [
+        (r["name"], r["version"], r["source"], r["status"], r["framework"])
+        for r in rendered
+    ]
+    widths = [
+        _column_width("Name", [row[0] for row in table_rows], max_width=64),
+        _column_width("Version", [row[1] for row in table_rows], max_width=24),
+        _column_width("Source", [row[2] for row in table_rows], max_width=12),
+        _column_width("Status", [row[3] for row in table_rows], max_width=18),
+        _column_width("Framework", [row[4] for row in table_rows], max_width=24),
+    ]
+    lines = render_table(
+        ("Name", "Version", "Source", "Status", "Framework"),
+        table_rows,
+        widths,
+        line_char="─",
     )
-    sep = "-" * len(header)
-    lines = [header, sep]
-
-    for r in rendered:
-        lines.append(
-            f"{r['name']:<{name_w}}  {r['version']:<{version_w}}  "
-            f"{r['source']:<{source_w}}  {r['status']:<{status_w}}  {r['framework']:<{framework_w}}"
-        )
-
-    lines.append(sep)
     lines.append(f"Total: {len(images)} image(s)")
 
     return "\n".join(lines)

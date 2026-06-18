@@ -50,6 +50,9 @@ class JobInfo:
     instance_count: int
     priority: int
     workspace_id: str
+    cpu_count: int = 0
+    memory_gib: int = 0
+    shm_gib: Optional[int] = None
 
     @classmethod
     def from_api_response(cls, data: dict) -> "JobInfo":
@@ -70,6 +73,9 @@ class JobInfo:
             compute_group_name=data.get("logic_compute_group_name", ""),
             gpu_type=gpu_info.get("gpu_type_display", ""),
             gpu_count=framework_config.get("gpu_count", 0),
+            cpu_count=framework_config.get("cpu", 0),
+            memory_gib=framework_config.get("mem_gi", 0),
+            shm_gib=framework_config.get("shm_gi"),
             instance_count=framework_config.get("instance_count", 1),
             priority=data.get("priority", 0),
             workspace_id=data.get("workspace_id", ""),

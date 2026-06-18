@@ -302,6 +302,7 @@ def test_global_json_flag_with_resources_list(monkeypatch: pytest.MonkeyPatch, t
     assert payload["success"] is True
     assert "availability" in payload["data"]
     assert "group_id" not in payload["data"]["availability"][0]
+    assert payload["data"]["availability"][0]["high_priority_available_gpus"] == 104
 
 
 def test_global_debug_flag_runs_subcommand(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
@@ -829,6 +830,9 @@ def test_job_list_web_name_search_scans_all_workspaces(
                         compute_group_name="H200-3",
                         gpu_type="NVIDIA H200",
                         gpu_count=8,
+                        cpu_count=80,
+                        memory_gib=800,
+                        shm_gib=64,
                         instance_count=6,
                         priority=10,
                         workspace_id="ws-train",
@@ -1188,6 +1192,9 @@ def test_job_list_human_output_hides_raw_ids_and_name_search_ignores_job_id(
                         compute_group_name="H200-3",
                         gpu_type="NVIDIA H200",
                         gpu_count=8,
+                        cpu_count=80,
+                        memory_gib=800,
+                        shm_gib=64,
                         instance_count=6,
                         priority=10,
                         workspace_id="ws-train",
@@ -1208,6 +1215,7 @@ def test_job_list_human_output_hides_raw_ids_and_name_search_ignores_job_id(
     assert human_result.exit_code == 0
     assert "kchen-slime-code-qwen35-35b-a3b-6node" in human_result.output
     assert "Training Workspace" in human_result.output
+    assert "8xH200 80C 800G shm64G" in human_result.output
     assert format_epoch(created_at) in human_result.output
     assert created_at not in human_result.output
     assert TEST_JOB_ID not in human_result.output
@@ -1340,6 +1348,8 @@ def test_resources_list_all_workspaces_and_cpu_json(
     assert {row["resource_kind"] for row in rows} == {"gpu", "cpu"}
     assert any(row["workspace_name"] == "分布式训练空间" for row in rows)
     assert any(row["cpu_total"] == 1200 for row in rows)
+    gpu_row = next(row for row in rows if row["resource_kind"] == "gpu")
+    assert gpu_row["high_priority_available_gpus"] == 72
 
 
 def test_config_check_auth_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):

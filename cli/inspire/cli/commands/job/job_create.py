@@ -236,6 +236,8 @@ def run_job_create(
                 click.echo(f"Priority: {priority}")
             if nodes > 1:
                 click.echo(f"Nodes: {nodes}")
+            if plan.shm_size_gib is not None:
+                click.echo(f"Shared memory: {plan.shm_size_gib} GiB")
             if plan_exclude_nodes:
                 click.echo(f"Exclude nodes: {scrub_raw_ids(', '.join(plan_exclude_nodes))}")
             click.echo(f"Image: {scrub_raw_ids(image)}")
@@ -275,6 +277,8 @@ def run_job_create(
         if ctx.json_output:
             payload = dict(data if data else result)
             payload.setdefault("name", name)
+            if plan.shm_size_gib is not None:
+                payload.setdefault("shm_size_gib", plan.shm_size_gib)
             click.echo(json_formatter.format_json(payload))
             return
 
@@ -285,6 +289,8 @@ def run_job_create(
                 click.echo(f"Priority: {priority}")
             if nodes > 1:
                 click.echo(f"Nodes:    {nodes}")
+            if plan.shm_size_gib is not None:
+                click.echo(f"Shared memory: {plan.shm_size_gib} GiB")
             if plan_exclude_nodes:
                 click.echo(f"Exclude nodes: {scrub_raw_ids(', '.join(plan_exclude_nodes))}")
             if auto_fault_tolerance:

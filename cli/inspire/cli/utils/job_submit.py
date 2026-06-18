@@ -37,6 +37,7 @@ class JobSubmissionPlan:
     project_name: Optional[str]
     workspace_id: str
     quota: ResolvedQuota
+    shm_size_gib: Optional[int] = None
 
 
 def wrap_in_bash(command: str) -> str:
@@ -314,6 +315,7 @@ def build_training_job_plan(
         project_name=project_name,
         workspace_id=workspace_id,
         quota=quota,
+        shm_size_gib=resolved_shm_size,
     )
 
 
@@ -334,6 +336,7 @@ def training_plan_payload(plan: JobSubmissionPlan) -> dict[str, Any]:
             "cpu_count": plan.quota.cpu_count,
             "memory_gib": plan.quota.memory_gib,
         },
+        "shm_size_gib": plan.shm_size_gib,
         "wrapped_command": plan.wrapped_command,
         "log_path": plan.log_path,
         "max_time_ms": plan.max_time_ms,

@@ -222,9 +222,9 @@ def test_resources_availability_human_hides_raw_group_ids(
                 group_name="中文资源组",
                 gpu_type="H200",
                 total_gpus=16,
-                used_gpus=4,
-                available_gpus=12,
-                low_priority_gpus=0,
+                used_gpus=16,
+                available_gpus=0,
+                low_priority_gpus=4,
                 workspace_id=_WS_CPU,
                 workspace_name="CPU资源空间",
             )
@@ -240,6 +240,11 @@ def test_resources_availability_human_hides_raw_group_ids(
         "Low Pri   = low-priority GPU usage that can be preempted by high-priority jobs"
         in result.output
     )
+    assert (
+        "High Pri  = Available + Low Pri; capacity a priority 5-10 job may reclaim"
+        in result.output
+    )
+    assert "↯" in result.output
     assert "lcg-secret-raw-id" not in result.output
 
 

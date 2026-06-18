@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import unicodedata
-
 import click
 
 from inspire.cli.formatters import json_formatter
 from inspire.cli.formatters.human_formatter import format_epoch
+from inspire.cli.formatters.table import column_width, render_table
 from inspire.cli.utils.raw_ids import scrub_raw_ids
 from .notebook_lookup import _format_notebook_cpu, _format_notebook_gpu, _notebook_gpu_type, _positive_int
 
@@ -32,23 +31,6 @@ def _format_notebook_project(item: dict) -> str:
 
 def _format_notebook_workspace(item: dict) -> str:
     return _nested_name(item, "workspace", "workspace_name", "workspaceName")
-
-
-def _display_width(value: str) -> int:
-    width = 0
-    for char in value:
-        if unicodedata.combining(char):
-            continue
-        width += 2 if unicodedata.east_asian_width(char) in {"F", "W"} else 1
-    return width
-
-
-def _column_width(title: str, values: list[str]) -> int:
-    return max(_display_width(title), *(_display_width(value) for value in values))
-
-
-def _pad(value: str, width: int) -> str:
-    return value + (" " * max(0, width - _display_width(value)))
 
 
 def _print_notebook_detail(notebook: dict) -> None:
@@ -134,35 +116,32 @@ def _print_notebook_list(items: list, json_output: bool) -> None:
     cpu_strings = [scrub_raw_ids(_format_notebook_cpu(item)) for item in items]
     created_strings = [scrub_raw_ids(format_epoch(item.get("created_at"))) for item in items]
 
-    name_w = _column_width("Name", name_strings)
-    status_w = _column_width("Status", status_strings)
-    project_w = _column_width("Project", project_strings)
-    workspace_w = _column_width("Workspace", workspace_strings)
-    gpu_w = _column_width("GPU", gpu_strings)
-    cpu_w = _column_width("CPU", cpu_strings)
-    created_w = _column_width("Created", created_strings)
-
-    header = (
-        f"{_pad('Name', name_w)}  {_pad('Status', status_w)}  "
-        f"{_pad('Project', project_w)}  {_pad('Workspace', workspace_w)}  "
-        f"{_pad('GPU', gpu_w)}  {_pad('CPU', cpu_w)}  {_pad('Created', created_w)}"
-    )
-    lines = [header, "-" * len(header)]
-    for name, status, project, workspace, gpu, cpu, created in zip(
-        name_strings,
-        status_strings,
-        project_strings,
-        workspace_strings,
-        gpu_strings,
-        cpu_strings,
-        created_strings,
-    ):
-        lines.append(
-            f"{_pad(name, name_w)}  {_pad(status, status_w)}  "
-            f"{_pad(project, project_w)}  {_pad(workspace, workspace_w)}  "
-            f"{_pad(gpu, gpu_w)}  {_pad(cpu, cpu_w)}  {_pad(created, created_w)}"
+    table_rows = list(
+        zip(
+            name_strings,
+            status_strings,
+            project_strings,
+            workspace_strings,
+            gpu_strings,
+            cpu_strings,
+            created_strings,
         )
-
+    )
+    widths = [
+        column_width("Name", name_strings, max_width=80),
+        column_width("Status", status_strings, max_width=18),
+        column_width("Project", project_strings, max_width=32),
+        column_width("Workspace", workspace_strings, max_width=24),
+        column_width("GPU", gpu_strings, max_width=24),
+        column_width("CPU", cpu_strings, max_width=8),
+        column_width("Created", created_strings, max_width=19),
+    ]
+    lines = render_table(
+        ("Name", "Status", "Project", "Workspace", "GPU", "CPU", "Created"),
+        table_rows,
+        widths,
+        line_char="─",
+    )
     lines.append("")
     lines.append(f"Showing {len(items)} notebook(s)")
     click.echo("\n".join(lines))

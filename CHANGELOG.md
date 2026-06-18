@@ -2,6 +2,35 @@
 
 本文件同步 GitHub Releases 正文格式；Release 页面是发布说明的标准口径。
 
+# v6.0.5
+
+## 更新内容
+
+### 新增
+
+- `resources availability` 增加 `High Pri` / `high_priority_available_gpus`，把高优任务可参考的容量明确为 `Available + Low Pri`，并在无即时空闲但存在低优可抢占占用时用 `↯` 标记。
+- `job create --dry-run`、提交成功输出和 JSON plan 显示解析后的 per-instance shared memory；`job list` 也显示资源摘要，包含 GPU / CPU / 内存和 `shm`。
+- 新增共享表格 helper 的 raw-id 清洗和 CJK display-width 列宽计算，供列表输出复用。
+
+### 修复
+
+- 统一 notebook、job、HPC、image、config context 和 user SSH key 等列表表格输出，避免中文 workspace / project / compute group 名导致列错位。
+- 补齐 JobInfo 对 CPU、内存和 shared memory 的解析，避免 job 列表只能看到部分资源规格。
+- 将 shared memory 的文案单位统一为 GiB。
+
+### 文档
+
+- 更新 Skill、资源与调度 reference、workload reference 和 Browser API reference，明确 `Available`、`Low Pri`、`High Pri` 的关系，以及 `/dev/shm` 和 quota memory 的验证方式。
+
+### 验证
+
+- `uv lock --check`
+- `uv run pytest -q`
+- `uv run ruff check inspire tests`
+- `uv run mypy`
+- `uv build`
+- `git diff --check`
+
 # v6.0.4
 
 ## 更新内容

@@ -22,6 +22,8 @@ description: "Inspire platform operating model for Agents: decide workspace, res
 
 `workspace`、`project`、`group`、`quota`、`image` 是核心调度条件，没有隐式默认值。创建 workload 时显式传入，或用 workload profile 明确保存这五类条件。GPU job shared memory 属于资源细项，不等同于 `quota` 的内存字段，且不能超过 `quota` 的实例内存；需要时查 job create help 或 [references/compute-workloads.md](references/compute-workloads.md)。Path alias 只表示远端路径，服务于 `--cwd`、scp、日志路径和共享盘约定。
 
+资源可用性里 `Available` 是即时空闲 GPU，`Low Pri` 是低优可抢占占用，`High Pri` 是高优任务可能回收的 `Available + Low Pri` 上限；正式提交后仍以 events / instances / metrics 判断调度结果。
+
 日常 workspace 选择通常很直接：
 
 - `CPU资源空间`：CPU notebook、联网准备、依赖安装、HPC 数据处理、CPU Ray。

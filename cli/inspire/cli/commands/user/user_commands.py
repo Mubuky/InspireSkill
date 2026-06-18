@@ -18,6 +18,7 @@ from inspire.cli.context import (
     pass_context,
 )
 from inspire.cli.formatters import json_formatter
+from inspire.cli.formatters.table import column_width, render_table
 from inspire.cli.utils.auth import AuthenticationError
 from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.id_resolver import reject_id_at_boundary
@@ -288,13 +289,23 @@ def list_ssh_keys(ctx: Context) -> None:
             }
             for item in items
         ]
-        name_w = max(len("Name"), *(len(row["name"]) for row in rows))
-        fp_w = max(len("Fingerprint"), *(len(row["fingerprint"]) for row in rows))
         click.echo(f"SSH Keys (total={total})")
-        click.echo(f"{'Name':<{name_w}}  {'Fingerprint':<{fp_w}}  Created")
-        click.echo(f"{'-' * name_w}  {'-' * fp_w}  -------")
-        for row in rows:
-            click.echo(f"{row['name']:<{name_w}}  {row['fingerprint']:<{fp_w}}  {row['created']}")
+        table_rows = [(row["name"], row["fingerprint"], row["created"]) for row in rows]
+        widths = [
+            column_width("Name", [row[0] for row in table_rows], max_width=48),
+            column_width("Fingerprint", [row[1] for row in table_rows], max_width=64),
+            column_width("Created", [row[2] for row in table_rows], max_width=24),
+        ]
+        click.echo(
+            "\n".join(
+                render_table(
+                    ("Name", "Fingerprint", "Created"),
+                    table_rows,
+                    widths,
+                    line_char="─",
+                )
+            )
+        )
 
     except AuthenticationError as e:
         _handle_error(ctx, "AuthenticationError", str(e), EXIT_AUTH_ERROR)

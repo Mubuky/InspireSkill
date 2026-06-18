@@ -146,31 +146,60 @@ def _format_accurate_availability_table(availability, *, include_cpu: bool) -> N
     lines = ["", "📊 Compute Group Availability (Accurate Real-Time)"]
 
     if gpu_rows:
-        widths = [16, 22, 25, 10, 8, 8, 8, 2] if show_workspace else [22, 25, 10, 8, 8, 8, 2]
-        headers = (
-            ("Workspace", "GPU Type", "Compute Group", "Available", "Used", "Low Pri", "Total", "")
+        gpu_widths = (
+            [16, 22, 25, 10, 10, 8, 8, 8, 2]
             if show_workspace
-            else ("GPU Type", "Compute Group", "Available", "Used", "Low Pri", "Total", "")
+            else [22, 25, 10, 10, 8, 8, 8, 2]
         )
-        aligns = (
-            ["left", "left", "left", "right", "right", "right", "right", "left"]
+        gpu_headers = (
+            (
+                "Workspace",
+                "GPU Type",
+                "Compute Group",
+                "Available",
+                "High Pri",
+                "Used",
+                "Low Pri",
+                "Total",
+                "",
+            )
             if show_workspace
-            else ["left", "left", "right", "right", "right", "right", "left"]
+            else (
+                "GPU Type",
+                "Compute Group",
+                "Available",
+                "High Pri",
+                "Used",
+                "Low Pri",
+                "Total",
+                "",
+            )
+        )
+        gpu_aligns = (
+            ["left", "left", "left", "right", "right", "right", "right", "right", "left"]
+            if show_workspace
+            else ["left", "left", "right", "right", "right", "right", "right", "left"]
         )
         gpu_table_rows: list[tuple[object, ...]] = []
         if show_workspace:
-            total_row: tuple[object, ...] = ("TOTAL", "", "", 0, 0, 0, 0, "")
+            total_row: tuple[object, ...] = ("TOTAL", "", "", 0, 0, 0, 0, 0, "")
         else:
-            total_row = ("TOTAL", "", 0, 0, 0, 0, "")
+            total_row = ("TOTAL", "", 0, 0, 0, 0, 0, "")
 
-        sorted_gpu_rows = sorted(gpu_rows, key=lambda x: x.available_gpus, reverse=True)
+        sorted_gpu_rows = sorted(
+            gpu_rows,
+            key=lambda x: (x.available_gpus, x.high_priority_available_gpus),
+            reverse=True,
+        )
         total_available = 0
+        total_high_priority_available = 0
         total_used = 0
         total_low_pri = 0
         total_gpus = 0
 
         for row in sorted_gpu_rows:
             available = row.available_gpus
+            high_priority_available = row.high_priority_available_gpus
             if available >= 100:
                 status = "✓"
             elif available >= 32:
@@ -179,6 +208,8 @@ def _format_accurate_availability_table(availability, *, include_cpu: bool) -> N
                 status = "◐"
             elif available > 0:
                 status = "⚠"
+            elif high_priority_available > 0:
+                status = "↯"
             else:
                 status = "✗"
 
@@ -189,6 +220,7 @@ def _format_accurate_availability_table(availability, *, include_cpu: bool) -> N
                         row.gpu_type,
                         row.group_name,
                         row.available_gpus,
+                        high_priority_available,
                         row.used_gpus,
                         row.low_priority_gpus,
                         row.total_gpus,
@@ -201,6 +233,7 @@ def _format_accurate_availability_table(availability, *, include_cpu: bool) -> N
                         row.gpu_type,
                         row.group_name,
                         row.available_gpus,
+                        high_priority_available,
                         row.used_gpus,
                         row.low_priority_gpus,
                         row.total_gpus,
@@ -209,6 +242,7 @@ def _format_accurate_availability_table(availability, *, include_cpu: bool) -> N
                 )
 
             total_available += row.available_gpus
+            total_high_priority_available += high_priority_available
             total_used += row.used_gpus
             total_low_pri += row.low_priority_gpus
             total_gpus += row.total_gpus
@@ -219,6 +253,7 @@ def _format_accurate_availability_table(availability, *, include_cpu: bool) -> N
                 "",
                 "",
                 total_available,
+                total_high_priority_available,
                 total_used,
                 total_low_pri,
                 total_gpus,
@@ -229,19 +264,28 @@ def _format_accurate_availability_table(availability, *, include_cpu: bool) -> N
                 "TOTAL",
                 "",
                 total_available,
+                total_high_priority_available,
                 total_used,
                 total_low_pri,
                 total_gpus,
                 "",
             )
         gpu_table_rows.append(total_row)
-        lines.extend(render_table(headers, gpu_table_rows, widths, aligns=aligns, line_char="─"))
+        lines.extend(
+            render_table(
+                gpu_headers,
+                gpu_table_rows,
+                gpu_widths,
+                aligns=gpu_aligns,
+                line_char="─",
+            )
+        )
 
     if include_cpu and cpu_rows:
-        widths = (
+        cpu_widths = (
             [16, 25, 10, 10, 10, 12, 12, 12] if show_workspace else [25, 10, 10, 10, 12, 12, 12]
         )
-        headers = (
+        cpu_headers = (
             (
                 "Workspace",
                 "Compute Group",
@@ -263,7 +307,7 @@ def _format_accurate_availability_table(availability, *, include_cpu: bool) -> N
                 "Total GiB",
             )
         )
-        aligns = (
+        cpu_aligns = (
             ["left", "left", "right", "right", "right", "right", "right", "right"]
             if show_workspace
             else ["left", "right", "right", "right", "right", "right", "right"]
@@ -339,14 +383,24 @@ def _format_accurate_availability_table(availability, *, include_cpu: bool) -> N
                     _format_metric(total_mem),
                 )
             )
-        lines.extend(render_table(headers, cpu_table_rows, widths, aligns=aligns, line_char="─"))
+        lines.extend(
+            render_table(
+                cpu_headers,
+                cpu_table_rows,
+                cpu_widths,
+                aligns=cpu_aligns,
+                line_char="─",
+            )
+        )
 
     lines.append("")
     lines.append("💡 Legend:")
     lines.append(
         "  Available = platform-reported total minus used; negative values come from the platform API"
     )
+    lines.append("  High Pri  = Available + Low Pri; capacity a priority 5-10 job may reclaim")
     lines.append("  Low Pri   = low-priority GPU usage that can be preempted by high-priority jobs")
+    lines.append("  ↯         = no idle GPU, but high-priority preemption may help; confirm via events")
     if include_cpu:
         lines.append("  CPU rows   = CPU-only compute groups with CPU and memory totals")
     lines.append("")
@@ -426,6 +480,7 @@ def _list_accurate_resources(
                     "total_gpus": a.total_gpus,
                     "used_gpus": a.used_gpus,
                     "available_gpus": a.available_gpus,
+                    "high_priority_available_gpus": a.high_priority_available_gpus,
                     "low_priority_gpus": a.low_priority_gpus,
                     "total_nodes": a.total_nodes,
                     "ready_nodes": a.ready_nodes,

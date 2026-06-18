@@ -31,6 +31,11 @@ class GPUAvailability:
     memory_available_gib: float = 0.0
     resource_kind: str = "gpu"
 
+    @property
+    def high_priority_available_gpus(self) -> int:
+        """GPU capacity visible to high-priority jobs after low-priority preemption."""
+        return int(self.available_gpus) + int(self.low_priority_gpus)
+
 
 @dataclass
 class FullFreeNodeCount:

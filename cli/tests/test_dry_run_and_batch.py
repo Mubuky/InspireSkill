@@ -300,6 +300,7 @@ def test_job_create_shm_size_overrides_config_default(
     payload = json.loads(result.output)
     framework_config = payload["data"]["create_kwargs"]["framework_config"][0]
     assert framework_config["shm_gi"] == 64
+    assert payload["data"]["shm_size_gib"] == 64
     assert api.training_calls == []
 
 
@@ -329,6 +330,33 @@ def test_job_create_uses_config_shm_size_when_flag_absent(
     payload = json.loads(result.output)
     framework_config = payload["data"]["create_kwargs"]["framework_config"][0]
     assert framework_config["shm_gi"] == 48
+    assert payload["data"]["shm_size_gib"] == 48
+    assert api.training_calls == []
+
+
+def test_job_create_human_dry_run_shows_resolved_shm_size(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    api = _patch_submit_deps(monkeypatch, tmp_path, shm_size=40)
+
+    result = CliRunner().invoke(
+        cli_main,
+        [
+            "job",
+            "create",
+            "--name",
+            "human-shm-job",
+            "--profile",
+            "h200",
+            "--command",
+            "python train.py",
+            "--dry-run",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Shared memory: 40 GiB" in result.output
     assert api.training_calls == []
 
 
@@ -487,6 +515,8 @@ def test_batch_matrix_dry_run_expands_json_without_submit(
     ]
     assert items[0]["create_kwargs"]["framework_config"][0]["shm_gi"] == 96
     assert items[1]["create_kwargs"]["framework_config"][0]["shm_gi"] == 96
+    assert items[0]["shm_size_gib"] == 96
+    assert items[1]["shm_size_gib"] == 96
     assert items[0]["create_kwargs"]["task_priority"] == 7
     assert api.training_calls == []
 

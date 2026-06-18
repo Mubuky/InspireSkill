@@ -14,6 +14,7 @@ from inspire.cli.context import (
     pass_context,
 )
 from inspire.cli.formatters import human_formatter, json_formatter
+from inspire.cli.formatters.table import column_width, render_table
 from inspire.cli.utils.auth import AuthenticationError
 from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.raw_ids import scrub_raw_ids
@@ -205,20 +206,16 @@ def _format_hpc_list_rows(rows: list[dict[str, str]]) -> str:
     if not rows:
         return "No HPC jobs found."
 
-    name_width = max(len("Name"), *(len(r["name"]) for r in rows))
-    status_width = max(len("Status"), *(len(r["status"]) for r in rows))
-    created_width = max(len("Created"), *(len(r["created_at"]) for r in rows))
-
-    header = f"{'Name':<{name_width}}  " f"{'Status':<{status_width}}  {'Created':<{created_width}}"
-    sep = "-" * len(header)
-    lines = ["HPC Jobs", header, sep]
-    for row in rows:
-        lines.append(
-            f"{row['name']:<{name_width}}  "
-            f"{row['status']:<{status_width}}  "
-            f"{row['created_at']:<{created_width}}"
-        )
-    lines.append(sep)
+    table_rows = [(row["name"], row["status"], row["created_at"]) for row in rows]
+    widths = [
+        column_width("Name", [row[0] for row in table_rows], max_width=80),
+        column_width("Status", [row[1] for row in table_rows], max_width=18),
+        column_width("Created", [row[2] for row in table_rows], max_width=19),
+    ]
+    lines = [
+        "HPC Jobs",
+        *render_table(("Name", "Status", "Created"), table_rows, widths, line_char="─"),
+    ]
     lines.append(f"Total: {len(rows)}")
     return "\n".join(lines)
 
@@ -248,25 +245,26 @@ def _format_hpc_instances(instances: list[dict[str, Any]]) -> str:
             }
         )
 
-    name_w = max(len("Instance"), *(len(row["name"]) for row in rendered))
-    status_w = max(len("Status"), *(len(row["status"]) for row in rendered))
-    component_w = max(len("Component"), *(len(row["component"]) for row in rendered))
-    node_w = max(len("Node"), *(len(row["node"]) for row in rendered))
-    header = (
-        f"{'Instance':<{name_w}} {'Status':<{status_w}} "
-        f"{'Component':<{component_w}} {'Node':<{node_w}} Created"
-    )
-    sep = "-" * len(header)
-    lines = ["HPC Instances", header, sep]
-    for row in rendered:
-        lines.append(
-            f"{row['name']:<{name_w}} "
-            f"{row['status']:<{status_w}} "
-            f"{row['component']:<{component_w}} "
-            f"{row['node']:<{node_w}} "
-            f"{row['created']}"
-        )
-    lines.append(sep)
+    table_rows = [
+        (row["name"], row["status"], row["component"], row["node"], row["created"])
+        for row in rendered
+    ]
+    widths = [
+        column_width("Instance", [row[0] for row in table_rows], max_width=64),
+        column_width("Status", [row[1] for row in table_rows], max_width=18),
+        column_width("Component", [row[2] for row in table_rows], max_width=18),
+        column_width("Node", [row[3] for row in table_rows], max_width=32),
+        column_width("Created", [row[4] for row in table_rows], max_width=19),
+    ]
+    lines = [
+        "HPC Instances",
+        *render_table(
+            ("Instance", "Status", "Component", "Node", "Created"),
+            table_rows,
+            widths,
+            line_char="─",
+        ),
+    ]
     lines.append(f"Total: {len(instances)} instance(s)")
     return "\n".join(lines)
 
