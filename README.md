@@ -86,18 +86,18 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 curl -fsSL https://raw.githubusercontent.com/realZillionX/InspireSkill/main/scripts/install.sh | bash
 ```
 
-安装、可选参数和安装后检查见 [references/setup/install-and-config.md](references/setup/install-and-config.md)。
+安装、可选参数和安装后检查见[`references/setup/install-and-config.md`](references/setup/install-and-config.md)。
 
 ## 更新
 
 ```bash
-inspire update                # CLI 包 + SKILL/references 一起升到最新
+inspire update                # CLI 包 + SKILL.md / references/ 一起升到最新
 inspire update --check        # 只检查，不动
 inspire update --cli-only     # 仅升 CLI 包与运行时
 inspire update --skill-only   # 仅刷 SKILL.md / references/
 ```
 
-升级旧版本和 Installer 检测说明见 [references/setup/install-and-config.md](references/setup/install-and-config.md)。
+升级旧版本和 Installer 检测说明见[`references/setup/install-and-config.md`](references/setup/install-and-config.md)。
 成功升级 CLI 后，`inspire update` 会显示旧版本到新版本之间的 GitHub Release 更新摘要。
 
 ## 完整初始化（安装后必跑）
@@ -113,7 +113,7 @@ inspire resources availability --workspace all --include-cpu
 
 `inspire init` 默认做账号级全局发现，写入平台 Catalog 和默认 Path Alias；`--scope project` 用于当前仓库的 Project Context 和 Path Alias 覆盖。
 
-账号级 / 项目级配置分层、多账号和代理 Setup 见 [references/setup/install-and-config.md](references/setup/install-and-config.md)。
+账号级 / 项目级配置分层、多账号和代理 Setup 见[`references/setup/install-and-config.md`](references/setup/install-and-config.md)。
 
 ---
 
@@ -204,7 +204,7 @@ inspire resources availability --workspace all --include-cpu
 
 启智平台的调度语义、资源组划分、镜像可用性会频繁变化。InspireSkill 的维护目标是让 CLI 和使用手册始终贴近平台真实行为。
 
-维护者 [@realZillionX](https://github.com/realZillionX) 会高频率、持续跟进上游变更。每次发版后，任意 `inspire <subcommand>` 都会在 stderr 提醒一行，跑 `inspire update` 即升（用法见上面 [更新](#更新) 段）。
+维护者 [@realZillionX](https://github.com/realZillionX) 会高频率、持续跟进上游变更。每次发版后，任意 `inspire <subcommand>` 都会在 stderr 提醒一行，跑 `inspire update` 即升（用法见上面[更新](#更新)段）。
 
 发现新的平台行为差异时，在 [Issue Tracker](https://github.com/realZillionX/InspireSkill/issues) 开一条，附 `inspire --debug <cmd>` 的 Trace（CLI 会自动脱敏敏感登录凭据和代理信息）。反馈流程的更多细节见下方“开发与贡献”一节。
 
@@ -212,7 +212,7 @@ inspire resources availability --workspace all --include-cpu
 
 # 代理配置
 
-不常驻 SII 的科研人员通常需要让本机代理转发 `*.sii.edu.cn` 流量；能直连 SII 校园网的人可以走 `DIRECT`。Clash Verge mixed-port 的 SII proxy / DIRECT 分流模板见 [references/setup/install-and-config.md](references/setup/install-and-config.md)；CLI 本身不绑定固定端口。代理地址通过 `inspire account add` 写入账号配置，并可用 `inspire config show --compact` 核对。
+不常驻 SII 的科研人员通常需要让本机代理转发 `*.sii.edu.cn` 流量；能直连 SII 校园网的人可以走 `DIRECT`。Clash Verge mixed-port 的 SII proxy / DIRECT 分流模板见[`references/setup/install-and-config.md`](references/setup/install-and-config.md)；CLI 本身不绑定固定端口。代理地址通过 `inspire account add` 写入账号配置，并可用 `inspire config show --compact` 核对。
 
 > 凭据（host / user / password）**从实验室或组织管理员获取**，不要提交到任何公开仓库或聊天记录。
 
@@ -233,16 +233,16 @@ inspire resources availability --workspace all --include-cpu
 # 文档索引
 
 - [`SKILL.md`](SKILL.md) — 日常使用入口：CLI Help 查询方式、按需加载索引和项目上下文字段。
-- [references/setup/install-and-config.md](references/setup/install-and-config.md) — 安装、更新、账号初始化、项目初始化和 SII proxy setup。
-- [references/dev/browser-api.md](references/dev/browser-api.md) — CLI 维护参考：网页会话接口和当前前端请求合约。
-- [references/resources-and-paths.md](references/resources-and-paths.md) — Workspace、Compute Group、规格三元组、实时资源和 Workload Profile 边界。
-- [references/network-and-sources.md](references/network-and-sources.md) — 公网、离线 GPU 空间、SII 内部源和镜像固化策略。
-- [references/paths.md](references/paths.md) — 共享盘作用域、存储池、挂载隔离、Path Alias 和项目 `INSPIRE.md` 维护边界。
-- [references/notebook.md](references/notebook.md) — Notebook 作为交互工作台、连接方式、文件流转、Proxy、安全和观察边界。
-- [references/image-management.md](references/image-management.md) — 镜像职责、保存 / 注册边界、可见性和清理原则。
-- [references/compute-workloads.md](references/compute-workloads.md) — GPU Job、CPU HPC、Ray、Serving 的适用边界、调度语义和观察闭环。
-- [references/workflows.md](references/workflows.md) — CPU 准备、数据处理、分布式训练三阶段项目流程。
-- [references/model.md](references/model.md) — Model Registry 与 Serving 的职责边界、注册限制和版本判断。
+- [`references/setup/install-and-config.md`](references/setup/install-and-config.md) — 安装、更新、账号初始化、项目初始化和 SII proxy setup。
+- [`references/dev/browser-api.md`](references/dev/browser-api.md) — CLI 维护参考：网页会话接口和当前前端请求合约。
+- [`references/resources-and-paths.md`](references/resources-and-paths.md) — Workspace、Compute Group、规格三元组、实时资源和 Workload Profile 边界。
+- [`references/network-and-sources.md`](references/network-and-sources.md) — 公网、离线 GPU 空间、SII 内部源和镜像固化策略。
+- [`references/paths.md`](references/paths.md) — 共享盘作用域、存储池、挂载隔离、Path Alias 和项目 `INSPIRE.md` 维护边界。
+- [`references/notebook.md`](references/notebook.md) — Notebook 作为交互工作台、连接方式、文件流转、Proxy、安全和观察边界。
+- [`references/image-management.md`](references/image-management.md) — 镜像职责、保存 / 注册边界、可见性和清理原则。
+- [`references/compute-workloads.md`](references/compute-workloads.md) — GPU Job、CPU HPC、Ray、Serving 的适用边界、调度语义和观察闭环。
+- [`references/workflows.md`](references/workflows.md) — CPU 准备、数据处理、分布式训练三阶段项目流程。
+- [`references/model.md`](references/model.md) — Model Registry 与 Serving 的职责边界、注册限制和版本判断。
 - [`cli/`](cli/) — CLI 源码；入口 `cli/inspire/cli/main.py`。
 - [`scripts/install.sh`](scripts/install.sh) — curl-pipe-bash 安装器。
 
@@ -250,7 +250,7 @@ inspire resources availability --workspace all --include-cpu
 
 # License
 
-[MIT](LICENSE)
+[`LICENSE`](LICENSE)（MIT）
 
 # Acknowledgements
 
