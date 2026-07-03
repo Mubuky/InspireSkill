@@ -9,6 +9,7 @@ from click.testing import CliRunner
 from inspire.bridge.tunnel import BridgeProfile, TunnelConfig
 from inspire.cli.commands.notebook import connection as connection_module
 from inspire.cli.commands.notebook import ssh as ssh_module
+from inspire.cli.commands.notebook.transport import NotebookTransportPolicy
 from inspire.cli.context import Context, EXIT_API_ERROR, EXIT_CONFIG_ERROR, EXIT_SUCCESS
 from inspire.cli.main import main as cli_main
 from inspire.platform.web.browser_api import NotebookFailedError
@@ -20,8 +21,22 @@ ssh_proxy_module = importlib.import_module("inspire.cli.commands.notebook.ssh_pr
 workspace_module = importlib.import_module("inspire.config.workspaces")
 
 
+def _allow_ssh_policy(monkeypatch) -> None:  # noqa: ANN001
+    monkeypatch.setattr(
+        ssh_module,
+        "preflight_notebook_transport_policy",
+        lambda *_args, **_kwargs: NotebookTransportPolicy(
+            notebook="demo-box",
+            notebook_id="nb-public",
+            public_internet=True,
+            reason="test",
+        ),
+    )
+
+
 def test_notebook_ssh_default_route_runs_notebook_command(monkeypatch) -> None:  # noqa: ANN001
     calls = []
+    _allow_ssh_policy(monkeypatch)
 
     def fake_run_notebook_ssh(ctx, **kwargs):  # noqa: ANN001
         del ctx
@@ -344,6 +359,7 @@ def test_notebook_ssh_explicit_account_bootstraps_without_switching_active(
 
 
 def test_notebook_ssh_stopped_error_is_actionable(monkeypatch) -> None:  # noqa: ANN001
+    _allow_ssh_policy(monkeypatch)
     events = "\n".join(
         [
             "The service is starting up...",

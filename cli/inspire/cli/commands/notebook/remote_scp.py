@@ -28,6 +28,7 @@ from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.raw_ids import scrub_raw_ids
 
 from .target_resolver import resolve_cached_notebook_target
+from .transport import preflight_notebook_transport_policy
 
 
 def _scp_failure_details(result: object) -> str | None:
@@ -122,6 +123,28 @@ def bridge_scp(
         # Auto-enable recursive for directories
         if local.is_dir() and not recursive:
             recursive = True
+
+    policy = preflight_notebook_transport_policy(
+        ctx,
+        notebook=notebook,
+        workspace=None,
+        account=account,
+        timeout=30,
+    )
+    if not policy.allow_ssh:
+        _handle_error(
+            ctx,
+            "RestrictedSshTransport",
+            "notebook scp is SSH-based and cannot run for this notebook.",
+            EXIT_GENERAL_ERROR,
+            hint=(
+                "Use a public-internet notebook to transfer shared paths instead: "
+                "inspire notebook scp <public-notebook> <local-path> /inspire/<storage>/...; "
+                "for rsync, target the public-internet notebook's SSH config entry with the same "
+                "/inspire/... path."
+            ),
+        )
+        return
 
     target = resolve_cached_notebook_target(
         ctx,

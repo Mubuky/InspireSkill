@@ -9,6 +9,7 @@ import click
 from inspire.cli.context import Context, pass_context
 
 from .notebook_ssh_flow import run_notebook_ssh
+from .transport import emit_ssh_policy_error, preflight_notebook_transport_policy
 
 
 _LEGACY_SSH_SUBCOMMANDS = {
@@ -104,6 +105,16 @@ def _ssh_open(
 ) -> None:
     """Open an SSH shell or run a command on a notebook."""
     command = shlex.join(command_parts) if command_parts else None
+    if workspace:
+        policy = preflight_notebook_transport_policy(
+            ctx,
+            notebook=notebook,
+            workspace=workspace,
+            account=account,
+            timeout=min(setup_timeout, 30),
+        )
+        if not policy.allow_ssh:
+            raise SystemExit(emit_ssh_policy_error(ctx, policy))
     run_notebook_ssh(
         ctx,
         notebook_id=notebook,
