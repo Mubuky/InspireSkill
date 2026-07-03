@@ -120,3 +120,27 @@ def test_run_command_capture_in_existing_lab_cleans_up_terminal(monkeypatch) -> 
     assert result.returncode == 0
     assert result.output == "ok\n"
     assert events == [("delete", "https://nb.example.com/lab|term-1")]
+
+
+def test_parse_network_probe_output() -> None:
+    output = "\n".join(
+        [
+            "PUBLIC www.baidu.com 443 ok",
+            "PUBLIC www.qq.com 443 fail",
+            "",
+        ]
+    )
+
+    result = jt.parse_network_probe_output(output)
+
+    assert result.public_internet is True
+    assert result.public_successes == ["www.baidu.com:443"]
+    assert result.public_failures == ["www.qq.com:443"]
+
+
+def test_parse_network_probe_output_all_public_failures() -> None:
+    output = "PUBLIC www.baidu.com 443 fail\nPUBLIC www.qq.com 443 fail\n"
+
+    result = jt.parse_network_probe_output(output)
+
+    assert result.public_internet is False
