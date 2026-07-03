@@ -21,15 +21,24 @@ ssh_cmd_module = importlib.import_module("inspire.cli.commands.notebook.remote_s
 
 @pytest.fixture(autouse=True)
 def _allow_exec_transport_policy(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        exec_cmd_module,
-        "preflight_notebook_transport_policy",
-        lambda *_args, **_kwargs: NotebookTransportPolicy(
+    def _allow_policy(*_args: object, **_kwargs: object) -> NotebookTransportPolicy:
+        return NotebookTransportPolicy(
             notebook="gpu-main",
             notebook_id="nb-public",
             public_internet=True,
             reason="test",
-        ),
+        )
+
+    monkeypatch.setattr(
+        exec_cmd_module,
+        "preflight_notebook_transport_policy",
+        _allow_policy,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        ssh_cmd_module,
+        "preflight_notebook_transport_policy",
+        _allow_policy,
         raising=False,
     )
 

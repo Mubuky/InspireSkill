@@ -144,3 +144,16 @@ def test_parse_network_probe_output_all_public_failures() -> None:
     result = jt.parse_network_probe_output(output)
 
     assert result.public_internet is False
+
+
+def test_build_jupyter_terminal_ws_url_uses_existing_rtunnel_helper(monkeypatch) -> None:  # noqa: ANN001
+    monkeypatch.setattr(
+        jt.rtunnel_module,
+        "_build_terminal_websocket_url",
+        lambda lab_url, term_name: f"wss://example.test/{term_name}",
+    )
+
+    assert (
+        jt.build_jupyter_terminal_ws_url("https://nb.example.com/lab", "3")
+        == "wss://example.test/3"
+    )

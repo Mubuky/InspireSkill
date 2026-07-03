@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 import base64
+import json
+import os
 import re
+import select
+import signal
 import shlex
+import sys
+import termios
+import tty
 import uuid
 from dataclasses import dataclass
 from typing import Optional
+from urllib.parse import urlsplit
 
 from inspire.platform.web.browser_api import rtunnel as rtunnel_module
 from inspire.platform.web.browser_api.core import (
@@ -150,6 +158,18 @@ def parse_network_probe_output(output: str) -> NotebookNetworkProbe:
         public_internet=public,
         endpoints=tuple(endpoints),
     )
+
+
+def build_jupyter_terminal_ws_url(lab_url: str, term_name: str) -> str:
+    return rtunnel_module._build_terminal_websocket_url(lab_url, term_name)
+
+
+def build_shell_bootstrap(*, cwd: str | None, env_exports: str) -> str:
+    if cwd:
+        return f"{env_exports}cd {shlex.quote(cwd)} && exec $SHELL -l\r"
+    if env_exports:
+        return f"{env_exports}exec $SHELL -l\r"
+    return "exec $SHELL -l\r"
 
 
 def _send_terminal_command_capture_via_websocket(
@@ -342,6 +362,169 @@ def probe_notebook_network(
             endpoints=(),
         )
     return parse_network_probe_output(result.output)
+
+
+def _jupyter_ws_headers(session: WebSession, ws_url: str) -> dict[str, str]:
+    parsed = urlsplit(ws_url)
+    origin_scheme = "https" if parsed.scheme == "wss" else "http"
+    headers = {
+        "Origin": f"{origin_scheme}://{parsed.netloc}",
+        "User-Agent": (
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        ),
+    }
+    cookie_pairs: list[str] = []
+    cookies = session.storage_state.get("cookies") if session.storage_state else None
+    if isinstance(cookies, list):
+        for cookie in cookies:
+            if not isinstance(cookie, dict):
+                continue
+            name = str(cookie.get("name") or "").strip()
+            value = str(cookie.get("value") or "").strip()
+            if name and value:
+                cookie_pairs.append(f"{name}={value}")
+    for name, value in (session.cookies or {}).items():
+        if name and value:
+            pair = f"{name}={value}"
+            if pair not in cookie_pairs:
+                cookie_pairs.append(pair)
+    if cookie_pairs:
+        headers["Cookie"] = "; ".join(cookie_pairs)
+    return headers
+
+
+def _send_jupyter_stdin(ws: object, text: str) -> None:
+    ws.send_text(json.dumps(["stdin", text]))
+
+
+def _run_jupyter_terminal_shell(
+    *,
+    ws_url: str,
+    session: WebSession,
+    bootstrap: str,
+    stdin=None,  # noqa: ANN001
+    stdout=None,  # noqa: ANN001
+) -> int:
+    from inspire.cli.utils.job_shell import (
+        CTRL_RIGHT_BRACKET,
+        _WebSocketClient,
+        _stty_command,
+        _write_stdout,
+    )
+
+    stdin = stdin or sys.stdin
+    stdout = stdout or sys.stdout
+    stdout_buffer = getattr(stdout, "buffer", stdout)
+    headers = _jupyter_ws_headers(session, ws_url)
+    old_term = None
+    raw_mode = bool(getattr(stdin, "isatty", lambda: False)())
+
+    with _WebSocketClient(ws_url, headers) as ws:
+        _send_jupyter_stdin(ws, bootstrap)
+        _send_jupyter_stdin(ws, _stty_command().replace("\n", "\r"))
+
+        def resize_handler(signum, frame):  # noqa: ANN001
+            del signum, frame
+            try:
+                _send_jupyter_stdin(ws, _stty_command().replace("\n", "\r"))
+            except Exception:
+                pass
+
+        previous_winch = None
+        if raw_mode:
+            old_term = termios.tcgetattr(stdin.fileno())
+            tty.setraw(stdin.fileno())
+            previous_winch = signal.getsignal(signal.SIGWINCH)
+            signal.signal(signal.SIGWINCH, resize_handler)
+        try:
+            stdin_open = True
+            while True:
+                readers = [ws]
+                if stdin_open and not getattr(stdin, "closed", False):
+                    readers.append(stdin)
+                ready, _, _ = select.select(readers, [], [])
+                if ws in ready:
+                    try:
+                        opcode, payload = ws.recv_frame()
+                    except EOFError:
+                        return 0
+                    if opcode == 0x8:
+                        return 0
+                    if opcode == 0x9:
+                        ws._send_frame(0xA, payload)
+                        continue
+                    if opcode in {0x1, 0x2}:
+                        text = payload.decode("utf-8", errors="ignore")
+                        try:
+                            msg = json.loads(text)
+                        except json.JSONDecodeError:
+                            _write_stdout(stdout_buffer, payload)
+                            continue
+                        if isinstance(msg, list) and len(msg) >= 2 and msg[0] == "stdout":
+                            _write_stdout(stdout_buffer, str(msg[1] or "").encode())
+                if stdin in ready:
+                    data = os.read(stdin.fileno(), 4096)
+                    if not data:
+                        stdin_open = False
+                        continue
+                    if CTRL_RIGHT_BRACKET in data:
+                        return 0
+                    _send_jupyter_stdin(ws, data.decode("utf-8", errors="ignore"))
+        finally:
+            if raw_mode and old_term is not None:
+                termios.tcsetattr(stdin.fileno(), termios.TCSADRAIN, old_term)
+                if previous_winch is not None:
+                    signal.signal(signal.SIGWINCH, previous_winch)
+
+
+def open_jupyter_terminal_shell(
+    *,
+    notebook_id: str,
+    session: Optional[WebSession] = None,
+    cwd: str | None = None,
+    env_exports: str = "",
+    timeout: int = 60,
+) -> int:
+    from playwright.sync_api import sync_playwright
+
+    active_session = session or get_web_session()
+    timeout_ms = max(int(timeout * 1000), 1000)
+    with sync_playwright() as p:
+        browser = _launch_browser(p, headless=True)
+        context = _new_context(browser, storage_state=active_session.storage_state)
+        page = context.new_page()
+
+        term_name: str | None = None
+        lab_url = ""
+        try:
+            lab_frame = open_notebook_lab(
+                page,
+                notebook_id=notebook_id,
+                session=active_session,
+                timeout=timeout_ms,
+            )
+            lab_url = lab_frame.url
+            term_name = rtunnel_module._create_terminal_via_api(context, lab_url)
+            if not term_name:
+                return MISSING_MARKER_RETURN_CODE
+            ws_url = build_jupyter_terminal_ws_url(lab_url, term_name)
+            return _run_jupyter_terminal_shell(
+                ws_url=ws_url,
+                session=active_session,
+                bootstrap=build_shell_bootstrap(cwd=cwd, env_exports=env_exports),
+            )
+        finally:
+            if term_name and lab_url:
+                rtunnel_module._delete_terminal_via_api(
+                    context,
+                    lab_url=lab_url,
+                    term_name=term_name,
+                )
+            try:
+                context.close()
+            finally:
+                browser.close()
 
 
 def _run_command_capture_in_notebook_sync(
