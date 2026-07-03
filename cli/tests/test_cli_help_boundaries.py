@@ -372,3 +372,30 @@ def test_resources_availability_has_no_watch_option() -> None:
     assert result.exit_code == 0
     assert "--watch" not in result.output
     assert "--interval" not in result.output
+
+
+def test_notebook_help_does_not_advertise_platform_cp() -> None:
+    result = CliRunner().invoke(cli_main, ["notebook", "--help"])
+
+    assert result.exit_code == 0
+    assert " cp " not in result.output
+
+
+def test_notebook_scp_help_is_ssh_only() -> None:
+    result = CliRunner().invoke(cli_main, ["notebook", "scp", "--help"])
+
+    assert result.exit_code == 0
+    assert "SCP" in result.output
+    assert "public-internet notebook" in result.output
+    assert "/inspire/" in result.output
+    assert "WebDAV" not in result.output
+    assert "JupyterTerminal" not in result.output
+
+
+def test_notebook_ssh_config_help_mentions_rsync_conversion() -> None:
+    result = CliRunner().invoke(cli_main, ["notebook", "ssh-config", "--help"])
+
+    assert result.exit_code == 0
+    assert "rsync" in result.output
+    assert "public-internet notebook" in result.output
+    assert "/inspire/" in result.output

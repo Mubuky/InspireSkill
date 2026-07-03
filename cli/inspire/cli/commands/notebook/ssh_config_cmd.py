@@ -147,7 +147,12 @@ def ssh_config_cmd(
     ssh_port: int,
     setup_timeout: int,
 ) -> None:
-    """Print an OpenSSH config snippet for a notebook."""
+    """Print OpenSSH config for a public-internet notebook.
+
+    Use this Host entry for ssh, scp, VS Code Remote SSH, or external rsync
+    against /inspire/... shared paths. For restricted notebooks, use a
+    public-internet notebook's config entry and keep the same /inspire/... path.
+    """
     target = _load_cached_target(
         ctx,
         notebook=notebook,

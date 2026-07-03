@@ -82,10 +82,13 @@ def bridge_scp(
     recursive: bool,
     timeout: Optional[int],
 ) -> None:
-    """Transfer files to/from a cached notebook via SCP.
+    """Transfer files to/from a public-internet notebook via SSH/SCP.
 
     Requires `inspire notebook connection refresh <notebook> --workspace <workspace>`
-    first. NOTEBOOK is the notebook name.
+    first. NOTEBOOK is the notebook name. This command is SSH/SCP-only and
+    is for public-internet notebooks. For restricted notebooks, keep the same
+    /inspire/... shared path and run the transfer against a public-internet
+    notebook instead.
     By default, uploads SOURCE (local) to DESTINATION (remote).
     Use --download to download SOURCE (remote) to DESTINATION (local).
     Remote paths may be absolute paths, aliases, or alias:sub/path values
@@ -99,6 +102,7 @@ def bridge_scp(
         inspire notebook scp my-notebook -d me:repo/results.tar.gz ./results.tar.gz
         inspire notebook scp my-notebook -d me:repo/checkpoints/ ./checkpoints/ -r
         inspire notebook scp my-notebook ./bundle.tar me:
+        inspire notebook scp public-box ./dataset.tar /inspire/hdd/project/topic/user/dataset.tar
     """
     from inspire.cli.utils.id_resolver import reject_id_at_boundary
 
