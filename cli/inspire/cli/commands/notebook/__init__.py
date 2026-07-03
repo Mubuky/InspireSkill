@@ -37,6 +37,7 @@ from .notebook_events import events as notebook_events
 from .notebook_lifecycle import lifecycle as notebook_lifecycle
 from .notebook_metrics import notebook_metrics
 from .url_cmd import notebook_proxy_url, notebook_url, notebook_vscode_proxy_suffix
+from .net_test import notebook_net_test
 
 # Remote operations on a cached notebook connection.
 from .install_deps import install_deps_cmd
@@ -51,10 +52,11 @@ def notebook():
 
     Notebooks are the interactive workbench: use them to prepare project
     environments, download data or weights into shared storage, run quick
-    probes, expose temporary HTTP services, and open SSH / exec / scp access
-    by notebook name. For 分布式训练空间 or another offline GPU area,
+    probes, open command access by notebook name, and expose temporary HTTP
+    services when network policy allows. For 分布式训练空间 or another offline GPU area,
     prepare public downloads in an internet-enabled CPU资源空间 notebook first;
-    for package installs, check the SII internal mirrors before falling back.
+    restricted notebooks use JupyterTerminal for exec/shell and shared
+    /inspire/... paths for file movement.
 
     \b
     Examples:
@@ -90,6 +92,7 @@ notebook.add_command(ssh_proxy_cmd)             # ssh-proxy
 notebook.add_command(notebook_events)           # events (K8s scheduling / pod lifecycle)
 notebook.add_command(notebook_lifecycle)        # lifecycle (run-cycle timeline; /run_index/list)
 notebook.add_command(notebook_metrics)          # metrics (资源视图 time-series, no SSH needed)
+notebook.add_command(notebook_net_test)         # net-test (JupyterTerminal egress probe)
 notebook.add_command(path_aliases_cmd)          # path (project remote path aliases)
 
 # Remote operations on a cached notebook connection.

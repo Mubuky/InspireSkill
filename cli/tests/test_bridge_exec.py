@@ -1,6 +1,7 @@
 import json
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 import importlib
 
@@ -8,6 +9,7 @@ import pytest
 from click.testing import CliRunner
 
 from inspire.bridge.tunnel import BridgeProfile, TunnelConfig
+from inspire.cli.commands.notebook.transport import NotebookTransportPolicy
 from inspire.cli.main import main as cli_main
 from inspire.cli.context import Context, EXIT_CONFIG_ERROR, EXIT_GENERAL_ERROR, EXIT_SUCCESS, EXIT_TIMEOUT
 from inspire.config import Config
@@ -15,6 +17,30 @@ from inspire.config import Config
 # Import the submodules where the patched names actually live
 exec_cmd_module = importlib.import_module("inspire.cli.commands.notebook.remote_exec")
 ssh_cmd_module = importlib.import_module("inspire.cli.commands.notebook.remote_shell")
+
+
+@pytest.fixture(autouse=True)
+def _allow_exec_transport_policy(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _allow_policy(*_args: object, **_kwargs: object) -> NotebookTransportPolicy:
+        return NotebookTransportPolicy(
+            notebook="gpu-main",
+            notebook_id="nb-public",
+            public_internet=True,
+            reason="test",
+        )
+
+    monkeypatch.setattr(
+        exec_cmd_module,
+        "preflight_notebook_transport_policy",
+        _allow_policy,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        ssh_cmd_module,
+        "preflight_notebook_transport_policy",
+        _allow_policy,
+        raising=False,
+    )
 
 
 def make_sync_config(tmp_path: Path) -> Config:
@@ -423,6 +449,67 @@ def test_bridge_exec_ssh_streaming_success(monkeypatch: pytest.MonkeyPatch, tmp_
     assert result.output.strip().endswith("OK")
     # Verify streaming function was called (output was streamed)
     assert len(streamed_lines) == 3
+
+
+def test_exec_uses_jupyter_when_policy_blocks_ssh(monkeypatch, tmp_path) -> None:  # noqa: ANN001
+    config = make_sync_config(tmp_path)
+
+    monkeypatch.setattr(
+        Config,
+        "from_files_and_env",
+        classmethod(lambda cls, require_credentials=True: (config, {})),
+    )
+    monkeypatch.setattr(
+        exec_cmd_module,
+        "preflight_notebook_transport_policy",
+        lambda *_a, **_k: NotebookTransportPolicy(
+            notebook="gpu-box",
+            notebook_id="nb-123",
+            public_internet=False,
+            reason="live_probe",
+        ),
+    )
+    monkeypatch.setattr(
+        exec_cmd_module.browser_api_module,
+        "run_command_capture_in_notebook",
+        lambda **_k: SimpleNamespace(returncode=0, output="ok\n", completed=True, marker="m"),
+    )
+    monkeypatch.setattr(exec_cmd_module, "try_exec_via_ssh_tunnel", lambda *_a, **_k: 99)
+
+    result = CliRunner().invoke(cli_main, ["notebook", "exec", "gpu-box", "echo ok"])
+
+    assert result.exit_code == 0
+    assert "ok" in result.output
+
+
+def test_exec_json_reports_jupyter_transport(monkeypatch, tmp_path) -> None:  # noqa: ANN001
+    config = make_sync_config(tmp_path)
+
+    monkeypatch.setattr(
+        Config,
+        "from_files_and_env",
+        classmethod(lambda cls, require_credentials=True: (config, {})),
+    )
+    monkeypatch.setattr(
+        exec_cmd_module,
+        "preflight_notebook_transport_policy",
+        lambda *_a, **_k: NotebookTransportPolicy(
+            notebook="gpu-box",
+            notebook_id="nb-123",
+            public_internet=False,
+            reason="live_probe",
+        ),
+    )
+    monkeypatch.setattr(
+        exec_cmd_module.browser_api_module,
+        "run_command_capture_in_notebook",
+        lambda **_k: SimpleNamespace(returncode=3, output="bad\n", completed=True, marker="m"),
+    )
+
+    result = CliRunner().invoke(cli_main, ["--json", "notebook", "exec", "gpu-box", "false"])
+
+    assert result.exit_code == 3
+    assert '"method": "jupyter_terminal"' in result.output
 
 
 def test_bridge_exec_supports_command_after_double_dash(

@@ -50,7 +50,7 @@ def test_notebook_ssh_help_is_human_ssh_entrypoint_without_compat_commands() -> 
     runner = CliRunner()
     result = runner.invoke(cli_main, ["notebook", "ssh", "--help"])
     assert result.exit_code == 0
-    assert "Open SSH to a notebook or run a remote command" in result.output
+    assert "OpenSSH access for public-internet notebooks." in result.output
     for subcommand in ("connect", "refresh", "forget", "test"):
         assert f"\n  {subcommand} " not in result.output
     for removed in ("list", "status", "exec", "shell", "scp", "install-deps"):

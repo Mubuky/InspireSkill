@@ -11,10 +11,25 @@ from inspire.bridge.tunnel.scp import _build_scp_base_args
 from inspire.cli.main import main as cli_main
 from inspire.cli.context import EXIT_GENERAL_ERROR, EXIT_SUCCESS, EXIT_TIMEOUT
 from inspire.config import Config
+from inspire.cli.commands.notebook.transport import NotebookTransportPolicy
 
 import importlib
 
 scp_cmd_module = importlib.import_module("inspire.cli.commands.notebook.remote_scp")
+
+
+@pytest.fixture(autouse=True)
+def _allow_scp_transport_policy(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        scp_cmd_module,
+        "preflight_notebook_transport_policy",
+        lambda *_args, **_kwargs: NotebookTransportPolicy(
+            notebook="default",
+            notebook_id="nb-public",
+            public_internet=True,
+            reason="test",
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------

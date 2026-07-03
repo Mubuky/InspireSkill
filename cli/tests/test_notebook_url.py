@@ -7,6 +7,7 @@ import json
 from click.testing import CliRunner
 
 from inspire.cli.commands.notebook import url_cmd as url_cmd_mod
+from inspire.cli.commands.notebook.transport import NotebookTransportPolicy
 from inspire.cli.main import main as cli_main
 from inspire.platform.web import browser_api as browser_api_mod
 from inspire.platform.web.browser_api import playwright_notebooks as pw
@@ -185,6 +186,16 @@ def _patch_resolve(monkeypatch) -> None:  # noqa: ANN001
         url_cmd_mod,
         "_resolve_notebook",
         lambda ctx, notebook, workspace: (object(), _BASE_URL, _NOTEBOOK_ID),
+    )
+    monkeypatch.setattr(
+        url_cmd_mod,
+        "preflight_notebook_transport_policy",
+        lambda *_a, **_k: NotebookTransportPolicy(
+            notebook="nb",
+            notebook_id=_NOTEBOOK_ID,
+            public_internet=True,
+            reason="test",
+        ),
     )
 
 

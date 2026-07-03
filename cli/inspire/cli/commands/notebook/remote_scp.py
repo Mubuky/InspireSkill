@@ -28,6 +28,7 @@ from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.raw_ids import scrub_raw_ids
 
 from .target_resolver import resolve_cached_notebook_target
+from .transport import preflight_notebook_transport_policy
 
 
 def _scp_failure_details(result: object) -> str | None:
@@ -81,10 +82,13 @@ def bridge_scp(
     recursive: bool,
     timeout: Optional[int],
 ) -> None:
-    """Transfer files to/from a cached notebook via SCP.
+    """Transfer files to/from a public-internet notebook via SSH/SCP.
 
     Requires `inspire notebook connection refresh <notebook> --workspace <workspace>`
-    first. NOTEBOOK is the notebook name.
+    first. NOTEBOOK is the notebook name. This command is SSH/SCP-only and
+    is for public-internet notebooks. For restricted notebooks, keep the same
+    /inspire/... shared path and run the transfer against a public-internet
+    notebook instead.
     By default, uploads SOURCE (local) to DESTINATION (remote).
     Use --download to download SOURCE (remote) to DESTINATION (local).
     Remote paths may be absolute paths, aliases, or alias:sub/path values
@@ -98,6 +102,7 @@ def bridge_scp(
         inspire notebook scp my-notebook -d me:repo/results.tar.gz ./results.tar.gz
         inspire notebook scp my-notebook -d me:repo/checkpoints/ ./checkpoints/ -r
         inspire notebook scp my-notebook ./bundle.tar me:
+        inspire notebook scp public-box ./dataset.tar /inspire/hdd/project/topic/user/dataset.tar
     """
     from inspire.cli.utils.id_resolver import reject_id_at_boundary
 
@@ -122,6 +127,28 @@ def bridge_scp(
         # Auto-enable recursive for directories
         if local.is_dir() and not recursive:
             recursive = True
+
+    policy = preflight_notebook_transport_policy(
+        ctx,
+        notebook=notebook,
+        workspace=None,
+        account=account,
+        timeout=30,
+    )
+    if not policy.allow_ssh:
+        _handle_error(
+            ctx,
+            "RestrictedSshTransport",
+            "notebook scp is SSH-based and cannot run for this notebook.",
+            EXIT_GENERAL_ERROR,
+            hint=(
+                "Use a public-internet notebook to transfer shared paths instead: "
+                "inspire notebook scp <public-notebook> <local-path> /inspire/<storage>/...; "
+                "for rsync, target the public-internet notebook's SSH config entry with the same "
+                "/inspire/... path."
+            ),
+        )
+        return
 
     target = resolve_cached_notebook_target(
         ctx,

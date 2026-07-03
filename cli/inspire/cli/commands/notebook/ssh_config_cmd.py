@@ -17,6 +17,7 @@ from inspire.cli.utils.raw_ids import scrub_raw_ids
 
 from .notebook_ssh_flow import run_notebook_ssh
 from .target_resolver import NotebookConnectionTarget, resolve_cached_notebook_target
+from .transport import emit_ssh_policy_error, preflight_notebook_transport_policy
 
 
 def _default_host_alias(notebook: str) -> str:
@@ -146,7 +147,12 @@ def ssh_config_cmd(
     ssh_port: int,
     setup_timeout: int,
 ) -> None:
-    """Print an OpenSSH config snippet for a notebook."""
+    """Print OpenSSH config for a public-internet notebook.
+
+    Use this Host entry for ssh, scp, VS Code Remote SSH, or external rsync
+    against /inspire/... shared paths. For restricted notebooks, use a
+    public-internet notebook's config entry and keep the same /inspire/... path.
+    """
     target = _load_cached_target(
         ctx,
         notebook=notebook,
@@ -155,6 +161,15 @@ def ssh_config_cmd(
         ignore_target_cache=ignore_target_cache,
     )
     if target is None:
+        policy = preflight_notebook_transport_policy(
+            ctx,
+            notebook=notebook,
+            workspace=workspace,
+            account=account,
+            timeout=min(setup_timeout, 30),
+        )
+        if not policy.allow_ssh:
+            raise SystemExit(emit_ssh_policy_error(ctx, policy))
         run_notebook_ssh(
             ctx,
             notebook_id=notebook,

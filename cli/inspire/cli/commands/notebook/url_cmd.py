@@ -10,7 +10,8 @@ Two separate ways to address a notebook's web IDE:
   This drives a headless browser to read the live gateway URL, so the notebook
   must be RUNNING and the embedded token is ephemeral.
 - ``proxy-url`` resolves the web IDE gateway and returns the same full
-  port-forward URL shape the IDE uses for container HTTP services.
+  port-forward URL shape the IDE uses for container HTTP services, only when
+  notebook network policy allows exposing that port.
 """
 
 from __future__ import annotations
@@ -19,6 +20,8 @@ from typing import TYPE_CHECKING
 import click
 
 from inspire.cli.context import Context, pass_context
+
+from .transport import preflight_notebook_transport_policy
 
 if TYPE_CHECKING:
     from inspire.platform.web.session import WebSession
@@ -180,6 +183,40 @@ def _build_proxy_url(ide_url: str, *, port: int, service_path: str) -> str:
     return url
 
 
+def _check_proxy_url(session: WebSession, url: str) -> str:
+    from inspire.platform.web.session import build_requests_session
+
+    http = None
+    try:
+        http = build_requests_session(session, url)
+        response = http.get(
+            url,
+            timeout=(5, 10),
+            allow_redirects=False,
+            stream=True,
+        )
+        try:
+            status = int(response.status_code)
+        finally:
+            response.close()
+    except Exception:
+        return "no_service"
+    finally:
+        if http is not None:
+            try:
+                http.close()
+            except Exception:
+                pass
+
+    if 200 <= status < 400:
+        return "reachable"
+    if status in {401, 403, 404}:
+        return "blocked"
+    if status in {502, 503, 504}:
+        return "no_service"
+    return "blocked"
+
+
 @click.command("proxy-url")
 @click.argument("notebook")
 @click.option("--workspace", required=True, help="Workspace name or 'all'.")
@@ -207,6 +244,16 @@ def _build_proxy_url(ide_url: str, *, port: int, service_path: str) -> str:
     is_flag=True,
     help="Skip the cache and re-derive via the browser (use after a container restart).",
 )
+@click.option(
+    "--check",
+    is_flag=True,
+    help="Request the generated URL once and report whether the service is reachable.",
+)
+@click.option(
+    "--allow-restricted",
+    is_flag=True,
+    help="Advanced: print a proxy URL even when the notebook probe reports no public internet.",
+)
 @pass_context
 def notebook_proxy_url(
     ctx: Context,
@@ -216,11 +263,14 @@ def notebook_proxy_url(
     service_path: str,
     timeout: int,
     refresh: bool,
+    check: bool,
+    allow_restricted: bool,
 ) -> None:
-    """Print a full proxy URL for a notebook container HTTP service.
+    """Print a container HTTP proxy URL when network policy allows it.
 
-    The notebook must be RUNNING. Use --path /v1 for OpenAI-compatible APIs or
-    omit --path for browser apps such as Gradio/FastAPI root pages.
+    The notebook must be RUNNING and allowed by notebook network policy. Use
+    --path /v1 for OpenAI-compatible APIs or omit --path for browser apps such
+    as Gradio/FastAPI root pages.
 
     \b
     Examples:
@@ -234,6 +284,24 @@ def notebook_proxy_url(
     from inspire.platform.web.browser_api import resolve_notebook_port_forward_url
 
     session, _base_url, notebook_id = _resolve_notebook(ctx, notebook, workspace)
+    policy = preflight_notebook_transport_policy(
+        ctx,
+        notebook=notebook,
+        workspace=workspace,
+        timeout=min(timeout, 30),
+    )
+    if not policy.allow_proxy_url and not allow_restricted:
+        _handle_error(
+            ctx,
+            "PolicyBlocked",
+            f"proxy-url is blocked on notebooks without public internet: {notebook}",
+            EXIT_API_ERROR,
+            hint=(
+                "Use JupyterTerminal for command execution. Do not expose container "
+                "HTTP services from restricted notebooks."
+            ),
+        )
+        return
     url = resolve_notebook_port_forward_url(
         notebook_id,
         port=port,
@@ -253,17 +321,18 @@ def notebook_proxy_url(
         )
         return
 
+    check_status = _check_proxy_url(session, url) if check else None
     if ctx.json_output:
-        click.echo(
-            json_formatter.format_json(
-                {
-                    "name": notebook,
-                    "port": port,
-                    "path": service_path,
-                    "url": url,
-                },
-                allow_ids=True,
-            )
-        )
+        payload = {
+            "name": notebook,
+            "port": port,
+            "path": service_path,
+            "url": url,
+        }
+        if check_status:
+            payload["check"] = check_status
+        click.echo(json_formatter.format_json(payload, allow_ids=True))
     else:
         click.echo(url)
+        if check_status:
+            click.echo(f"Check: {check_status}")

@@ -14,6 +14,8 @@
 
 调度条件没有隐式默认值。创建 workload 时显式传入，或用 workload profile 保存这五类条件。Path alias 只表示远端路径，不能替代 workspace、project、group、quota 或 image。
 
+Shared paths under `/inspire/<storage>/...` are the supported transfer boundary for restricted notebooks. Do not introduce a separate WebDAV copy command for restricted notebooks; use a public-internet notebook plus `notebook scp`, or external `rsync` through that public-internet notebook's SSH config, to move local files into or out of shared storage.
+
 ## 2. Workspace 判断
 
 日常 workspace 选择不要抽象化：

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import json
 import logging
 import shlex
 import subprocess
@@ -57,6 +58,7 @@ from inspire.cli.utils.tunnel_reconnect import (
 from inspire.platform.web import browser_api as browser_api_module
 
 from .target_resolver import resolve_cached_notebook_target
+from .transport import preflight_notebook_transport_policy
 
 logger = logging.getLogger(__name__)
 _RUNNING_NOTEBOOK_STATUS = "RUNNING"
@@ -475,6 +477,68 @@ def try_exec_via_ssh_tunnel(
             )
 
 
+def try_exec_via_jupyter_terminal(
+    ctx: Context,
+    *,
+    notebook_id: str,
+    command: str,
+    config: Config,
+    remote_cwd: Optional[str],
+    env_exports: str,
+    timeout_s: int,
+) -> int:
+    del config
+    full_command = _build_remote_command(
+        command=command,
+        remote_cwd=remote_cwd,
+        env_exports=env_exports,
+    )
+    result = browser_api_module.run_command_capture_in_notebook(
+        notebook_id=notebook_id,
+        command=full_command,
+        timeout=timeout_s,
+    )
+    if ctx.json_output:
+        if result.returncode == 0:
+            emit_output_success(
+                ctx,
+                payload={
+                    "status": "success",
+                    "method": "jupyter_terminal",
+                    "returncode": result.returncode,
+                    "output": result.output,
+                },
+            )
+            return EXIT_SUCCESS
+        click.echo(
+            json.dumps(
+                {
+                    "success": False,
+                    "error": {
+                        "type": "CommandFailed",
+                        "code": result.returncode,
+                        "message": f"Command failed with exit code {result.returncode}",
+                    },
+                    "data": {
+                        "method": "jupyter_terminal",
+                        "returncode": result.returncode,
+                        "output": result.output,
+                    },
+                },
+                indent=2,
+                ensure_ascii=False,
+            ),
+            err=True,
+        )
+        return result.returncode
+    if result.output:
+        click.echo(scrub_raw_ids(result.output), nl=False)
+    if result.returncode == 0:
+        click.echo("OK")
+        return EXIT_SUCCESS
+    return _emit_command_failed(ctx, returncode=result.returncode)
+
+
 def exec_via_workflow(
     ctx: Context,
     *,
@@ -711,10 +775,9 @@ def exec_command(
     cwd: Optional[str],
     stdin_mode: bool,
 ) -> None:
-    """Execute a command on a cached notebook.
+    """Execute a notebook command; SSH when allowed, otherwise JupyterTerminal.
 
-    Requires `inspire notebook connection refresh <notebook> --workspace <workspace>`
-    first. NOTEBOOK is the notebook name. Each call runs an independent remote shell command;
+    NOTEBOOK is the notebook name. Each call runs an independent remote shell command;
     use one quoted command string when cwd, environment variables, or shell
     state must stay together.
 
@@ -782,8 +845,28 @@ def exec_command(
         )
         sys.exit(EXIT_GENERAL_ERROR)
 
+    policy = preflight_notebook_transport_policy(
+        ctx,
+        notebook=notebook,
+        workspace=None,
+        account=account,
+        timeout=min(action_timeout, 30),
+    )
+
     # SSH tunnel is the default command transport when artifacts are not requested.
     if not artifact_path and not download:
+        if policy.exec_transport == "jupyter":
+            sys.exit(
+                try_exec_via_jupyter_terminal(
+                    ctx,
+                    notebook_id=policy.notebook_id,
+                    command=command,
+                    config=config,
+                    remote_cwd=remote_cwd,
+                    env_exports=env_exports,
+                    timeout_s=action_timeout,
+                )
+            )
         target = resolve_cached_notebook_target(
             ctx,
             notebook=notebook,
@@ -821,6 +904,29 @@ def exec_command(
             run_ssh_command_streaming_fn=run_ssh_command_streaming,
         )
         sys.exit(ssh_exit_code if ssh_exit_code is not None else EXIT_GENERAL_ERROR)
+
+    if not policy.allow_ssh:
+        emit_output_error(
+            ctx,
+            error_type="RestrictedArtifactTransport",
+            message=(
+                "Artifact download for restricted notebooks requires shared paths. "
+                "Write artifacts under `/inspire/<storage>/...`, then download them "
+                "through a public-internet notebook with "
+                "`inspire notebook scp <public-notebook> -d /inspire/<storage>/... <local-path>`."
+            ),
+            exit_code=EXIT_GENERAL_ERROR,
+            human_lines=[
+                "Artifact download for restricted notebooks requires shared paths.",
+                (
+                    "Write artifacts under `/inspire/<storage>/...`, then download them "
+                    "through a public-internet notebook with "
+                    "`inspire notebook scp <public-notebook> -d /inspire/<storage>/... "
+                    "<local-path>`."
+                ),
+            ],
+        )
+        sys.exit(EXIT_GENERAL_ERROR)
 
     workflow_exit_code = exec_via_workflow(
         ctx,

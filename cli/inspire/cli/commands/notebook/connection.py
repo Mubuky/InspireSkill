@@ -21,6 +21,7 @@ from inspire.cli.utils.raw_ids import scrub_raw_ids
 
 from .notebook_ssh_flow import run_notebook_ssh
 from .target_resolver import forget_notebook_targets, list_notebook_targets
+from .transport import emit_ssh_policy_error, preflight_notebook_transport_policy
 
 
 def _bridge_payload(bridge: BridgeProfile, *, healthy: bool | None = None) -> dict[str, object]:
@@ -236,6 +237,12 @@ def connection_status(ctx: Context, notebook: str, workspace: str | None) -> Non
 
     if ok:
         click.echo(human_formatter.format_success(f"Notebook '{bridge.name}': connected"))
+        if bridge.has_internet is False:
+            click.echo(
+                "Warning: cached connection is marked as no-public-internet; "
+                "do not refresh SSH/rtunnel for this notebook.",
+                err=True,
+            )
         click.echo(f"Hostname: {scrub_raw_ids(hostname)}")
         click.echo(f"Response time: {elapsed_ms}ms")
         return
@@ -288,7 +295,15 @@ def connection_refresh(
     debug_playwright: bool,
     setup_timeout: int,
 ) -> None:
-    """Create or refresh the cached connection without opening SSH."""
+    """Create or refresh SSH/rtunnel cache for public-internet notebooks."""
+    policy = preflight_notebook_transport_policy(
+        ctx,
+        notebook=notebook,
+        workspace=workspace,
+        timeout=min(setup_timeout, 30),
+    )
+    if not policy.allow_ssh:
+        raise SystemExit(emit_ssh_policy_error(ctx, policy))
     run_notebook_ssh(
         ctx,
         notebook_id=notebook,

@@ -125,9 +125,11 @@ inspire account current
 这里的 `<name>` 是本地 account alias，也就是 `~/.inspire/accounts/<name>/` 的目录名；它不要求等于平台登录 username。`~/.inspire/current` 是普通文本文件，不是 symlink，内容只有当前 active account alias 一行。`inspire account use <name>` 只更新这个默认指针，不会移动或合并任何账号目录。
 `inspire account rename <old-name> <new-name>` 只改本地 alias：移动 `~/.inspire/accounts/<old-name>/` 到新目录，若旧 alias 是 active account 则同步更新 `~/.inspire/current`，并把 remembered notebook target cache 中的旧 alias 改成新 alias。平台登录 username 保留在该账号的 `config.toml` 中，不会被 rename 修改。
 
-账号目录、Web session、Notebook SSH 连接缓存和 rtunnel proxy state 都在 `~/.inspire/accounts/<name>/` 下。连接缓存用 `inspire notebook connection list/status/refresh/forget/prune` 管理。
+账号目录、Web session、联网 Notebook SSH 连接缓存和 rtunnel proxy state 都在 `~/.inspire/accounts/<name>/` 下。连接缓存用 `inspire notebook connection list/status/refresh/forget/prune` 管理。
 
 Notebook 连接类命令的 `--account <name>` 也使用本地 account alias，不用平台登录 username 反查 alias。`ssh` / `exec` / `shell` / `scp` / `ssh-config` / `ssh-proxy` 在不传 `--account` 时可以跨账号解析已有 notebook connection；传 `--account all` 表示扫描全部账号，传具体 alias 表示只使用该账号。
+
+联网 notebook 才创建或刷新 SSH / rtunnel connection。不可上网区 notebook 的 `exec` / `shell` 走 JupyterTerminal；文件流转先落到 `/inspire/...` 共享路径，再通过可上网 notebook 的 `notebook scp` 或外部 `rsync` 上传 / 下载。
 
 ## 5. SII Proxy
 

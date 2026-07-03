@@ -16,6 +16,11 @@ from inspire.cli.utils.raw_ids import scrub_raw_ids
 
 from .notebook_ssh_flow import run_notebook_ssh
 from .target_resolver import NotebookConnectionTarget, resolve_cached_notebook_target
+from .transport import (
+    NotebookTransportPolicy,
+    emit_ssh_policy_error,
+    preflight_notebook_transport_policy,
+)
 
 
 def _load_proxy_target(
@@ -128,6 +133,18 @@ def ssh_proxy_cmd(
     bridge = target.bridge if target else None
     needs_bootstrap = bridge is None
     if bridge is not None:
+        if bridge.has_internet is False:
+            raise SystemExit(
+                emit_ssh_policy_error(
+                    ctx,
+                    NotebookTransportPolicy(
+                        notebook=notebook,
+                        notebook_id=bridge.notebook_id or "",
+                        public_internet=False,
+                        reason="cached_bridge",
+                    ),
+                )
+            )
         ready = is_tunnel_available(
             bridge_name=bridge.name,
             config=config,
@@ -152,6 +169,15 @@ def ssh_proxy_cmd(
             f"Preparing notebook SSH connection for {scrub_raw_ids(notebook)}...",
             err=True,
         )
+        policy = preflight_notebook_transport_policy(
+            ctx,
+            notebook=notebook,
+            workspace=bootstrap_workspace,
+            account=account,
+            timeout=min(setup_timeout, 30),
+        )
+        if not policy.allow_ssh:
+            raise SystemExit(emit_ssh_policy_error(ctx, policy))
         run_notebook_ssh(
             ctx,
             notebook_id=notebook,

@@ -29,6 +29,7 @@ from inspire.config import Config, ConfigError, build_env_exports, resolve_remot
 from inspire.platform.web import browser_api as browser_api_module
 
 from .target_resolver import resolve_cached_notebook_target
+from .transport import preflight_notebook_transport_policy
 
 logger = logging.getLogger(__name__)
 _RUNNING_NOTEBOOK_STATUS = "RUNNING"
@@ -71,10 +72,10 @@ def bridge_ssh(
     ignore_target_cache: bool,
     cwd: Optional[str],
 ) -> None:
-    """Open an interactive SSH shell to a cached notebook.
+    """Open an interactive shell; SSH when allowed, otherwise JupyterTerminal.
 
-    Requires a cached notebook connection. Create one with
-    ``inspire notebook connection refresh <notebook> --workspace <workspace>``.
+    Public-internet notebooks use cached SSH. Restricted notebooks open a
+    JupyterTerminal-backed shell.
 
     \b
     Example:
@@ -100,6 +101,27 @@ def bridge_ssh(
         env_exports = build_env_exports(config.remote_env)
     except ConfigError as e:
         _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
+
+    policy = preflight_notebook_transport_policy(
+        ctx,
+        notebook=notebook,
+        workspace=None,
+        account=account,
+        timeout=30,
+    )
+    if policy.exec_transport == "jupyter":
+        if not ctx.json_output:
+            click.echo("Opening JupyterTerminal shell...")
+            click.echo(f"Notebook: {scrub_raw_ids(notebook)}")
+            click.echo(f"Working directory: {scrub_raw_ids(remote_cwd or '$HOME')}")
+            click.echo("Press Ctrl-] to disconnect")
+            click.echo("")
+        code = browser_api_module.open_jupyter_terminal_shell(
+            notebook_id=policy.notebook_id,
+            cwd=remote_cwd,
+            env_exports=env_exports,
+        )
+        sys.exit(code)
 
     target = resolve_cached_notebook_target(
         ctx,

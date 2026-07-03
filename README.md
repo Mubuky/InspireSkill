@@ -23,7 +23,7 @@
 
 建立和维护本项目的过程并非易事，InspireSkill 也并非只是将[启智平台](qz.sii.edu.cn)的网页 API 打平重构为 CLI 的简单工作，在维护本项目的过程中，设计高于平台语义的高层功能、寻找启智平台中细枝末节的 API 并将其优雅融入 CLI 系统中、尤其是维护一个易于 Agent 阅读且包含平台所有特性的文档系统都给我们带来了不小于 CLI 本身的麻烦。
 
-在长时间的开发与维护中，以 [@realZillionX](https://github.com/realZillionX) 和 [@JingYiJun](https://github.com/JingYiJun) 为首的开发团队始终秉持着注重细节与优雅的开发者精神，最终构建出一个令人满意的项目。时至今日，我们可以自豪地说：**InspireSkill 所包含的功能，只有你想不到，没有我们做不到**。它们包括但不限于：对 HDD/SSD/QB-ILM 等项目路径的优雅维护、翻转镜像的可见范围、将平台内部源入口交给 Agent（从而使在不可上网区配置镜像成为可能）、从任何工作空间 SSH 进 Notebook 的 SSH 板块、空闲 8 卡整节点总量的查询、低优任务占用总量的查询、将 Notebook / 训练任务的资源视图 / 事件 / 聚合日志交给 Agent。
+在长时间的开发与维护中，以 [@realZillionX](https://github.com/realZillionX) 和 [@JingYiJun](https://github.com/JingYiJun) 为首的开发团队始终秉持着注重细节与优雅的开发者精神，最终构建出一个令人满意的项目。时至今日，我们可以自豪地说：**InspireSkill 所包含的功能，只有你想不到，没有我们做不到**。它们包括但不限于：对 HDD/SSD/QB-ILM 等项目路径的优雅维护、翻转镜像的可见范围、将平台内部源入口交给 Agent（从而使在不可上网区配置镜像成为可能）、联网 Notebook 的 SSH 板块、受限 Notebook 的 JupyterTerminal 执行路径、空闲 8 卡整节点总量的查询、低优任务占用总量的查询、将 Notebook / 训练任务的资源视图 / 事件 / 聚合日志交给 Agent。
 
 # 对初次使用者的简单介绍
 
@@ -123,7 +123,7 @@ inspire resources availability --workspace all --include-cpu
 <tr>
   <td width="50%">
     <h4>📝 Notebook 统一入口</h4>
-    全链路命令化：<code>create / list / status / start / stop / ssh / connection / ssh-config / exec / shell / scp / install-deps / metrics / events / lifecycle</code>。<code>notebook ssh &lt;name&gt;</code> 像 SSH 一样打开交互终端，<code>notebook connection refresh &lt;name&gt;</code> 可显式刷新 Connection Cache，<code>notebook ssh-config &lt;name&gt;</code> 可接入原生 OpenSSH / <code>scp</code> / <code>rsync</code>。SSH / Exec / Shell / SCP / SSH Config / SSH Proxy 会跨账号解析本地已缓存的 Notebook Connection，不要求先切 Active Account。任何镜像、任何计算组、有无公网都能直接使用远程执行和文件流转命令。
+    全链路命令化：<code>create / list / status / start / stop / ssh / connection / ssh-config / exec / shell / scp / install-deps / metrics / events / lifecycle</code>。联网 notebook 可使用 OpenSSH / SCP / SSH Config；不可上网区 notebook 使用 JupyterTerminal 执行命令，文件流转以 <code>/inspire/...</code> 共享路径为边界，并通过可上网 notebook 使用 <code>notebook scp</code> 或外部 <code>rsync</code> 完成本地上传/下载。连接类命令会跨账号解析本地已缓存的 Notebook Connection，不要求先切 Active Account。
   </td>
   <td width="50%">
     <h4>🚀 HPC 任务分派</h4>

@@ -1,15 +1,34 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 from click.testing import CliRunner
 
 from inspire.bridge.tunnel import BridgeProfile, TunnelConfig
 from inspire.cli.commands.notebook import install_deps as install_deps_module
+from inspire.cli.commands.notebook.transport import NotebookTransportPolicy
+from inspire.cli.main import main as cli_main
 from inspire.cli.commands.notebook.install_deps import (
     DEFAULT_RAY_VERSION,
     SUPPORTED_DISTROS,
     install_deps_cmd,
 )
+
+
+@pytest.fixture(autouse=True)
+def _allow_install_deps_transport_policy(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        install_deps_module,
+        "preflight_notebook_transport_policy",
+        lambda *_args, **_kwargs: NotebookTransportPolicy(
+            notebook="cpu-box",
+            notebook_id="nb-public",
+            public_internet=True,
+            reason="test",
+        ),
+        raising=False,
+    )
 
 
 def _patch_tunnel(monkeypatch: pytest.MonkeyPatch, *, alias: str = "cpu-box") -> list[dict]:
@@ -219,3 +238,27 @@ def test_install_deps_passes_timeout_to_ssh(monkeypatch: pytest.MonkeyPatch) -> 
     )
     assert result.exit_code == 0, result.output
     assert calls[0]["timeout"] == 1234
+
+
+def test_install_deps_uses_jupyter_on_restricted_notebook(monkeypatch) -> None:  # noqa: ANN001
+    monkeypatch.setattr(
+        install_deps_module,
+        "preflight_notebook_transport_policy",
+        lambda *_a, **_k: NotebookTransportPolicy(
+            notebook="gpu-box",
+            notebook_id="nb-123",
+            public_internet=False,
+            reason="live_probe",
+        ),
+    )
+    monkeypatch.setattr(
+        install_deps_module.browser_api_module,
+        "run_command_capture_in_notebook",
+        lambda **_k: SimpleNamespace(returncode=0, output="done\n", completed=True, marker="m"),
+        raising=False,
+    )
+
+    result = CliRunner().invoke(cli_main, ["notebook", "install-deps", "gpu-box", "--ray"])
+
+    assert result.exit_code == 0
+    assert "install-deps complete" in result.output

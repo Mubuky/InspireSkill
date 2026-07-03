@@ -36,6 +36,9 @@ from inspire.bridge.tunnel import (
 )
 from inspire.cli.context import Context, EXIT_CONFIG_ERROR, EXIT_GENERAL_ERROR, pass_context
 from inspire.cli.utils.errors import exit_with_error as _handle_error
+from inspire.platform.web import browser_api as browser_api_module
+
+from .transport import preflight_notebook_transport_policy
 
 DEFAULT_RAY_VERSION = "2.55.1"
 DEFAULT_PIP_INDEX_URL = "https://pypi.tuna.tsinghua.edu.cn/simple"
@@ -200,8 +203,25 @@ def _resolve_notebook(notebook: str, tunnel_config: TunnelConfig):
     return bridge
 
 
-def _run_step(label: str, command: str, *, notebook: str, timeout: int) -> int:
+def _run_step(
+    label: str,
+    command: str,
+    *,
+    notebook: str,
+    notebook_id: str,
+    use_jupyter: bool,
+    timeout: int,
+) -> int:
     click.echo(f"=== install-deps: {label} ===")
+    if use_jupyter:
+        result = browser_api_module.run_command_capture_in_notebook(
+            notebook_id=notebook_id,
+            command=command,
+            timeout=timeout,
+        )
+        if result.output:
+            click.echo(result.output, nl=False)
+        return result.returncode
     return run_ssh_command_streaming(
         command=command,
         bridge_name=notebook,
@@ -269,7 +289,8 @@ def install_deps_cmd(
 ) -> None:
     """One-shot install of hpc/ray runtime deps on a cached notebook.
 
-    NOTEBOOK is the notebook name and must already have a cached connection.
+    NOTEBOOK is the notebook name. Public-internet notebooks use cached SSH;
+    restricted notebooks run the steps through JupyterTerminal.
     Run this on a notebook when you need a reusable base image for CPU HPC, Ray,
     or 分布式训练空间 GPU jobs. Public downloads need internet; use CPU资源空间
     for those. SII internal mirrors may work directly inside GPU or
@@ -291,9 +312,18 @@ def install_deps_cmd(
     if not (slurm or ray):
         raise click.UsageError("Pass at least one of --slurm / --ray.")
 
+    policy = preflight_notebook_transport_policy(
+        ctx,
+        notebook=notebook,
+        workspace=None,
+        timeout=30,
+    )
+    use_jupyter = not policy.allow_ssh
+
     try:
-        tunnel_config = load_tunnel_config()
-        _resolve_notebook(notebook, tunnel_config)
+        if not use_jupyter:
+            tunnel_config = load_tunnel_config()
+            _resolve_notebook(notebook, tunnel_config)
     except click.UsageError:
         raise
     except Exception as e:
@@ -312,7 +342,14 @@ def install_deps_cmd(
         )
 
     for label, command in steps:
-        exit_code = _run_step(label, command, notebook=notebook, timeout=timeout)
+        exit_code = _run_step(
+            label,
+            command,
+            notebook=notebook,
+            notebook_id=policy.notebook_id,
+            use_jupyter=use_jupyter,
+            timeout=timeout,
+        )
         if exit_code != 0:
             _handle_error(
                 ctx,
