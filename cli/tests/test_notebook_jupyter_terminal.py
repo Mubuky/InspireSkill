@@ -26,6 +26,25 @@ def test_parse_command_output_extracts_returncode_and_removes_marker() -> None:
     assert result.completed is True
 
 
+def test_parse_command_output_strips_terminal_banner_and_echo() -> None:
+    raw = (
+        "\x1b[32m══════════════════════════ 欢迎使用 Inspire Studio ══════════════════════════\x1b[0m\r\n"
+        "Tips:\r\n"
+        "\x1b[?2004h[root:user]$ echo 'YWJj' | base64 -d | bash\r\n"
+        "\x1b[?2004l\r"
+        "exec-ok\r\n"
+        "host=remote-pod\r\n"
+        "\r\n__INSPIRE_DONE_abc__:exit:0\r\n"
+    )
+
+    result = jt.parse_jupyter_exec_output(raw, marker="__INSPIRE_DONE_abc__")
+
+    assert result.returncode == 0
+    assert result.output == "exec-ok\r\nhost=remote-pod\r\n\r\n"
+    assert "欢迎使用 Inspire Studio" not in result.output
+    assert "base64 -d" not in result.output
+
+
 def test_parse_command_output_marks_missing_marker_unknown() -> None:
     result = jt.parse_jupyter_exec_output("partial output", marker="__INSPIRE_DONE_abc__")
 

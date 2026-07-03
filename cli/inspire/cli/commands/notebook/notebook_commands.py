@@ -93,6 +93,20 @@ def _notebook_ssh_overrides() -> dict[str, object]:
     }
 
 
+def _print_notebook_wait_progress(notebook: dict, status: str, events: str) -> None:
+    display_status = status or "UNKNOWN"
+    sub_status = str(notebook.get("sub_status") or "").strip()
+    suffix = f" ({sub_status})" if sub_status else ""
+    click.echo(f"Status: {scrub_raw_ids(display_status)}{scrub_raw_ids(suffix)}")
+
+    latest_event = next(
+        (line.strip() for line in reversed(events.splitlines()) if line.strip()),
+        "",
+    )
+    if latest_event:
+        click.echo(f"Latest event: {scrub_raw_ids(latest_event)}")
+
+
 def _resolve_notebook_id(*args, **kwargs):  # noqa: ANN002, ANN003
     return _call_with_module_overrides(
         notebook_lookup_module,
@@ -544,7 +558,9 @@ def start_notebook_cmd(
             click.echo("Waiting for notebook to reach RUNNING status...")
         try:
             notebook_detail = browser_api_module.wait_for_notebook_running(
-                notebook_id=notebook_id, session=session
+                notebook_id=notebook_id,
+                session=session,
+                progress_callback=None if ctx.json_output else _print_notebook_wait_progress,
             )
             if not ctx.json_output:
                 click.echo("Notebook is now RUNNING.")

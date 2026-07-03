@@ -39,3 +39,155 @@ def test_shell_uses_jupyter_when_policy_blocks_ssh(monkeypatch) -> None:  # noqa
 
     assert result.exit_code == 0
     assert called["jupyter"] is True
+
+
+def test_shell_check_uses_jupyter_probe_when_policy_blocks_ssh(monkeypatch) -> None:  # noqa: ANN001
+    config = Config(username="", password="")
+
+    monkeypatch.setattr(
+        Config,
+        "from_files_and_env",
+        classmethod(lambda cls, require_credentials=True: (config, {})),
+    )
+    monkeypatch.setattr(
+        shell_module,
+        "preflight_notebook_transport_policy",
+        lambda *_a, **_k: NotebookTransportPolicy(
+            notebook="gpu-box",
+            notebook_id="nb-123",
+            public_internet=False,
+            reason="live_probe",
+        ),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        shell_module.browser_api_module,
+        "run_command_capture_in_notebook",
+        lambda **_k: shell_module.browser_api_module.JupyterCommandResult(
+            returncode=0,
+            output="shell-check-ok\n",
+            completed=True,
+            marker="m",
+        ),
+        raising=False,
+    )
+
+    result = CliRunner().invoke(cli_main, ["notebook", "shell", "gpu-box", "--check"])
+
+    assert result.exit_code == 0
+    assert "Shell transport: jupyter_terminal" in result.output
+    assert "OK" in result.output
+
+
+def test_shell_check_json_reports_transport(monkeypatch) -> None:  # noqa: ANN001
+    config = Config(username="", password="")
+
+    monkeypatch.setattr(
+        Config,
+        "from_files_and_env",
+        classmethod(lambda cls, require_credentials=True: (config, {})),
+    )
+    monkeypatch.setattr(
+        shell_module,
+        "preflight_notebook_transport_policy",
+        lambda *_a, **_k: NotebookTransportPolicy(
+            notebook="gpu-box",
+            notebook_id="nb-123",
+            public_internet=False,
+            reason="live_probe",
+        ),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        shell_module.browser_api_module,
+        "run_command_capture_in_notebook",
+        lambda **_k: shell_module.browser_api_module.JupyterCommandResult(
+            returncode=0,
+            output="shell-check-ok\n",
+            completed=True,
+            marker="m",
+        ),
+        raising=False,
+    )
+
+    result = CliRunner().invoke(cli_main, ["--json", "notebook", "shell", "gpu-box", "--check"])
+
+    assert result.exit_code == 0
+    assert '"transport": "jupyter_terminal"' in result.output
+    assert '"status": "success"' in result.output
+
+
+def test_shell_check_uses_ssh_noninteractive_transport(monkeypatch) -> None:  # noqa: ANN001
+    config = Config(username="", password="")
+
+    monkeypatch.setattr(
+        Config,
+        "from_files_and_env",
+        classmethod(lambda cls, require_credentials=True: (config, {})),
+    )
+    monkeypatch.setattr(
+        shell_module,
+        "preflight_notebook_transport_policy",
+        lambda *_a, **_k: NotebookTransportPolicy(
+            notebook="cpu-box",
+            notebook_id="nb-123",
+            public_internet=True,
+            reason="live_probe",
+        ),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        shell_module,
+        "resolve_cached_notebook_target",
+        lambda *_a, **_k: None,
+        raising=False,
+    )
+
+    class FakeBridge:
+        name = "cpu-box"
+        notebook_id = "nb-123"
+
+    class FakeTunnelConfig:
+        account = "default"
+
+        def get_bridge(self, name=None):  # noqa: ANN001
+            return FakeBridge() if name in (None, "cpu-box") else None
+
+    monkeypatch.setattr(
+        shell_module,
+        "_load_tunnel_config_for_account",
+        lambda _account=None: FakeTunnelConfig(),
+        raising=False,
+    )
+    monkeypatch.setattr(shell_module, "is_tunnel_available", lambda **_k: True)
+
+    captured: dict[str, object] = {}
+
+    def fake_get_ssh_command_args(**kwargs):  # noqa: ANN003
+        captured.update(kwargs)
+        return ["ssh", "cpu-box"]
+
+    monkeypatch.setattr(shell_module, "get_ssh_command_args", fake_get_ssh_command_args)
+
+    class FakeCompleted:
+        returncode = 0
+        stdout = "shell-check-ok\n"
+        stderr = ""
+
+    def fake_run(args, *, text: bool, capture_output: bool, check: bool):  # noqa: ANN001
+        captured["args"] = args
+        captured["text"] = text
+        captured["capture_output"] = capture_output
+        captured["check"] = check
+        return FakeCompleted()
+
+    monkeypatch.setattr(shell_module.subprocess, "run", fake_run)
+
+    result = CliRunner().invoke(cli_main, ["notebook", "shell", "cpu-box", "--check"])
+
+    assert result.exit_code == 0
+    assert "Shell transport: ssh" in result.output
+    assert "OK" in result.output
+    assert "shell-check-ok" not in result.output
+    assert captured["capture_output"] is True
+    assert "shell-check-ok" in str(captured["remote_command"])

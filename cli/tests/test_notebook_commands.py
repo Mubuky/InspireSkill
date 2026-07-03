@@ -636,7 +636,11 @@ def test_notebook_start_accepts_name(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     monkeypatch.setattr(browser_api_module, "start_notebook", fake_start_notebook)
 
     def fake_wait_for_notebook_running(
-        notebook_id: str, session=None, timeout: int = 600, poll_interval: int = 5
+        notebook_id: str,
+        session=None,
+        timeout: int = 600,
+        poll_interval: int = 5,
+        progress_callback=None,
     ) -> dict:
         return {"status": "RUNNING", "notebook_id": notebook_id, "quota": {"gpu_count": 8}}
 
@@ -652,6 +656,104 @@ def test_notebook_start_accepts_name(monkeypatch: pytest.MonkeyPatch, tmp_path: 
 
     assert result.exit_code == EXIT_SUCCESS
     assert started["notebook_id"] == item["id"]
+
+
+def test_notebook_start_wait_prints_progress(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    ws_cpu = "ws-6e6ba362-e98e-45b2-9c5a-311998e93d65"
+
+    config = config_module.Config(
+        username="user",
+        password="pass",
+        base_url="https://example.invalid",
+        path_aliases={"me": str(tmp_path / "logs")},
+        log_cache_dir=str(tmp_path / "log_cache"),
+        timeout=5,
+        max_retries=0,
+        retry_delay=0.0,
+    )
+
+    def fake_from_files_and_env(cls, require_credentials: bool = True):  # type: ignore[override]
+        return config, {}
+
+    monkeypatch.setattr(
+        config_module.Config, "from_files_and_env", classmethod(fake_from_files_and_env)
+    )
+
+    class FakeSession:
+        workspace_id = ws_cpu
+        storage_state = {}
+        all_workspace_ids = [ws_cpu]
+        all_workspace_names = {ws_cpu: "a"}
+
+    monkeypatch.setattr(web_session_module, "get_web_session", lambda: FakeSession())
+
+    item = {
+        "id": "78822a57-3830-44e7-8d45-e8b0d674fc44",
+        "name": "ring-8h100-test",
+        "status": "STOPPED",
+        "created_at": "2026-02-01T10:00:00Z",
+        "quota": {"cpu_count": 8, "gpu_count": 8},
+    }
+
+    def fake_request_json(
+        session,
+        method: str,
+        url: str,
+        *,
+        headers: Optional[dict[str, str]] = None,
+        body: Optional[dict] = None,
+        timeout: int = 30,
+        _retry_count: int = 0,
+    ) -> dict:
+        assert timeout
+        assert _retry_count >= 0
+
+        if method.upper() == "GET" and url.endswith("/api/v1/user/detail"):
+            return {"data": {"id": "user-1"}}
+
+        assert method.upper() == "POST"
+        assert url.endswith("/api/v1/notebook/list")
+        assert body and "workspace_id" in body
+        assert (body.get("filter_by") or {}).get("keyword") == "ring-8h100-test"
+        return {"code": 0, "data": {"list": [item]}}
+
+    monkeypatch.setattr(web_session_module, "request_json", fake_request_json)
+    monkeypatch.setattr(
+        browser_api_module,
+        "start_notebook",
+        lambda notebook_id, session=None: {"ok": True},
+    )
+
+    def fake_wait_for_notebook_running(
+        notebook_id: str,
+        session=None,
+        timeout: int = 600,
+        poll_interval: int = 5,
+        progress_callback=None,
+    ) -> dict:
+        assert progress_callback is not None
+        progress_callback(
+            {"status": "CREATING", "sub_status": "Scheduling"},
+            "CREATING",
+            "[Normal] Scheduled: Pulling image\n[Normal] Started: Container booting",
+        )
+        return {"status": "RUNNING", "notebook_id": notebook_id, "quota": {"gpu_count": 8}}
+
+    monkeypatch.setattr(
+        browser_api_module, "wait_for_notebook_running", fake_wait_for_notebook_running
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_main,
+        ["notebook", "start", "ring-8h100-test", "--workspace", "a", "--wait"],
+    )
+
+    assert result.exit_code == EXIT_SUCCESS
+    assert "Status: CREATING (Scheduling)" in result.output
+    assert "Latest event: [Normal] Started: Container booting" in result.output
 
 
 def test_notebook_start_name_conflict_prompts_selection(
@@ -740,7 +842,11 @@ def test_notebook_start_name_conflict_prompts_selection(
     monkeypatch.setattr(browser_api_module, "start_notebook", fake_start_notebook)
 
     def fake_wait_for_notebook_running(
-        notebook_id: str, session=None, timeout: int = 600, poll_interval: int = 5
+        notebook_id: str,
+        session=None,
+        timeout: int = 600,
+        poll_interval: int = 5,
+        progress_callback=None,
     ) -> dict:
         return {"status": "RUNNING", "notebook_id": notebook_id, "quota": {"gpu_count": 8}}
 
@@ -838,7 +944,11 @@ def test_notebook_start_warns_when_no_wait_conflicts_with_configured_post_start(
     monkeypatch.setattr(browser_api_module, "start_notebook", fake_start_notebook)
 
     def fake_wait_for_notebook_running(
-        notebook_id: str, session=None, timeout: int = 600, poll_interval: int = 5
+        notebook_id: str,
+        session=None,
+        timeout: int = 600,
+        poll_interval: int = 5,
+        progress_callback=None,
     ) -> dict:
         return {"status": "RUNNING", "notebook_id": notebook_id, "quota": {"gpu_count": 8}}
 

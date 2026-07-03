@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from inspire.config import Config
 from inspire.platform.web.browser_api.core import _browser_api_path, _get_base_url, _request_json
@@ -769,6 +769,8 @@ def wait_for_notebook_running(
     session: Optional[WebSession] = None,
     timeout: int = 600,
     poll_interval: int = 5,
+    progress_callback: Optional[Callable[[dict, str, str], None]] = None,
+    progress_interval: int = 30,
 ) -> dict:
     """Wait for a notebook instance to reach RUNNING status."""
     if session is None:
@@ -776,6 +778,8 @@ def wait_for_notebook_running(
 
     start = time.time()
     last_status = None
+    last_progress_at = 0.0
+    last_reported_status = None
 
     while True:
         notebook = get_notebook_detail(notebook_id=notebook_id, session=session)
@@ -790,7 +794,16 @@ def wait_for_notebook_running(
             events = _try_fetch_events(notebook_id, session)
             raise NotebookFailedError(notebook_id, status, notebook, events=events)
 
-        if time.time() - start >= timeout:
+        now = time.time()
+        if progress_callback is not None and (
+            status != last_reported_status or now - last_progress_at >= progress_interval
+        ):
+            events = _try_fetch_events(notebook_id, session)
+            progress_callback(notebook, status, events)
+            last_reported_status = status
+            last_progress_at = now
+
+        if now - start >= timeout:
             raise TimeoutError(
                 f"Notebook '{notebook_id}' did not reach RUNNING within {timeout}s "
                 f"(last status: {last_status or 'unknown'})"

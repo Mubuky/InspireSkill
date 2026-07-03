@@ -2,6 +2,34 @@
 
 本文件同步 GitHub Releases 正文格式；Release 页面是发布说明的标准口径。
 
+# v6.1.1
+
+## 更新内容
+
+### 新增
+
+- 新增 `inspire notebook shell --check`，用于不打开交互会话的 Shell 通道 smoke test；restricted notebook 会验证 JupyterTerminal，public-internet notebook 会验证 SSH。
+
+### 变更
+
+- `notebook exec` 的 JupyterTerminal 输出会清理欢迎横幅、Prompt 和启动命令回显，只保留用户命令输出。
+- `notebook start --wait` 在等待期间输出当前状态和最近事件，降低长时间启动时的黑盒感。
+
+### 文档
+
+- `SKILL.md` 集中承载 `INSPIRE.md` 项目上下文规则，`references/` 不再重复相关叙述。
+- README 保留面向人类的 `INSPIRE.md` 说明，并统一文档文件名链接格式。
+- 主要使用文档统一英文术语大小写和命令 / 文件名代码样式，压缩冗余说明。
+
+### 验证
+
+- `uv lock --check`
+- `uv run pytest -q`
+- `uv run ruff check inspire tests`
+- `uv run mypy`
+- `uv build`
+- `git diff --check`
+
 # v6.1.0
 
 ## 更新内容

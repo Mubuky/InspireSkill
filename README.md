@@ -86,7 +86,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 curl -fsSL https://raw.githubusercontent.com/realZillionX/InspireSkill/main/scripts/install.sh | bash
 ```
 
-安装、可选参数和安装后检查见[`references/setup/install-and-config.md`](references/setup/install-and-config.md)。
+安装、可选参数和安装后检查见 [`references/setup/install-and-config.md`](references/setup/install-and-config.md)。
 
 ## 更新
 
@@ -97,7 +97,7 @@ inspire update --cli-only     # 仅升 CLI 包与运行时
 inspire update --skill-only   # 仅刷 SKILL.md / references/
 ```
 
-升级旧版本和 Installer 检测说明见[`references/setup/install-and-config.md`](references/setup/install-and-config.md)。
+升级旧版本和 Installer 检测说明见 [`references/setup/install-and-config.md`](references/setup/install-and-config.md)。
 成功升级 CLI 后，`inspire update` 会显示旧版本到新版本之间的 GitHub Release 更新摘要。
 
 ## 完整初始化（安装后必跑）
@@ -113,7 +113,7 @@ inspire resources availability --workspace all --include-cpu
 
 `inspire init` 默认做账号级全局发现，写入平台 Catalog 和默认 Path Alias；`--scope project` 用于当前仓库的 Project Context 和 Path Alias 覆盖。
 
-账号级 / 项目级配置分层、多账号和代理 Setup 见[`references/setup/install-and-config.md`](references/setup/install-and-config.md)。
+账号级 / 项目级配置分层、多账号和代理 Setup 见 [`references/setup/install-and-config.md`](references/setup/install-and-config.md)。
 
 ---
 
@@ -123,11 +123,11 @@ inspire resources availability --workspace all --include-cpu
 <tr>
   <td width="50%">
     <h4>📝 Notebook 统一入口</h4>
-    全链路命令化：<code>create / list / status / start / stop / ssh / connection / ssh-config / exec / shell / scp / install-deps / metrics / events / lifecycle</code>。联网 notebook 可使用 OpenSSH / SCP / SSH Config；不可上网区 notebook 使用 JupyterTerminal 执行命令，文件流转以 <code>/inspire/...</code> 共享路径为边界，并通过可上网 notebook 使用 <code>notebook scp</code> 或外部 <code>rsync</code> 完成本地上传/下载。连接类命令会跨账号解析本地已缓存的 Notebook Connection，不要求先切 Active Account。
+    全链路命令化：<code>create / list / status / start / stop / ssh / connection / ssh-config / exec / shell / scp / install-deps / metrics / events / lifecycle</code>。联网 Notebook 可使用 OpenSSH / SCP / SSH Config；不可上网区 Notebook 使用 JupyterTerminal 执行命令，文件流转以 <code>/inspire/...</code> 共享路径为边界，并通过可上网 Notebook 使用 <code>notebook scp</code> 或外部 <code>rsync</code> 完成本地上传/下载。连接类命令会跨账号解析本地已缓存的 Notebook Connection，不要求先切 Active Account。
   </td>
   <td width="50%">
     <h4>🚀 HPC 任务分派</h4>
-    <code>inspire hpc create -c &lt;slurm-body&gt;</code> 只写 Slurm 正文 + 显式 <code>srun</code>，平台自动补 <code>#SBATCH</code> 头。两层独立：节点资源用 <code>--quota gpu,cpu,mem</code>（CLI 自动解析到平台 quota row），slurm 调度用 <code>--number-of-tasks / --cpus-per-task / --memory-per-cpu</code>。
+    <code>inspire hpc create -c &lt;slurm-body&gt;</code> 只写 Slurm 正文 + 显式 <code>srun</code>，平台自动补 <code>#SBATCH</code> 头。两层独立：节点资源用 <code>--quota gpu,cpu,mem</code>（CLI 自动解析到平台 Quota Row），Slurm 调度用 <code>--number-of-tasks / --cpus-per-task / --memory-per-cpu</code>。
   </td>
 </tr>
 <tr>
@@ -147,7 +147,7 @@ inspire resources availability --workspace all --include-cpu
   </td>
   <td>
     <h4>🛰 模型部署 （Serving）</h4>
-    <code>inspire serving create / list / status / stop / configs / metrics</code> —— 覆盖模型部署服务的创建、列表、状态、可用配置、资源指标和停止操作；创建前用 <code>serving quota --workspace &lt;workspace&gt;</code> 选 quota。
+    <code>inspire serving create / list / status / stop / configs / metrics</code> —— 覆盖模型部署服务的创建、列表、状态、可用配置、资源指标和停止操作；创建前用 <code>serving quota --workspace &lt;workspace&gt;</code> 选 Quota。
   </td>
 </tr>
 <tr>
@@ -193,10 +193,11 @@ inspire resources availability --workspace all --include-cpu
 
 # 自定义 `SKILL.md` / `INSPIRE.md`
 
-`SKILL.md` 装完是一份通用 Playbook。日常 Workspace 基本就是 `CPU资源空间` 和 `分布式训练空间`；资源条件不要写成隐式默认值，把 `workspace`、`project`、`group`、`quota` 和 `image` 组合成 Workload Profile，并在 `inspire notebook/job/hpc/... create --profile <name>` 或 Batch 文件里显式使用。如果你的主战场是启智的国产卡分区、`CI-情境智能` Workspace，或小组自己划走的专属资源开发空间，两条口子做定制：
+`SKILL.md` 装完是一份通用 Playbook。日常 Workspace 基本就是 `CPU资源空间` 和 `分布式训练空间`；资源条件不要写成隐式默认值，把 `workspace`、`project`、`group`、`quota` 和 `image` 组合成 Workload Profile，并在 `inspire notebook/job/hpc/... create --profile <name>` 或 Batch 文件里显式使用。
 
-1. 项目级（必须）：维护仓库根的 `INSPIRE.md`，并用 `inspire <workload> profile set <name> ...` 保存条件组；`Path Conventions` 只写 Remote Path Alias。`INSPIRE.md` 属于当前 Repo，不会被 `inspire update` 覆写，也方便跟组内协作。启智相关上下文必须和 `AGENTS.md` / `CLAUDE.md` 这类本地 Agent 计划分开维护。
-2. Harness 级：直接编辑 `~/.claude/skills/inspire/SKILL.md` 和同目录 `references/`（Codex / Antigravity / Cursor / OpenClaw / OpenCode / Qoder / Kimi Code 同理），改按需加载入口或对应使用手册。注意：`inspire update` 默认会覆盖 `SKILL.md` 和 `references/`；维护了本地改动后用 `inspire update --cli-only` 只升级 CLI 与运行时、不动 Skill 文件，想合并上游变更时再手动 Diff。
+项目仓库维护根目录 `INSPIRE.md`，记录该项目的人类可读启智上下文；具体字段和边界以 `SKILL.md` 为准。`INSPIRE.md` 属于当前 Repo，不会被 `inspire update` 覆写。
+
+需要定制 Harness 级入口时，直接编辑 `~/.claude/skills/inspire/SKILL.md` 和同目录 `references/`（Codex / Antigravity / Cursor / OpenClaw / OpenCode / Qoder / Kimi Code 同理）。`inspire update` 默认会覆盖 `SKILL.md` 和 `references/`；维护本地改动后用 `inspire update --cli-only` 只升级 CLI 与运行时。
 
 ---
 
@@ -212,9 +213,9 @@ inspire resources availability --workspace all --include-cpu
 
 # 代理配置
 
-不常驻 SII 的科研人员通常需要让本机代理转发 `*.sii.edu.cn` 流量；能直连 SII 校园网的人可以走 `DIRECT`。Clash Verge mixed-port 的 SII proxy / DIRECT 分流模板见[`references/setup/install-and-config.md`](references/setup/install-and-config.md)；CLI 本身不绑定固定端口。代理地址通过 `inspire account add` 写入账号配置，并可用 `inspire config show --compact` 核对。
+不常驻 SII 的科研人员通常需要让本机代理转发 `*.sii.edu.cn` 流量；能直连 SII 校园网的人可以走 `DIRECT`。Clash Verge Mixed Port 的 SII Proxy / DIRECT 分流模板见 [`references/setup/install-and-config.md`](references/setup/install-and-config.md)；CLI 本身不绑定固定端口。代理地址通过 `inspire account add` 写入账号配置，并可用 `inspire config show --compact` 核对。
 
-> 凭据（host / user / password）**从实验室或组织管理员获取**，不要提交到任何公开仓库或聊天记录。
+> 凭据（Host / User / Password）**从实验室或组织管理员获取**，不要提交到任何公开仓库或聊天记录。
 
 ---
 
@@ -233,18 +234,18 @@ inspire resources availability --workspace all --include-cpu
 # 文档索引
 
 - [`SKILL.md`](SKILL.md) — 日常使用入口：CLI Help 查询方式、按需加载索引和项目上下文字段。
-- [`references/setup/install-and-config.md`](references/setup/install-and-config.md) — 安装、更新、账号初始化、项目初始化和 SII proxy setup。
+- [`references/setup/install-and-config.md`](references/setup/install-and-config.md) — 安装、更新、账号初始化、项目初始化和 SII Proxy Setup。
 - [`references/dev/browser-api.md`](references/dev/browser-api.md) — CLI 维护参考：网页会话接口和当前前端请求合约。
 - [`references/resources-and-paths.md`](references/resources-and-paths.md) — Workspace、Compute Group、规格三元组、实时资源和 Workload Profile 边界。
 - [`references/network-and-sources.md`](references/network-and-sources.md) — 公网、离线 GPU 空间、SII 内部源和镜像固化策略。
-- [`references/paths.md`](references/paths.md) — 共享盘作用域、存储池、挂载隔离、Path Alias 和项目 `INSPIRE.md` 维护边界。
+- [`references/paths.md`](references/paths.md) — 共享盘作用域、存储池、挂载隔离、Path Alias 和远端路径边界。
 - [`references/notebook.md`](references/notebook.md) — Notebook 作为交互工作台、连接方式、文件流转、Proxy、安全和观察边界。
 - [`references/image-management.md`](references/image-management.md) — 镜像职责、保存 / 注册边界、可见性和清理原则。
 - [`references/compute-workloads.md`](references/compute-workloads.md) — GPU Job、CPU HPC、Ray、Serving 的适用边界、调度语义和观察闭环。
 - [`references/workflows.md`](references/workflows.md) — CPU 准备、数据处理、分布式训练三阶段项目流程。
 - [`references/model.md`](references/model.md) — Model Registry 与 Serving 的职责边界、注册限制和版本判断。
 - [`cli/`](cli/) — CLI 源码；入口 `cli/inspire/cli/main.py`。
-- [`scripts/install.sh`](scripts/install.sh) — curl-pipe-bash 安装器。
+- [`scripts/install.sh`](scripts/install.sh) — Curl Pipe Bash 安装器。
 
 ---
 

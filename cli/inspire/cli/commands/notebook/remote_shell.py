@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import shlex
 import subprocess
 import sys
 import time
@@ -15,9 +16,16 @@ from inspire.bridge.tunnel import (
     is_tunnel_available,
     load_tunnel_config,
 )
-from inspire.cli.context import Context, EXIT_CONFIG_ERROR, EXIT_GENERAL_ERROR, pass_context
+from inspire.cli.context import (
+    Context,
+    EXIT_CONFIG_ERROR,
+    EXIT_GENERAL_ERROR,
+    EXIT_SUCCESS,
+    pass_context,
+)
 from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.notebook_cli import WEB_AUTH_HINT, require_web_session
+from inspire.cli.utils.output import emit_success as emit_output_success
 from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.cli.utils.tunnel_reconnect import (
     load_ssh_public_key_material,
@@ -47,6 +55,34 @@ def _build_remote_shell_command(*, remote_cwd: Optional[str], env_exports: str) 
     return None
 
 
+def _build_shell_check_command(*, remote_cwd: Optional[str], env_exports: str) -> str:
+    command = "printf 'shell-check-ok\\n'"
+    if remote_cwd:
+        return f"{env_exports}cd {shlex.quote(remote_cwd)} && {command}"
+    return f"{env_exports}{command}"
+
+
+def _emit_shell_check_success(
+    ctx: Context,
+    *,
+    transport: str,
+    returncode: int,
+    output: str,
+) -> None:
+    emit_output_success(
+        ctx,
+        payload={
+            "status": "success",
+            "transport": transport,
+            "returncode": returncode,
+            "output": output,
+        },
+    )
+    if not ctx.json_output:
+        click.echo(f"Shell transport: {transport}")
+        click.echo("OK")
+
+
 def _load_tunnel_config_for_account(account: str | None):
     return load_tunnel_config(account=account) if account else load_tunnel_config()
 
@@ -64,6 +100,11 @@ def _load_tunnel_config_for_account(account: str | None):
     default=None,
     help="Remote working directory or path alias (default: 'me' alias, else $HOME)",
 )
+@click.option(
+    "--check",
+    is_flag=True,
+    help="Validate the shell transport without opening an interactive session.",
+)
 @pass_context
 def bridge_ssh(
     ctx: Context,
@@ -71,6 +112,7 @@ def bridge_ssh(
     account: str | None,
     ignore_target_cache: bool,
     cwd: Optional[str],
+    check: bool,
 ) -> None:
     """Open an interactive shell; SSH when allowed, otherwise JupyterTerminal.
 
@@ -110,6 +152,30 @@ def bridge_ssh(
         timeout=30,
     )
     if policy.exec_transport == "jupyter":
+        if check:
+            result = browser_api_module.run_command_capture_in_notebook(
+                notebook_id=policy.notebook_id,
+                command=_build_shell_check_command(
+                    remote_cwd=remote_cwd,
+                    env_exports=env_exports,
+                ),
+                timeout=30,
+            )
+            if result.returncode == 0:
+                _emit_shell_check_success(
+                    ctx,
+                    transport="jupyter_terminal",
+                    returncode=result.returncode,
+                    output=result.output,
+                )
+                sys.exit(EXIT_SUCCESS)
+            _handle_error(
+                ctx,
+                "ShellCheckFailed",
+                f"JupyterTerminal shell check failed with exit code {result.returncode}",
+                EXIT_GENERAL_ERROR,
+                hint=result.output.strip() or None,
+            )
         if not ctx.json_output:
             click.echo("Opening JupyterTerminal shell...")
             click.echo(f"Notebook: {scrub_raw_ids(notebook)}")
@@ -311,8 +377,50 @@ def bridge_ssh(
         ssh_args = get_ssh_command_args(
             bridge_name=bridge_name,
             config=tunnel_config,
-            remote_command=remote_command,
+            remote_command=(
+                _build_shell_check_command(remote_cwd=remote_cwd, env_exports=env_exports)
+                if check
+                else remote_command
+            ),
         )
+        if check:
+            try:
+                completed = subprocess.run(
+                    ssh_args,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+            except KeyboardInterrupt:
+                logger.debug("bridge_ssh check interrupted bridge=%s", bridge_name)
+                raise SystemExit(130) from None
+
+            returncode = completed.returncode
+            output = (completed.stdout or "") + (completed.stderr or "")
+            if returncode == 0:
+                _emit_shell_check_success(
+                    ctx,
+                    transport="ssh",
+                    returncode=returncode,
+                    output=output,
+                )
+                sys.exit(EXIT_SUCCESS)
+            if should_attempt_ssh_reconnect(
+                returncode,
+                interactive=False,
+                allow_non_interactive=True,
+            ):
+                if not ctx.json_output:
+                    click.echo(
+                        "SSH check failed; attempting automatic tunnel rebuild...",
+                        err=True,
+                )
+                should_rebuild = True
+                continue
+            if not ctx.json_output and output.strip():
+                click.echo(scrub_raw_ids(output.rstrip()), err=True)
+            sys.exit(returncode if returncode is not None else EXIT_GENERAL_ERROR)
+
         if not opened_once and not ctx.json_output:
             click.echo("Opening SSH connection...")
             click.echo(f"Notebook: {scrub_raw_ids(bridge_name)}")

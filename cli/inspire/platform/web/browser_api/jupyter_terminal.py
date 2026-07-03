@@ -28,6 +28,7 @@ from inspire.platform.web.session import get_web_session
 
 JUPYTER_DONE_PREFIX = "__INSPIRE_JUPYTER_DONE_"
 MISSING_MARKER_RETURN_CODE = 124
+_ANSI_CSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
 
 class _Evaluatable(Protocol):
@@ -107,6 +108,18 @@ def build_jupyter_exec_command(command: str, *, marker: str) -> str:
     return f"echo '{encoded}' | base64 -d | bash\r"
 
 
+def _strip_jupyter_terminal_prelude(output: str) -> str:
+    lines = output.splitlines(keepends=True)
+    command_line_end = 0
+    for index, line in enumerate(lines):
+        plain = _ANSI_CSI_RE.sub("", line)
+        if "echo '" in plain and "| base64 -d | bash" in plain:
+            command_line_end = index + 1
+
+    cleaned = "".join(lines[command_line_end:])
+    return re.sub(r"^(?:\x1b\[\?2004[lh]\r?|\r)+", "", cleaned)
+
+
 def parse_jupyter_exec_output(raw_output: str, *, marker: str) -> JupyterCommandResult:
     pattern = re.compile(rf"{re.escape(marker)}:exit:(\d+)\s*")
     match = pattern.search(raw_output)
@@ -117,7 +130,7 @@ def parse_jupyter_exec_output(raw_output: str, *, marker: str) -> JupyterCommand
             completed=False,
             marker=marker,
         )
-    output = raw_output[: match.start()]
+    output = _strip_jupyter_terminal_prelude(raw_output[: match.start()])
     return JupyterCommandResult(
         returncode=int(match.group(1)),
         output=output,
