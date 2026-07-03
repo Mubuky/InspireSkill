@@ -12,7 +12,7 @@ import termios
 import tty
 import uuid
 from dataclasses import dataclass
-from typing import Optional
+from typing import Protocol, Optional
 from urllib.parse import urlsplit
 
 from inspire.platform.web.browser_api import rtunnel as rtunnel_module
@@ -28,6 +28,18 @@ from inspire.platform.web.session import get_web_session
 
 JUPYTER_DONE_PREFIX = "__INSPIRE_JUPYTER_DONE_"
 MISSING_MARKER_RETURN_CODE = 124
+
+
+class _Evaluatable(Protocol):
+    def evaluate(self, expression: str, arg: object | None = None) -> object: ...
+
+
+class _LabFrameLike(_Evaluatable, Protocol):
+    url: str
+
+
+class _TextWebSocket(Protocol):
+    def send_text(self, text: str) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -173,7 +185,7 @@ def build_shell_bootstrap(*, cwd: str | None, env_exports: str) -> str:
 
 
 def _send_terminal_command_capture_via_websocket(
-    page_or_frame: object,
+    page_or_frame: _Evaluatable,
     *,
     ws_url: str,
     stdin_data: str,
@@ -276,7 +288,7 @@ def _send_terminal_command_capture_via_websocket(
 def run_command_capture_in_existing_lab(
     *,
     context: object,
-    lab_frame: object,
+    lab_frame: _LabFrameLike,
     command: str,
     timeout_ms: int,
     marker: str | None = None,
@@ -394,7 +406,7 @@ def _jupyter_ws_headers(session: WebSession, ws_url: str) -> dict[str, str]:
     return headers
 
 
-def _send_jupyter_stdin(ws: object, text: str) -> None:
+def _send_jupyter_stdin(ws: _TextWebSocket, text: str) -> None:
     ws.send_text(json.dumps(["stdin", text]))
 
 
