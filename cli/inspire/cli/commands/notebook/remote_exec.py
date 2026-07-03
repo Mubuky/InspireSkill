@@ -775,10 +775,9 @@ def exec_command(
     cwd: Optional[str],
     stdin_mode: bool,
 ) -> None:
-    """Execute a command on a cached notebook.
+    """Execute a notebook command; SSH when allowed, otherwise JupyterTerminal.
 
-    Requires `inspire notebook connection refresh <notebook> --workspace <workspace>`
-    first. NOTEBOOK is the notebook name. Each call runs an independent remote shell command;
+    NOTEBOOK is the notebook name. Each call runs an independent remote shell command;
     use one quoted command string when cwd, environment variables, or shell
     state must stay together.
 

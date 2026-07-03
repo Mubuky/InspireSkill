@@ -134,12 +134,12 @@ def _ssh_open(
 
 @click.group("ssh", cls=NotebookSSHGroup)
 def notebook_ssh() -> None:
-    """Open SSH to a notebook or run a remote command.
+    """OpenSSH access for public-internet notebooks.
 
     Use `inspire notebook ssh <notebook>` for an interactive shell, or
     `inspire notebook ssh <notebook> -- <command>` for a one-shot command.
-    Cached connection management is available through the
-    `inspire notebook connection` command group.
+    Restricted notebooks use `inspire notebook shell` instead.
+    Cached connection management is available through `inspire notebook connection`.
     """
 
 

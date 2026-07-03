@@ -289,7 +289,8 @@ def install_deps_cmd(
 ) -> None:
     """One-shot install of hpc/ray runtime deps on a cached notebook.
 
-    NOTEBOOK is the notebook name and must already have a cached connection.
+    NOTEBOOK is the notebook name. Public-internet notebooks use cached SSH;
+    restricted notebooks run the steps through JupyterTerminal.
     Run this on a notebook when you need a reusable base image for CPU HPC, Ray,
     or 分布式训练空间 GPU jobs. Public downloads need internet; use CPU资源空间
     for those. SII internal mirrors may work directly inside GPU or

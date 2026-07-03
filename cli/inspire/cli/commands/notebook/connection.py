@@ -295,7 +295,7 @@ def connection_refresh(
     debug_playwright: bool,
     setup_timeout: int,
 ) -> None:
-    """Create or refresh the cached connection without opening SSH."""
+    """Create or refresh SSH/rtunnel cache for public-internet notebooks."""
     policy = preflight_notebook_transport_policy(
         ctx,
         notebook=notebook,

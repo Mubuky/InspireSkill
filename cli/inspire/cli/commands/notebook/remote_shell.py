@@ -72,10 +72,10 @@ def bridge_ssh(
     ignore_target_cache: bool,
     cwd: Optional[str],
 ) -> None:
-    """Open an interactive SSH shell to a cached notebook.
+    """Open an interactive shell; SSH when allowed, otherwise JupyterTerminal.
 
-    Requires a cached notebook connection. Create one with
-    ``inspire notebook connection refresh <notebook> --workspace <workspace>``.
+    Public-internet notebooks use cached SSH. Restricted notebooks open a
+    JupyterTerminal-backed shell.
 
     \b
     Example:

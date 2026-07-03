@@ -89,7 +89,7 @@ def test_notebook_ssh_help_omits_legacy_commands() -> None:
     result = CliRunner().invoke(cli_main, ["notebook", "ssh", "--help"])
 
     assert result.exit_code == EXIT_SUCCESS
-    assert "Open SSH to a notebook or run a remote command" in result.output
+    assert "OpenSSH access for public-internet notebooks" in result.output
     for subcommand in ("connect", "refresh", "forget", "test"):
         assert f"\n  {subcommand} " not in result.output
 

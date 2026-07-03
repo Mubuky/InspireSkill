@@ -10,7 +10,8 @@ Two separate ways to address a notebook's web IDE:
   This drives a headless browser to read the live gateway URL, so the notebook
   must be RUNNING and the embedded token is ephemeral.
 - ``proxy-url`` resolves the web IDE gateway and returns the same full
-  port-forward URL shape the IDE uses for container HTTP services.
+  port-forward URL shape the IDE uses for container HTTP services, only when
+  notebook network policy allows exposing that port.
 """
 
 from __future__ import annotations
@@ -265,10 +266,11 @@ def notebook_proxy_url(
     check: bool,
     allow_restricted: bool,
 ) -> None:
-    """Print a full proxy URL for a notebook container HTTP service.
+    """Print a container HTTP proxy URL when network policy allows it.
 
-    The notebook must be RUNNING. Use --path /v1 for OpenAI-compatible APIs or
-    omit --path for browser apps such as Gradio/FastAPI root pages.
+    The notebook must be RUNNING and allowed by notebook network policy. Use
+    --path /v1 for OpenAI-compatible APIs or omit --path for browser apps such
+    as Gradio/FastAPI root pages.
 
     \b
     Examples:

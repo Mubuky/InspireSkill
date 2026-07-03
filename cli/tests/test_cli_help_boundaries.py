@@ -206,7 +206,7 @@ def test_notebook_ssh_removed_compat_commands_and_connection_group() -> None:
         assert f"\n  {command} " in notebook_help.output
 
     assert ssh_help.exit_code == 0
-    assert "Open SSH to a notebook or run a remote command" in ssh_help.output
+    assert "OpenSSH access for public-internet notebooks" in ssh_help.output
     for subcommand in ("connect", "refresh", "forget", "test"):
         assert f"\n  {subcommand} " not in ssh_help.output
     for removed in ("list", "status", "exec", "shell", "scp", "install-deps"):

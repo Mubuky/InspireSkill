@@ -39,6 +39,14 @@ description: "Inspire platform operating model for Agents: decide workspace, res
 
 需要内部源地址、快速配置或发行版源选择时，加载 [references/network-and-sources.md](references/network-and-sources.md)。不要在 SKILL.md 或对话里凭记忆复写内部源清单。
 
+### 远端合规边界
+
+本地机器上安装和使用 Codex CLI、Claude Code、Cursor、Qoder、OpenCode、OpenClaw、Antigravity 等 harness 不属于启智远端机器行为。限制对象是启智 Notebook / Job / HPC / Ray / Serving 容器内的命令和网络行为。
+
+不可上网或 live probe 判定 `public_internet=false` 的 H100/H200 等 notebook 不使用 `inspire notebook ssh`、`inspire notebook scp`、`connection refresh`、`ssh-config`、`ssh-proxy` 或 `proxy-url` 暴露容器端口。需要命令执行时使用 `notebook exec` / `notebook shell`，CLI 会走 JupyterTerminal；需要文件流转时先把文件放到 `/inspire/...` 共享路径，再通过可上网 notebook 使用 `notebook scp` 或外部 `rsync` 上传 / 下载。
+
+不要在启智远端容器里执行 `codex`、`claude`、海外模型 API client、vibecoding agent，或任何会把学院研发数据发送到不面向中国境内服务的模型 API 的命令。
+
 依赖安装跑通后，优先把运行环境固化为镜像；后续 notebook / job / HPC / Ray / serving 复用镜像，而不是每次启动都重新联网安装。
 
 ## 3. 执行闭环

@@ -52,10 +52,11 @@ def notebook():
 
     Notebooks are the interactive workbench: use them to prepare project
     environments, download data or weights into shared storage, run quick
-    probes, expose temporary HTTP services, and open SSH / exec / scp access
-    by notebook name. For 分布式训练空间 or another offline GPU area,
+    probes, open command access by notebook name, and expose temporary HTTP
+    services when network policy allows. For 分布式训练空间 or another offline GPU area,
     prepare public downloads in an internet-enabled CPU资源空间 notebook first;
-    for package installs, check the SII internal mirrors before falling back.
+    restricted notebooks use JupyterTerminal for exec/shell and shared
+    /inspire/... paths for file movement.
 
     \b
     Examples:
