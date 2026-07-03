@@ -2,6 +2,36 @@
 
 本文件同步 GitHub Releases 正文格式；Release 页面是发布说明的标准口径。
 
+# v6.1.0
+
+## 更新内容
+
+### 新增
+
+- 新增 JupyterTerminal 命令捕获通道，restricted notebook 可通过网页会话执行 `notebook exec`、`notebook shell` 和 `notebook install-deps`，不再依赖 SSH / rtunnel 公网入口。
+- 新增 `inspire notebook net-test`，通过 notebook 内部 JupyterTerminal live probe 判断公网连通性，并输出可读状态或 JSON 结构化结果。
+- 新增 notebook transport policy 层，用 live probe 与 GPU 类型兜底判断 SSH / proxy-url / rtunnel 是否允许使用。
+
+### 变更
+
+- `notebook ssh`、`scp`、`ssh-config`、`proxy-url` 和连接刷新现在会在 restricted notebook 上明确阻断 SSH / rtunnel 路径，并提示改用 JupyterTerminal 或共享存储中转。
+- `notebook exec` 和 `notebook shell` 在 public-internet notebook 上继续使用 SSH，在 restricted notebook 上自动切到 JupyterTerminal。
+- `notebook install-deps` 在 restricted notebook 上通过 JupyterTerminal 执行依赖安装步骤，保持与 SSH notebook 相同的命令语义。
+
+### 文档
+
+- README、SKILL.md、Notebook reference、资源路径 reference、网络 / 内部源 reference、安装配置 reference 和 Browser API reference 同步说明 restricted notebook transport 边界。
+- 文档补充共享存储文件流转方式：restricted notebook 先写入 `/inspire/<storage>/...`，再从 public-internet notebook 或平台文件入口取回。
+
+### 验证
+
+- `uv lock --check`
+- `uv run pytest -q`
+- `uv run ruff check inspire tests`
+- `uv run mypy`
+- `uv build`
+- `git diff --check`
+
 # v6.0.6
 
 ## 更新内容
