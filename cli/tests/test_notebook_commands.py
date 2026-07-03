@@ -2144,6 +2144,11 @@ def test_notebook_exec_cwd_uses_path_alias(
     )
     monkeypatch.setattr(remote_exec_module, "load_tunnel_config", lambda: tunnel_config)
     monkeypatch.setattr(remote_exec_module, "is_tunnel_available", lambda *args, **kwargs: True)
+    monkeypatch.setattr(
+        remote_exec_module,
+        "preflight_notebook_transport_policy",
+        lambda *args, **kwargs: SimpleNamespace(exec_transport="ssh", notebook_id="nb-test"),
+    )
 
     def fake_stream(**kwargs: object) -> int:
         captured.update(kwargs)
@@ -2185,6 +2190,11 @@ def test_notebook_exec_verifies_target_cache_before_use(
     )
     monkeypatch.setattr(
         remote_exec_module,
+        "preflight_notebook_transport_policy",
+        lambda *args, **kwargs: SimpleNamespace(exec_transport="ssh", notebook_id="nb-test"),
+    )
+    monkeypatch.setattr(
+        remote_exec_module,
         "try_exec_via_ssh_tunnel",
         lambda *args, **kwargs: EXIT_SUCCESS,
     )
@@ -2217,6 +2227,11 @@ def test_notebook_shell_cwd_uses_path_alias(
     )
     monkeypatch.setattr(remote_shell_module, "load_tunnel_config", lambda: tunnel_config)
     monkeypatch.setattr(remote_shell_module, "is_tunnel_available", lambda *args, **kwargs: True)
+    monkeypatch.setattr(
+        remote_shell_module,
+        "preflight_notebook_transport_policy",
+        lambda *args, **kwargs: SimpleNamespace(exec_transport="ssh", notebook_id="nb-test"),
+    )
 
     def fake_get_ssh_command_args(bridge_name, config, remote_command=None):  # type: ignore[no-untyped-def]
         captured["bridge_name"] = bridge_name
@@ -2253,6 +2268,11 @@ def test_notebook_shell_without_default_path_alias_uses_login_home(
     )
     monkeypatch.setattr(remote_shell_module, "load_tunnel_config", lambda: tunnel_config)
     monkeypatch.setattr(remote_shell_module, "is_tunnel_available", lambda *args, **kwargs: True)
+    monkeypatch.setattr(
+        remote_shell_module,
+        "preflight_notebook_transport_policy",
+        lambda *args, **kwargs: SimpleNamespace(exec_transport="ssh", notebook_id="nb-test"),
+    )
 
     def fake_get_ssh_command_args(bridge_name, config, remote_command=None):  # type: ignore[no-untyped-def]
         captured["bridge_name"] = bridge_name
