@@ -95,6 +95,14 @@ from .playwright_notebooks import (
     resolve_notebook_vscode_proxy_suffix,
     run_command_in_notebook,
 )
+from .jupyter_terminal import (
+    JupyterCommandResult,
+    build_jupyter_exec_command,
+    new_completion_marker,
+    parse_jupyter_exec_output,
+    run_command_capture_in_existing_lab,
+    run_command_capture_in_notebook,
+)
 from .images import (
     CustomImageInfo,
     create_image,
@@ -267,6 +275,12 @@ __all__ = [
     "resolve_notebook_vscode_ide_url",
     "resolve_notebook_vscode_proxy_suffix",
     "run_command_in_notebook",
+    "JupyterCommandResult",
+    "build_jupyter_exec_command",
+    "new_completion_marker",
+    "parse_jupyter_exec_output",
+    "run_command_capture_in_existing_lab",
+    "run_command_capture_in_notebook",
     "OpenSSHInternalInstallError",
     "OpenSSHJammyInstallError",
     "OPENSSH_INSTALL_LOG",
