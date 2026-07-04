@@ -8,6 +8,7 @@ from click.testing import CliRunner
 
 from inspire import config as config_module
 from inspire.cli.main import main as cli_main
+from inspire.cli.utils import job_submit
 from inspire.cli.utils.quota_resolver import ResolvedQuota
 from inspire.platform.web import browser_api as browser_api_module
 
@@ -199,9 +200,36 @@ def test_job_create_dry_run_resolves_plan_without_create_api(
         "qb-prod-gpu1736",
         "qb-prod-gpu1737",
     ]
+    assert "exclude_nodes" not in payload["data"]["create_kwargs"]["framework_config"][0]
     assert payload["data"]["project_name"] == "Project One"
     assert "project_id" not in payload["data"]["create_kwargs"]
     assert api.training_calls == []
+
+
+def test_training_plan_exclude_nodes_reads_top_level_payload() -> None:
+    plan = job_submit.JobSubmissionPlan(
+        create_kwargs={
+            "exclude_nodes": ["qb-prod-gpu1736"],
+            "framework_config": [{"exclude_nodes": ["legacy-nested-node"]}],
+        },
+        log_path=None,
+        wrapped_command="bash -c 'echo hi'",
+        max_time_ms=None,
+        project_name="Project One",
+        workspace_id="ws-77777777-7777-7777-7777-777777777777",
+        quota=ResolvedQuota(
+            quota_id="quota-12345678-1234-1234-1234-123456789abc",
+            logic_compute_group_id="lcg-12345678-1234-1234-1234-123456789abc",
+            compute_group_name="H200 Room",
+            gpu_count=1,
+            cpu_count=20,
+            memory_gib=200,
+            gpu_type="H200",
+            raw_price={},
+        ),
+    )
+
+    assert job_submit.training_plan_exclude_nodes(plan) == ["qb-prod-gpu1736"]
 
 
 def test_hpc_dry_run_human_scrubs_raw_ids(
@@ -509,6 +537,8 @@ def test_batch_matrix_dry_run_expands_json_without_submit(
     )
     assert items[0]["create_kwargs"]["exclude_nodes"] == ["qb-prod-gpu171"]
     assert items[1]["create_kwargs"]["exclude_nodes"] == ["qb-prod-gpu172"]
+    assert "exclude_nodes" not in items[0]["create_kwargs"]["framework_config"][0]
+    assert "exclude_nodes" not in items[1]["create_kwargs"]["framework_config"][0]
     assert items[0]["create_kwargs"]["framework_config"][0]["shm_gi"] == 96
     assert items[1]["create_kwargs"]["framework_config"][0]["shm_gi"] == 96
     assert items[0]["shm_size_gib"] == 96

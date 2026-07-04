@@ -395,6 +395,7 @@ def test_job_create_json_output(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
         "qb-prod-gpu1736",
         "qb-prod-gpu1737",
     ]
+    assert "exclude_nodes" not in framework_config
     # The backend CreateJob proto has no framework_config-level quota_id; the quota
     # is conveyed by the top-level logic_compute_group_id plus the nested
     # resource_spec_price (which carries its own quota_id).
