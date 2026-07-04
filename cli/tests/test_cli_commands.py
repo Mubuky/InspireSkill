@@ -391,7 +391,7 @@ def test_job_create_json_output(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
     assert "job_id" not in data["data"]
     create_payload = api.calls["create_training_job"]["payload"]
     framework_config = create_payload["framework_config"][0]
-    assert framework_config["exclude_nodes"] == [
+    assert create_payload["exclude_nodes"] == [
         "qb-prod-gpu1736",
         "qb-prod-gpu1737",
     ]

@@ -195,7 +195,7 @@ def test_job_create_dry_run_resolves_plan_without_create_api(
     assert payload["success"] is True
     assert payload["data"]["dry_run"] is True
     assert payload["data"]["create_kwargs"]["name"] == "dry-job"
-    assert payload["data"]["create_kwargs"]["framework_config"][0]["exclude_nodes"] == [
+    assert payload["data"]["create_kwargs"]["exclude_nodes"] == [
         "qb-prod-gpu1736",
         "qb-prod-gpu1737",
     ]
@@ -507,12 +507,8 @@ def test_batch_matrix_dry_run_expands_json_without_submit(
     assert items[0]["create_kwargs"]["framework_config"][0]["image"] == (
         "registry.batch/train:latest"
     )
-    assert items[0]["create_kwargs"]["framework_config"][0]["exclude_nodes"] == [
-        "qb-prod-gpu171"
-    ]
-    assert items[1]["create_kwargs"]["framework_config"][0]["exclude_nodes"] == [
-        "qb-prod-gpu172"
-    ]
+    assert items[0]["create_kwargs"]["exclude_nodes"] == ["qb-prod-gpu171"]
+    assert items[1]["create_kwargs"]["exclude_nodes"] == ["qb-prod-gpu172"]
     assert items[0]["create_kwargs"]["framework_config"][0]["shm_gi"] == 96
     assert items[1]["create_kwargs"]["framework_config"][0]["shm_gi"] == 96
     assert items[0]["shm_size_gib"] == 96

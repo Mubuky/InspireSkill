@@ -195,13 +195,7 @@ def normalize_exclude_nodes(exclude_nodes: Iterable[str] | None) -> list[str]:
 
 def training_plan_exclude_nodes(plan: JobSubmissionPlan) -> list[str]:
     """Return excluded node names from a training create plan."""
-    framework_config = plan.create_kwargs.get("framework_config")
-    if not isinstance(framework_config, list) or not framework_config:
-        return []
-    first = framework_config[0]
-    if not isinstance(first, dict):
-        return []
-    nodes = first.get("exclude_nodes")
+    nodes = plan.create_kwargs.get("exclude_nodes")
     if isinstance(nodes, list):
         return [str(node) for node in nodes]
     return []
@@ -295,7 +289,7 @@ def build_training_job_plan(
 
     normalized_exclude_nodes = normalize_exclude_nodes(exclude_nodes)
     if normalized_exclude_nodes:
-        framework_config["exclude_nodes"] = normalized_exclude_nodes
+        create_kwargs["exclude_nodes"] = normalized_exclude_nodes
 
     if auto_fault_tolerance is True:
         if fault_tolerance_max_retry is not None and fault_tolerance_max_retry < 1:
