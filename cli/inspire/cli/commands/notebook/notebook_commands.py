@@ -194,7 +194,10 @@ def _with_workspace_display_name(item: dict, workspace_name: str) -> dict:
 @click.option(
     "--auto-stop/--no-auto-stop",
     default=False,
-    help="Auto-stop when idle",
+    help=(
+        "Request idle auto-stop. This does not disable manager auto-recycle "
+        "rules or workspace lifetime caps."
+    ),
 )
 @click.option(
     "--wait/--no-wait",

@@ -130,6 +130,16 @@ def test_job_create_help_explains_framework_and_fault_tolerance() -> None:
     assert "platform shm_gi" in output
 
 
+def test_notebook_create_help_explains_auto_stop_boundary() -> None:
+    result = CliRunner().invoke(cli_main, ["notebook", "create", "--help"])
+    output = _one_line(result.output)
+
+    assert result.exit_code == 0
+    assert "Request idle auto-stop" in output
+    assert "does not disable manager auto-recycle rules" in output
+    assert "workspace lifetime caps" in output
+
+
 def test_init_help_explains_plain_init_discovery() -> None:
     result = CliRunner().invoke(cli_main, ["init", "--help"])
     output = _one_line(result.output)
