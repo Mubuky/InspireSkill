@@ -20,7 +20,7 @@ from inspire.config import Config, ConfigError
 from inspire.config.workspaces import resolve_workspace_query_scope, workspace_name_map
 from inspire.platform.web import browser_api as browser_api_module
 from inspire.platform.web.session import SessionExpiredError, get_web_session
-from inspire.cli.utils.quota_resolver import qz_card_area_hint_for_group_names
+from inspire.cli.utils.quota_resolver import qz_scheduling_zone_hint_for_group_names
 
 
 _SCHEDULE_TYPE_BY_WORKLOAD = {
@@ -262,7 +262,7 @@ def make_quota_command(workload: str) -> click.Command:
             click.echo(f"{workload.title()} Quotas (valid --quota gpu,cpu,mem triples)")
             click.echo("\n".join(render_table(headers, table_rows, widths)))
             click.echo(f"Total quotas: {len(rows)}")
-            qz_hint = qz_card_area_hint_for_group_names(
+            qz_hint = qz_scheduling_zone_hint_for_group_names(
                 row.get("compute_group_name") for row in rows
             )
             if qz_hint:
