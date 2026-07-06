@@ -2,6 +2,35 @@
 
 本文件同步 GitHub Releases 正文格式；Release 页面是发布说明的标准口径。
 
+# v6.1.2
+
+## 更新内容
+
+### 修复
+
+- 修复 `inspire job create --exclude-node` 和 `inspire job batch` 的训练任务提交 payload：`exclude_nodes` 现在放在 create payload 顶层，不再写入 `framework_config[0]`，避免当前 v2 CreateJobConsole proto 以 `unknown field "exclude_nodes"` 拒绝请求。
+
+### 变更
+
+- `notebook` / `job` / `hpc` / `ray` / `serving` 的 create help 和 profile help 现在强调 `--group` 应从同一条 live quota row 与 `--quota` 一起复制。
+- 各 workload 的 `quota` 人类输出在检测到 qz `小卡区` / `整卡区` compute group 时，会提示小卡区适合单节点 4 卡及以下任务，整卡区适合单节点 8 卡或 8 卡倍数任务。
+- quota 匹配失败、`--group` 精确匹配失败或同三元组多行冲突时，错误信息会在相关 qz 卡区场景下补充同一 live quota row 选取提示。
+
+### 文档
+
+- `SKILL.md` 和资源 reference 补充 qz 小卡区 / 整卡区语义，明确 Job 的 `--nodes` 只放大节点数，不改变单节点 quota row 的分区语义。
+- Notebook reference 补充 `--auto-stop` 不覆盖管理员自动回收和 Workspace 生命周期上限，并说明 `分布式训练空间` 交互式建模实例启动 18 小时后会自动回收。
+- Browser API reference 同步训练任务 v2 `CreateJobConsole` 合同，明确 `exclude_nodes` 必须位于顶层，`framework_config[0]` 只保留镜像、实例数、资源规格和可选 shared memory。
+
+### 验证
+
+- `uv lock --check`
+- `uv run pytest -q`
+- `uv run ruff check inspire tests`
+- `uv run mypy`
+- `uv build`
+- `git diff --check`
+
 # v6.1.1
 
 ## 更新内容
