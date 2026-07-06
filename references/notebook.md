@@ -25,7 +25,7 @@ Notebook 是交互工作台，不只是“开一个终端”。
 3. 确认 Project 是目标项目名，Image 已 `READY`。
 4. 需要复用同一调度条件时写 Workload Profile；远端目录仍用 Path Alias。
 
-`--auto-stop` 只表达空闲自动停止请求，不覆盖平台管理员设置的自动回收规则或 Workspace 生命周期上限。`分布式训练空间` 的交互式建模实例启动 18 小时后会被自动回收，不受 GPU 利用率等指标影响；长时间训练、批量推理或守护任务应改用 Job、Ray 或 Serving 这类匹配的 Workload。
+`--auto-stop` 只表达空闲自动停止请求，不覆盖平台管理员设置的自动回收规则或 Workspace 生命周期上限。`分布式训练空间` 的交互式建模实例启动 18 小时后会被自动回收，不受 GPU 利用率等指标影响；长时间训练、批量推理或守护任务应改用 Job、Ray 或 Serving 这类匹配的 Workload。需要在 Notebook 中验证长任务入口时，只跑短 probe，并把正式命令迁移到后台 Workload。
 
 手动 Pin 节点只用于排查坏节点、复现实验或平台同学明确指定节点。节点名是 Compute Group 里的节点名，不是平台 Handle；节点必须属于所选 Group。
 

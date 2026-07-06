@@ -122,6 +122,19 @@ def _group_name(group: dict, fallback: str = "") -> str:
 PricesLoader = Callable[[str], list[dict]]
 GroupsLoader = Callable[[], list[dict]]
 
+QZ_CARD_AREA_HINT = (
+    "QZ card areas: 小卡区 is for <=4-GPU-per-node workloads; "
+    "整卡区 is for 8-GPU-per-node or 8-GPU-multiple workloads. "
+    "Keep --group and --quota from the same live quota row."
+)
+
+
+def qz_card_area_hint_for_group_names(group_names: Iterable[object]) -> str | None:
+    names = [str(name or "") for name in group_names]
+    if any(("小卡区" in name or "整卡区" in name) for name in names):
+        return QZ_CARD_AREA_HINT
+    return None
+
 
 def _default_groups_loader(
     *, workspace_id: str, session: WebSession
@@ -188,11 +201,13 @@ def resolve_quota(
                 _group_name(g) for g in group_list if _group_name(g)
             })
             hint = ", ".join(available) if available else "(none)"
+            qz_hint = qz_card_area_hint_for_group_names([group_override, *available])
             raise QuotaMatchError(
                 f"No compute group name exactly matches --group {group_override!r}. "
                 "Create/profile --group requires the full compute group name. "
                 "Use a quota query --group <keyword> only to find the exact name. "
                 f"Available: {hint}"
+                + (f"\n{qz_hint}" if qz_hint else "")
             )
         group_list = filtered
 
@@ -246,9 +261,13 @@ def resolve_quota(
         )
 
     if not matches:
+        qz_hint = qz_card_area_hint_for_group_names(
+            _group_name(group, fallback=_group_id(group)) for group in group_list
+        )
         raise QuotaMatchError(
             f"--quota {spec.display()} matches no quota row in the selected workspace."
             f"\nAvailable:\n{_format_row_catalog(all_rows)}"
+            + (f"\n{qz_hint}" if qz_hint else "")
         )
 
     if len(matches) > 1:
@@ -256,11 +275,13 @@ def resolve_quota(
             f"  {m.compute_group_name}  (gpu_type={m.gpu_type or 'CPU'})"
             for m in matches
         ]
+        qz_hint = qz_card_area_hint_for_group_names(m.compute_group_name for m in matches)
         raise QuotaMatchError(
             f"--quota {spec.display()} matches multiple quota rows in the selected workspace; "
             "pass --group <full compute group name> to disambiguate. "
             "Use a quota query --group <keyword> only to find the exact name:\n"
             + "\n".join(lines)
+            + (f"\n{qz_hint}" if qz_hint else "")
         )
 
     return matches[0]
@@ -321,6 +342,7 @@ __all__ = [
     "QuotaMatchError",
     "QuotaParseError",
     "QuotaSpec",
+    "QZ_CARD_AREA_HINT",
     "ResolvedQuota",
     "SCHEDULE_TYPE_DSW",
     "SCHEDULE_TYPE_HPC",
@@ -328,5 +350,6 @@ __all__ = [
     "SCHEDULE_TYPE_TRAIN",
     "build_resource_spec_price",
     "parse_quota",
+    "qz_card_area_hint_for_group_names",
     "resolve_quota",
 ]

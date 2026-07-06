@@ -20,6 +20,7 @@ from inspire.config import Config, ConfigError
 from inspire.config.workspaces import resolve_workspace_query_scope, workspace_name_map
 from inspire.platform.web import browser_api as browser_api_module
 from inspire.platform.web.session import SessionExpiredError, get_web_session
+from inspire.cli.utils.quota_resolver import qz_card_area_hint_for_group_names
 
 
 _SCHEDULE_TYPE_BY_WORKLOAD = {
@@ -142,17 +143,6 @@ def _sort_rows(rows: list[dict[str, Any]]) -> None:
     )
 
 
-def _qz_card_area_hint(rows: list[dict[str, Any]]) -> str | None:
-    group_names = [str(row.get("compute_group_name") or "") for row in rows]
-    if not any(("小卡区" in name or "整卡区" in name) for name in group_names):
-        return None
-    return (
-        "QZ card areas: 小卡区 is for <=4-GPU workloads; "
-        "整卡区 is for 8-GPU or 8-GPU-multiple workloads. "
-        "Keep --group and --quota from the same quota row."
-    )
-
-
 def make_quota_command(workload: str) -> click.Command:
     """Build ``inspire <workload> quota``."""
 
@@ -272,7 +262,9 @@ def make_quota_command(workload: str) -> click.Command:
             click.echo(f"{workload.title()} Quotas (valid --quota gpu,cpu,mem triples)")
             click.echo("\n".join(render_table(headers, table_rows, widths)))
             click.echo(f"Total quotas: {len(rows)}")
-            qz_hint = _qz_card_area_hint(rows)
+            qz_hint = qz_card_area_hint_for_group_names(
+                row.get("compute_group_name") for row in rows
+            )
             if qz_hint:
                 click.echo(qz_hint)
             click.echo("")

@@ -95,7 +95,11 @@ def make_profile_command(kind: str) -> click.Group:
     @click.argument("name")
     @click.option("--workspace", required=True, help="Workspace name")
     @click.option("--project", required=True, help="Project name")
-    @click.option("--group", required=True, help="Full compute group name")
+    @click.option(
+        "--group",
+        required=True,
+        help="Full compute group name copied from the same quota row as --quota",
+    )
     @click.option("--quota", "-q", required=True, help="Resource quota as gpu,cpu,mem")
     @click.option("--image", required=True, help="Image name or URL")
     @pass_context

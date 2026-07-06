@@ -545,7 +545,10 @@ def _parse_worker_spec(raw: str) -> dict[str, Any]:
 @click.option(
     "--group",
     default=None,
-    help="Full compute group name. Required unless supplied by --profile.",
+    help=(
+        "Full compute group name copied from the same quota row as --quota. "
+        "Required unless supplied by --profile."
+    ),
 )
 @click.option(
     "--quota",

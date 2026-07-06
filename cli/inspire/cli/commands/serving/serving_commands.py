@@ -740,7 +740,10 @@ def configs_serving(
 )
 @click.option(
     "--group",
-    help="Full compute group name. Required unless supplied by --profile.",
+    help=(
+        "Full compute group name copied from the same quota row as --quota. "
+        "Required unless supplied by --profile."
+    ),
 )
 @click.option(
     "--quota",

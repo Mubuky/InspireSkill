@@ -98,6 +98,7 @@ def test_create_and_profile_group_help_requires_full_name() -> None:
 
         assert result.exit_code == 0
         assert "Full compute group name" in output
+        assert "same quota row as --quota" in output
         assert "Partial matches accepted" not in output
         assert "compute group name keyword/substring" not in output
 

@@ -398,7 +398,8 @@ def run_job_create(
 @click.option(
     "--group",
     help=(
-        "Full compute group name. Required unless supplied by --profile. "
+        "Full compute group name copied from the same quota row as --quota. "
+        "Required unless supplied by --profile. "
         "Partial matches are not accepted."
     ),
 )

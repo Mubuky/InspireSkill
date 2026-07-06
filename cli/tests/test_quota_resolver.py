@@ -9,6 +9,7 @@ from inspire.cli.utils.quota_resolver import (
     ResolvedQuota,
     build_resource_spec_price,
     parse_quota,
+    qz_card_area_hint_for_group_names,
     resolve_quota,
 )
 
@@ -235,6 +236,45 @@ def test_resolve_quota_swallows_price_loader_errors() -> None:
         prices_loader=loader,
     )
     assert result.quota_id == "q-ok"
+
+
+def test_qz_card_area_hint_detects_area_names() -> None:
+    hint = qz_card_area_hint_for_group_names(["小卡区-H100", "整卡区-H200"])
+
+    assert hint is not None
+    assert "<=4-GPU-per-node" in hint
+    assert "8-GPU-per-node" in hint
+    assert "same live quota row" in hint
+    assert qz_card_area_hint_for_group_names(["CPU资源-2"]) is None
+
+
+def test_resolve_quota_qz_group_quota_mismatch_adds_card_area_hint() -> None:
+    groups = [
+        _make_group("lcg-small", "小卡区-H100"),
+        _make_group("lcg-whole", "整卡区-H200"),
+    ]
+    prices = {
+        "lcg-small": [
+            _make_price(quota_id="q-small", gpu=4, cpu=55, mem=900, gpu_type="H100")
+        ],
+        "lcg-whole": [
+            _make_price(quota_id="q-whole", gpu=8, cpu=160, mem=1800, gpu_type="H200")
+        ],
+    }
+
+    with pytest.raises(QuotaMatchError) as exc:
+        resolve_quota(
+            spec=QuotaSpec(4, 55, 900),
+            workspace_id="ws-qz",
+            groups=groups,
+            prices_loader=lambda lcg: prices.get(lcg, []),
+            group_override="整卡区-H200",
+        )
+
+    message = str(exc.value)
+    assert "matches no quota row" in message
+    assert "QZ card areas:" in message
+    assert "Keep --group and --quota from the same live quota row" in message
 
 
 def test_build_resource_spec_price_shape() -> None:

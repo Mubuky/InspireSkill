@@ -190,9 +190,9 @@ def test_qz_quota_human_output_explains_card_areas(
 
     assert result.exit_code == 0, result.output
     assert "QZ card areas:" in result.output
-    assert "小卡区 is for <=4-GPU workloads" in result.output
-    assert "整卡区 is for 8-GPU or 8-GPU-multiple workloads" in result.output
-    assert "Keep --group and --quota from the same quota row" in result.output
+    assert "小卡区 is for <=4-GPU-per-node workloads" in result.output
+    assert "整卡区 is for 8-GPU-per-node or 8-GPU-multiple workloads" in result.output
+    assert "Keep --group and --quota from the same live quota row" in result.output
 
 
 def test_qz_quota_hint_is_human_only(
