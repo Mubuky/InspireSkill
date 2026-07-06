@@ -142,6 +142,17 @@ def _sort_rows(rows: list[dict[str, Any]]) -> None:
     )
 
 
+def _qz_card_area_hint(rows: list[dict[str, Any]]) -> str | None:
+    group_names = [str(row.get("compute_group_name") or "") for row in rows]
+    if not any(("小卡区" in name or "整卡区" in name) for name in group_names):
+        return None
+    return (
+        "QZ card areas: 小卡区 is for <=4-GPU workloads; "
+        "整卡区 is for 8-GPU or 8-GPU-multiple workloads. "
+        "Keep --group and --quota from the same quota row."
+    )
+
+
 def make_quota_command(workload: str) -> click.Command:
     """Build ``inspire <workload> quota``."""
 
@@ -261,6 +272,9 @@ def make_quota_command(workload: str) -> click.Command:
             click.echo(f"{workload.title()} Quotas (valid --quota gpu,cpu,mem triples)")
             click.echo("\n".join(render_table(headers, table_rows, widths)))
             click.echo(f"Total quotas: {len(rows)}")
+            qz_hint = _qz_card_area_hint(rows)
+            if qz_hint:
+                click.echo(qz_hint)
             click.echo("")
         except ConfigError as e:
             _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)

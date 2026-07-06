@@ -160,6 +160,90 @@ def test_quota_json_rows_carry_quota_and_no_ids(
     assert "q-1" not in result.output
 
 
+def test_qz_quota_human_output_explains_card_areas(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _patch_config(monkeypatch, tmp_path)
+
+    def prices(**kwargs):
+        group_id = kwargs["logic_compute_group_id"]
+        if group_id == "lcg-small":
+            return [_make_price(qid="q-small", gpu=4, cpu=55, mem=900, gpu_type="NVIDIA H100")]
+        if group_id == "lcg-whole":
+            return [_make_price(qid="q-whole", gpu=8, cpu=160, mem=1800, gpu_type="NVIDIA H200")]
+        return []
+
+    _stub_quota_browser(
+        monkeypatch,
+        groups_by_ws={
+            _WS_TRAIN: [
+                {"logic_compute_group_id": "lcg-small", "name": "小卡区-H100-cuda12.8版本"},
+                {"logic_compute_group_id": "lcg-whole", "name": "整卡区-H200"},
+            ]
+        },
+        prices_fn=prices,
+    )
+
+    result = CliRunner().invoke(
+        cli_main, ["job", "quota", "--workspace", "分布式训练空间"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "QZ card areas:" in result.output
+    assert "小卡区 is for <=4-GPU workloads" in result.output
+    assert "整卡区 is for 8-GPU or 8-GPU-multiple workloads" in result.output
+    assert "Keep --group and --quota from the same quota row" in result.output
+
+
+def test_qz_quota_hint_is_human_only(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _patch_config(monkeypatch, tmp_path)
+    _stub_quota_browser(
+        monkeypatch,
+        groups_by_ws={_WS_TRAIN: [{"logic_compute_group_id": "lcg-small", "name": "小卡区-H200"}]},
+        prices_fn=lambda **_: [
+            _make_price(qid="q-small", gpu=1, cpu=20, mem=200, gpu_type="NVIDIA H200")
+        ],
+    )
+
+    result = CliRunner().invoke(
+        cli_main, ["--json", "notebook", "quota", "--workspace", "分布式训练空间"]
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    row = payload["data"]["quotas"][0]
+    assert row.keys() == {
+        "workspace_name",
+        "compute_group_name",
+        "cpu_count",
+        "memory_size_gib",
+        "gpu_count",
+        "gpu_type",
+        "quota",
+    }
+    assert "QZ card areas" not in result.output
+
+
+def test_non_qz_quota_human_output_has_no_card_area_hint(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _patch_config(monkeypatch, tmp_path)
+    _stub_quota_browser(
+        monkeypatch,
+        groups_by_ws={_WS_CPU: [{"logic_compute_group_id": "lcg-cpu", "name": "CPU资源-2"}]},
+        prices_fn=lambda **_: [_make_price(qid="q-cpu", gpu=0, cpu=20, mem=80)],
+    )
+
+    result = CliRunner().invoke(
+        cli_main, ["notebook", "quota", "--workspace", "CPU资源空间"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "QZ card areas" not in result.output
+
+
 def test_group_keyword_filter_skips_non_matching_compute_groups(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
