@@ -22,7 +22,7 @@ description: "Inspire Platform Operating Model For Agents: Decide Workspace, Res
 
 `workspace`、`project`、`group`、`quota`、`image` 是核心调度条件，没有隐式默认值。创建 Workload 时显式传入，或用 Workload Profile 保存。GPU Job Shared Memory 属于资源细项，不等同于 `quota` 的内存字段，且不能超过 `quota` 的实例内存；需要时查 `job create --help` 或 [`references/compute-workloads.md`](references/compute-workloads.md)。Path Alias 只表示远端路径，服务于 `--cwd`、`scp`、日志路径和共享盘约定。
 
-Compute Group 名称可能承载平台调度区语义，例如 qz 的 `小卡区` / `整卡区`；选择资源时以 Live Quota Row 同时确定 `group` 和 `quota`，不要把不同 Row 的名称和三元组拼接使用。
+Compute Group 名称可能承载平台调度区语义，例如 `开发区` / `训练区`。开发区推荐用于开发调试和小卡任务；训练区推荐用于 8 GPU 或 8 GPU 倍数训练。选择资源时从同一 Live Quota Row 复制完整 `group` 和 `quota`。
 
 资源可用性里 `Available` 是即时空闲 GPU，`Low Pri` 是低优可抢占占用，`High Pri` 是高优任务可能回收的 `Available + Low Pri` 上限；正式提交后仍以 Events / Instances / Metrics 判断调度结果。
 

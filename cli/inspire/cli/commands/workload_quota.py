@@ -142,14 +142,15 @@ def _sort_rows(rows: list[dict[str, Any]]) -> None:
     )
 
 
-def _qz_card_area_hint(rows: list[dict[str, Any]]) -> str | None:
+def _qz_scheduling_zone_hint(rows: list[dict[str, Any]]) -> str | None:
     group_names = [str(row.get("compute_group_name") or "") for row in rows]
-    if not any(("小卡区" in name or "整卡区" in name) for name in group_names):
+    if not any(("开发区" in name or "训练区" in name) for name in group_names):
         return None
     return (
-        "QZ card areas: 小卡区 is for <=4-GPU workloads; "
-        "整卡区 is for 8-GPU or 8-GPU-multiple workloads. "
-        "Keep --group and --quota from the same quota row."
+        "QZ scheduling zones: 开发区 is recommended for development/debug and "
+        "small-card workloads; 训练区 is recommended for 8-GPU or "
+        "8-GPU-multiple training. Use --group and --quota from the same live "
+        "quota row."
     )
 
 
@@ -272,7 +273,7 @@ def make_quota_command(workload: str) -> click.Command:
             click.echo(f"{workload.title()} Quotas (valid --quota gpu,cpu,mem triples)")
             click.echo("\n".join(render_table(headers, table_rows, widths)))
             click.echo(f"Total quotas: {len(rows)}")
-            qz_hint = _qz_card_area_hint(rows)
+            qz_hint = _qz_scheduling_zone_hint(rows)
             if qz_hint:
                 click.echo(qz_hint)
             click.echo("")
