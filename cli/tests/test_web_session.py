@@ -240,6 +240,44 @@ def test_extract_cas_rsa_key_from_login_js() -> None:
     assert ws_auth._extract_cas_rsa_key(text) == (CAS_RSA_EXPONENT, CAS_RSA_MODULUS)
 
 
+def test_extract_login_failure_hint_prefers_actionable_text() -> None:
+    html = """
+    <html><body>
+      <script>var noisy = "ignore me";</script>
+      <div class="error">账号或密码错误，请重新输入</div>
+    </body></html>
+    """
+
+    assert "账号或密码错误" in ws_auth._extract_login_failure_hint(html)
+
+
+def test_login_not_complete_message_includes_diagnostics() -> None:
+    message = ws_auth._login_not_complete_message(
+        status=401,
+        current_url="https://cas.sii.edu.cn/login",
+        page_hint="账号或密码错误",
+    )
+
+    assert "Login did not complete." in message
+    assert "platform login ID" in message
+    assert "*.sii.edu.cn" in message
+    assert "inspire config show --compact" in message
+    assert "last auth check status=401" in message
+    assert "page_hint=账号或密码错误" in message
+
+
+def test_describe_proxy_config_redacts_credentials() -> None:
+    assert ws_auth._describe_proxy_config(
+        {
+            "https": "http://user:secret@127.0.0.1:7897",
+            "http": "http://127.0.0.1:7897",
+        }
+    ) == {
+        "http": "http://127.0.0.1:7897",
+        "https": "http://<redacted>@127.0.0.1:7897",
+    }
+
+
 def test_resolve_cas_rsa_key_reads_same_origin_script() -> None:
     class Response:
         def __init__(self, text: str) -> None:

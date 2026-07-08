@@ -10,7 +10,7 @@ import re
 import time
 from http.cookiejar import Cookie
 from typing import TYPE_CHECKING, Any, Optional, cast
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 from inspire.config import Config
 
@@ -31,6 +31,22 @@ _CAS_PROVIDER_LOGIN_RE = re.compile(r'"loginUrl"\s*:\s*"([^"]*broker[^"]*cas[^"]
 _CAS_RSA_KEY_RE = re.compile(
     r"RSAUtils\.getKeyPair\(\s*['\"]([0-9a-fA-F]+)['\"]\s*,\s*['\"][^'\"]*['\"]\s*,"
     r"\s*['\"]([0-9a-fA-F]+)['\"]"
+)
+_LOGIN_HINT_KEYWORDS = (
+    "captcha",
+    "verify",
+    "verification",
+    "invalid",
+    "incorrect",
+    "error",
+    "验证码",
+    "校验",
+    "验证",
+    "密码",
+    "账号",
+    "用户名",
+    "错误",
+    "失败",
 )
 
 
@@ -112,6 +128,77 @@ def _raise_browser_closed_error(exc: BaseException) -> None:
         "sandbox and /dev/shm flags; if this still happens, reinstall the "
         "Playwright browser runtime for the active package and retry."
     ) from exc
+
+
+def _extract_login_failure_hint(text: str, *, limit: int = 180) -> str:
+    """Return a compact user-facing hint from a login page or response body."""
+    if not text:
+        return ""
+    cleaned = re.sub(r"(?is)<(script|style).*?</\1>", " ", text)
+    cleaned = re.sub(r"(?s)<[^>]+>", " ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    if not cleaned:
+        return ""
+
+    lower = cleaned.lower()
+    for keyword in _LOGIN_HINT_KEYWORDS:
+        index = lower.find(keyword.lower())
+        if index < 0:
+            continue
+        start = max(0, index - 60)
+        end = min(len(cleaned), index + 120)
+        snippet = cleaned[start:end].strip(" .:-")
+        if start:
+            snippet = f"...{snippet}"
+        if end < len(cleaned):
+            snippet = f"{snippet}..."
+        return snippet[:limit]
+    return cleaned[:limit]
+
+
+def _login_not_complete_message(
+    *,
+    status: int | None = None,
+    current_url: str | None = None,
+    page_hint: str | None = None,
+) -> str:
+    lines = [
+        "Login did not complete.",
+        "Check that the password is correct and `auth.username` is the platform login ID "
+        "(phone, student ID, or email), not the display name.",
+        "If those are correct, verify that the configured proxy can reach both the public "
+        "internet and *.sii.edu.cn, and whether the platform login page is asking for "
+        "CAPTCHA, MFA, or another manual verification step.",
+        "Run `inspire config show --compact` to confirm the active account, base URL, and "
+        "proxy settings. Re-run with `inspire --debug init` if you need a debug report.",
+    ]
+    details: list[str] = []
+    if status is not None:
+        details.append(f"last auth check status={status}")
+    if current_url:
+        details.append(f"current_url={current_url}")
+    if page_hint:
+        details.append(f"page_hint={page_hint}")
+    if details:
+        lines.append("Details: " + "; ".join(details))
+    return "\n".join(lines)
+
+
+def _redact_proxy_url(url: str) -> str:
+    parsed = urlsplit(str(url or "").strip())
+    if not parsed.netloc:
+        return str(url or "").strip()
+    host = parsed.hostname or ""
+    netloc = host
+    if parsed.port is not None:
+        netloc = f"{netloc}:{parsed.port}"
+    if parsed.username or parsed.password:
+        netloc = f"<redacted>@{netloc}"
+    return urlunsplit((parsed.scheme, netloc, parsed.path, "", ""))
+
+
+def _describe_proxy_config(proxies: dict[str, str]) -> dict[str, str]:
+    return {key: _redact_proxy_url(value) for key, value in sorted(proxies.items())}
 
 
 _WORKSPACE_ID_PATTERN = re.compile(
@@ -310,7 +397,12 @@ def _login_with_cas_requests(
 
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-    proxies, _source = resolve_requests_proxy_config(account=account)
+    proxies, proxy_source = resolve_requests_proxy_config(account=account)
+    logger.debug(
+        "CAS requests login using proxy_source=%s proxies=%s",
+        proxy_source,
+        _describe_proxy_config(proxies),
+    )
     http = requests.Session()
     http.trust_env = False
     http.proxies.update(proxies)
@@ -355,9 +447,11 @@ def _login_with_cas_requests(
     )
     if user_detail_resp.status_code != 200:
         raise ValueError(
-            "Login did not complete. Check that the password is correct and "
-            "`auth.username` is the platform login ID (phone, student ID, or email), "
-            "not the display name."
+            _login_not_complete_message(
+                status=user_detail_resp.status_code,
+                current_url=str(getattr(auth_resp, "url", "") or ""),
+                page_hint=_extract_login_failure_hint(getattr(auth_resp, "text", "") or ""),
+            )
         )
     payload = user_detail_resp.json()
     data = payload.get("data")
@@ -535,6 +629,7 @@ def login_with_playwright(
 
         def _wait_for_api_auth() -> None:
             deadline = time.time() + 30
+            last_status: int | None = None
             headers = {
                 "Accept": "application/json",
                 "Referer": f"{base_url}/login",
@@ -546,15 +641,30 @@ def login_with_playwright(
                         headers=headers,
                         timeout=10000,
                     )
+                    last_status = resp.status
                     if resp.status == 200:
                         return
                 except Exception:
                     pass
                 page.wait_for_timeout(500)
+            page_hint = ""
+            current_url = ""
+            try:
+                current_url = page.url
+            except Exception:
+                current_url = ""
+            try:
+                page_hint = _extract_login_failure_hint(
+                    page.locator("body").inner_text(timeout=1000)
+                )
+            except Exception:
+                page_hint = ""
             raise ValueError(
-                "Login did not complete. Check that the password is correct and "
-                "`auth.username` is the platform login ID (phone, student ID, or email), "
-                "not the display name."
+                _login_not_complete_message(
+                    status=last_status,
+                    current_url=current_url,
+                    page_hint=page_hint,
+                )
             )
 
         _wait_for_api_auth()
