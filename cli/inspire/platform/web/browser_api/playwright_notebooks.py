@@ -86,7 +86,7 @@ def _resolve_direct_lab_url(
         http = build_requests_session(session, direct_lab_url)
         response = http.get(
             direct_lab_url,
-            timeout=(5, max(5.0, timeout_s)),
+            timeout=(min(5.0, max(1.0, timeout_s)), max(1.0, timeout_s)),
             allow_redirects=False,
             stream=True,
         )
@@ -116,13 +116,61 @@ def open_notebook_lab(
     notebook_id: str,
     timeout: int = 60000,
     session: Optional[WebSession] = None,
+    prefer_direct: bool = False,
 ):
     """Open the notebook's JupyterLab and return the lab frame/page handle."""
-    base_url = _get_base_url()
-    timeout_ms = max(int(timeout), 10000)
-    timeout_s = max(timeout_ms // 1000, 10)
+    base_url = str(getattr(session, "base_url", None) or _get_base_url()).rstrip("/")
+    requested_timeout_ms = max(int(timeout), 1000)
+    timeout_ms = requested_timeout_ms if prefer_direct else max(requested_timeout_ms, 10000)
+    timeout_s = max(timeout_ms / 1000.0, 1.0)
     started_at = time.time()
-    ide_timeout_ms = min(timeout_ms, 20000)
+    notebook_lab_pattern = _browser_api_path("/notebook/lab/")
+    notebook_lab_prefix = _browser_api_path("/notebook/lab").rstrip("/")
+    direct_lab_url = f"{base_url}{notebook_lab_prefix}/{notebook_id}"
+
+    def open_direct(*, fast: bool) -> object | None:
+        elapsed_ms = int((time.time() - started_at) * 1000)
+        remaining_floor_ms = 1000 if fast else 10000
+        remaining_ms = max(remaining_floor_ms, timeout_ms - elapsed_ms)
+        resolve_timeout_s = (
+            min(8.0, max(2.0, remaining_ms / 1000.0))
+            if fast
+            else min(15.0, max(5.0, remaining_ms / 1000.0))
+        )
+        resolved_url = _resolve_direct_lab_url(
+            direct_lab_url,
+            session=session,
+            timeout_s=resolve_timeout_s,
+        )
+        try:
+            page.goto(
+                resolved_url,
+                timeout=remaining_ms,
+                wait_until="commit",
+            )
+        except Exception:
+            pass
+        return _wait_for_lab_handle(
+            page,
+            notebook_lab_pattern=notebook_lab_pattern,
+            timeout_s=(
+                min(2.0, max(0.5, remaining_ms / 1000.0))
+                if fast
+                else min(5.0, max(1.0, remaining_ms / 1000.0))
+            ),
+        )
+
+    # One-shot terminal operations only need the Jupyter proxy surface.  Going
+    # straight to it avoids waiting for the outer /ide page and the complete
+    # JupyterLab UI; keep the UI path as a compatibility fallback.
+    if prefer_direct:
+        lab_handle = open_direct(fast=True)
+        if lab_handle is not None:
+            return lab_handle
+
+    elapsed_ms = int((time.time() - started_at) * 1000)
+    remaining_ms = max(1000, timeout_ms - elapsed_ms)
+    ide_timeout_ms = min(remaining_ms, 20000)
     try:
         page.goto(
             f"{base_url}/ide?notebook_id={notebook_id}",
@@ -132,8 +180,12 @@ def open_notebook_lab(
     except Exception:
         pass
 
-    notebook_lab_pattern = _browser_api_path("/notebook/lab/")
-    frame_probe_s = min(10.0, max(4.0, timeout_s / 6.0))
+    if prefer_direct:
+        elapsed_ms = int((time.time() - started_at) * 1000)
+        remaining_s = max(0.5, (timeout_ms - elapsed_ms) / 1000.0)
+        frame_probe_s = min(10.0, max(2.0, min(timeout_s / 6.0, remaining_s)))
+    else:
+        frame_probe_s = min(10.0, max(4.0, timeout_s / 6.0))
     lab_handle = _wait_for_lab_handle(
         page,
         notebook_lab_pattern=notebook_lab_pattern,
@@ -142,25 +194,10 @@ def open_notebook_lab(
     if lab_handle is not None:
         return lab_handle
 
-    notebook_lab_prefix = _browser_api_path("/notebook/lab").rstrip("/")
-    direct_lab_url = f"{base_url}{notebook_lab_prefix}/{notebook_id}"
-    elapsed_ms = int((time.time() - started_at) * 1000)
-    remaining_ms = max(10000, timeout_ms - elapsed_ms)
-    direct_lab_url = _resolve_direct_lab_url(
-        direct_lab_url,
-        session=session,
-        timeout_s=min(15.0, max(5.0, remaining_ms / 1000.0)),
-    )
-    page.goto(
-        direct_lab_url,
-        timeout=remaining_ms,
-        wait_until="commit",
-    )
-    lab_handle = _wait_for_lab_handle(
-        page,
-        notebook_lab_pattern=notebook_lab_pattern,
-        timeout_s=min(5.0, max(1.0, remaining_ms / 1000.0)),
-    )
+    # Preserve the historical direct fallback for callers that prefer the UI
+    # route.  A direct-first caller only reaches this retry after the UI route
+    # also failed, which can recover a notebook that became ready meanwhile.
+    lab_handle = open_direct(fast=prefer_direct)
     if lab_handle is not None:
         return lab_handle
 

@@ -198,13 +198,13 @@ def _run_in_thread(func, *args, **kwargs):  # noqa: ANN001
     return result.get("value")
 
 
-def _launch_browser(p, headless: bool = True):  # noqa: ANN001
-    proxy = get_playwright_proxy()
+def _launch_browser(p, headless: bool = True, *, account: str | None = None):  # noqa: ANN001
+    proxy = get_playwright_proxy(account=account)
     return p.chromium.launch(**chromium_launch_kwargs(headless=headless, proxy=proxy))
 
 
-def _new_context(browser, *, storage_state=None):  # noqa: ANN001
-    proxy = get_playwright_proxy()
+def _new_context(browser, *, storage_state=None, account: str | None = None):  # noqa: ANN001
+    proxy = get_playwright_proxy(account=account)
     if storage_state is not None:
         return browser.new_context(
             storage_state=storage_state, proxy=proxy, ignore_https_errors=True

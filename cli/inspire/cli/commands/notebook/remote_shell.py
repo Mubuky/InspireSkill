@@ -159,6 +159,7 @@ def bridge_ssh(
                     remote_cwd=remote_cwd,
                     env_exports=env_exports,
                 ),
+                session=policy.session,
                 timeout=30,
             )
             if result.returncode == 0:
@@ -184,6 +185,7 @@ def bridge_ssh(
             click.echo("")
         code = browser_api_module.open_jupyter_terminal_shell(
             notebook_id=policy.notebook_id,
+            session=policy.session,
             cwd=remote_cwd,
             env_exports=env_exports,
         )

@@ -56,6 +56,7 @@ from inspire.cli.utils.tunnel_reconnect import (
     should_attempt_ssh_reconnect,
 )
 from inspire.platform.web import browser_api as browser_api_module
+from inspire.platform.web.session import WebSession
 
 from .target_resolver import resolve_cached_notebook_target
 from .transport import preflight_notebook_transport_policy
@@ -482,6 +483,7 @@ def try_exec_via_jupyter_terminal(
     *,
     notebook_id: str,
     command: str,
+    session: WebSession | None,
     config: Config,
     remote_cwd: Optional[str],
     env_exports: str,
@@ -496,6 +498,7 @@ def try_exec_via_jupyter_terminal(
     result = browser_api_module.run_command_capture_in_notebook(
         notebook_id=notebook_id,
         command=full_command,
+        session=session,
         timeout=timeout_s,
     )
     if ctx.json_output:
@@ -861,6 +864,7 @@ def exec_command(
                     ctx,
                     notebook_id=policy.notebook_id,
                     command=command,
+                    session=policy.session,
                     config=config,
                     remote_cwd=remote_cwd,
                     env_exports=env_exports,

@@ -107,6 +107,26 @@ def test_open_notebook_lab_falls_back_early_to_direct_url(monkeypatch) -> None: 
     assert fake_time[0] < 20.0
 
 
+def test_open_notebook_lab_prefers_direct_url_for_terminal_operations(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    fake_time = [0.0]
+    page = _FakePage(fake_time)
+    monkeypatch.setattr(notebooks_module, "_get_base_url", lambda: "https://qz.sii.edu.cn")
+    monkeypatch.setattr(notebooks_module, "_browser_api_path", lambda path: f"/api/v1{path}")
+    monkeypatch.setattr(notebooks_module.time, "time", lambda: fake_time[0])
+
+    lab = notebooks_module.open_notebook_lab(
+        page,
+        notebook_id="nb-123",
+        timeout=7000,
+        prefer_direct=True,
+    )
+
+    assert lab is not None
+    assert page.goto_calls == ["https://qz.sii.edu.cn/api/v1/notebook/lab/nb-123"]
+    assert page.goto_timeouts == [7000]
+    assert all("/ide?notebook_id=" not in url for url in page.goto_calls)
+
+
 def test_open_notebook_lab_falls_back_when_ide_entry_times_out(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     fake_time = [0.0]
 

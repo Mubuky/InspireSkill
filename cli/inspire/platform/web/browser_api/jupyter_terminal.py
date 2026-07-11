@@ -97,7 +97,9 @@ def build_jupyter_exec_command(command: str, *, marker: str) -> str:
     script = "\n".join(
         [
             "set +e",
+            "(",
             command,
+            ")",
             "__inspire_status=$?",
             f"printf '\\n%s:exit:%s\\n' {shlex.quote(marker)} \"$__inspire_status\"",
             "exit \"$__inspire_status\"",
@@ -154,7 +156,8 @@ def build_network_probe_command(
         "}",
     ]
     for host, port in public_endpoints:
-        lines.append(f"probe_one PUBLIC {shlex.quote(host)} {int(port)}")
+        lines.append(f"probe_one PUBLIC {shlex.quote(host)} {int(port)} &")
+    lines.append("wait")
     return "\n".join(lines)
 
 
@@ -278,8 +281,15 @@ def _send_terminal_command_capture_via_websocket(
                   if (!sent && /[$#]\\s*$/.test(text)) {
                     doSend();
                   }
-                  if (sent && output.includes(marker)) {
-                    finish(output);
+                  if (sent) {
+                    const donePrefix = marker + ":exit:";
+                    const doneAt = output.indexOf(donePrefix);
+                    if (
+                      doneAt >= 0 &&
+                      /^\\d+\\s/.test(output.slice(doneAt + donePrefix.length))
+                    ) {
+                      finish(output);
+                    }
                   }
                 };
               });
@@ -516,8 +526,16 @@ def open_jupyter_terminal_shell(
     active_session = session or get_web_session()
     timeout_ms = max(int(timeout * 1000), 1000)
     with sync_playwright() as p:
-        browser = _launch_browser(p, headless=True)
-        context = _new_context(browser, storage_state=active_session.storage_state)
+        browser = _launch_browser(
+            p,
+            headless=True,
+            account=active_session.account,
+        )
+        context = _new_context(
+            browser,
+            storage_state=active_session.storage_state,
+            account=active_session.account,
+        )
         page = context.new_page()
 
         term_name: str | None = None
@@ -528,6 +546,7 @@ def open_jupyter_terminal_shell(
                 notebook_id=notebook_id,
                 session=active_session,
                 timeout=timeout_ms,
+                prefer_direct=True,
             )
             lab_url = lab_frame.url
             term_name = rtunnel_module._create_terminal_via_api(context, lab_url)
@@ -569,16 +588,26 @@ def _run_command_capture_in_notebook_sync(
     effective_marker = marker or new_completion_marker()
     timeout_ms = max(int(timeout * 1000), 1000)
     with sync_playwright() as p:
-        browser = _launch_browser(p, headless=headless)
-        context = _new_context(browser, storage_state=session.storage_state)
+        browser = _launch_browser(
+            p,
+            headless=headless,
+            account=session.account,
+        )
+        context = _new_context(
+            browser,
+            storage_state=session.storage_state,
+            account=session.account,
+        )
         page = context.new_page()
 
         try:
-            lab_frame = open_notebook_lab(page, notebook_id=notebook_id, session=session)
-            try:
-                lab_frame.locator("text=加载中").first.wait_for(state="hidden", timeout=30000)
-            except Exception:
-                pass
+            lab_frame = open_notebook_lab(
+                page,
+                notebook_id=notebook_id,
+                timeout=timeout_ms,
+                session=session,
+                prefer_direct=True,
+            )
             return run_command_capture_in_existing_lab(
                 context=context,
                 lab_frame=lab_frame,

@@ -453,6 +453,8 @@ def test_bridge_exec_ssh_streaming_success(monkeypatch: pytest.MonkeyPatch, tmp_
 
 def test_exec_uses_jupyter_when_policy_blocks_ssh(monkeypatch, tmp_path) -> None:  # noqa: ANN001
     config = make_sync_config(tmp_path)
+    target_session = SimpleNamespace(account="secondary")
+    capture_kwargs: dict[str, Any] = {}
 
     monkeypatch.setattr(
         Config,
@@ -467,12 +469,18 @@ def test_exec_uses_jupyter_when_policy_blocks_ssh(monkeypatch, tmp_path) -> None
             notebook_id="nb-123",
             public_internet=False,
             reason="live_probe",
+            session=target_session,
         ),
     )
+
+    def fake_capture(**kwargs):  # noqa: ANN202
+        capture_kwargs.update(kwargs)
+        return SimpleNamespace(returncode=0, output="ok\n", completed=True, marker="m")
+
     monkeypatch.setattr(
         exec_cmd_module.browser_api_module,
         "run_command_capture_in_notebook",
-        lambda **_k: SimpleNamespace(returncode=0, output="ok\n", completed=True, marker="m"),
+        fake_capture,
     )
     monkeypatch.setattr(exec_cmd_module, "try_exec_via_ssh_tunnel", lambda *_a, **_k: 99)
 
@@ -480,6 +488,7 @@ def test_exec_uses_jupyter_when_policy_blocks_ssh(monkeypatch, tmp_path) -> None
 
     assert result.exit_code == 0
     assert "ok" in result.output
+    assert capture_kwargs["session"] is target_session
 
 
 def test_exec_json_reports_jupyter_transport(monkeypatch, tmp_path) -> None:  # noqa: ANN001

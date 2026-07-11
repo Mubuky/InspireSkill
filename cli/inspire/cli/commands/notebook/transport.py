@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Literal
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Literal
 
 from inspire.bridge.tunnel import has_internet_for_gpu_type
 from inspire.cli.context import EXIT_GENERAL_ERROR, Context
@@ -14,7 +14,10 @@ from inspire.cli.utils.notebook_cli import (
 )
 from inspire.platform.web import browser_api as browser_api_module
 
-from .notebook_lookup import _resolve_notebook_id
+from .notebook_lookup import _notebook_gpu_type, _resolve_notebook_id
+
+if TYPE_CHECKING:
+    from inspire.platform.web.session import WebSession
 
 NotebookExecTransport = Literal["ssh", "jupyter"]
 
@@ -25,6 +28,7 @@ class NotebookTransportPolicy:
     notebook_id: str
     public_internet: bool | None
     reason: str
+    session: WebSession | None = field(default=None, repr=False, compare=False)
 
     @property
     def allow_ssh(self) -> bool:
@@ -93,23 +97,33 @@ def preflight_notebook_transport_policy(
         workspace_ids=workspace_ids,
     )
     detail = browser_api_module.get_notebook_detail(notebook_id=notebook_id, session=session)
-    gpu_info = (detail.get("resource_spec_price") or {}).get("gpu_info") or {}
-    gpu_type = str(gpu_info.get("gpu_product_simple") or "")
+    gpu_type = _notebook_gpu_type(detail)
     static_public = has_internet_for_gpu_type(gpu_type)
-    try:
-        probe = browser_api_module.probe_notebook_network(
-            notebook_id=notebook_id,
-            session=session,
-            timeout=timeout,
-        )
-        public_internet = probe.public_internet
-        reason = "live_probe"
-    except Exception:
-        public_internet = static_public if static_public is False else None
-        reason = "static_gpu_fallback"
+    public_internet: bool | None
+    if static_public is False:
+        # H100/H200 and other statically restricted notebook types must never
+        # use SSH.  Avoid an expensive JupyterTerminal network probe here: it
+        # would open a complete remote terminal only to select the same
+        # restricted transport, then `notebook exec` would open a second one
+        # for the user's command.
+        public_internet = False
+        reason = "static_gpu_policy"
+    else:
+        try:
+            probe = browser_api_module.probe_notebook_network(
+                notebook_id=notebook_id,
+                session=session,
+                timeout=timeout,
+            )
+            public_internet = probe.public_internet
+            reason = "live_probe"
+        except Exception:
+            public_internet = None
+            reason = "static_gpu_fallback"
     return NotebookTransportPolicy(
         notebook=notebook,
         notebook_id=notebook_id,
         public_internet=public_internet,
         reason=reason,
+        session=session,
     )
