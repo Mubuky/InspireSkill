@@ -2,6 +2,46 @@
 
 本文件同步 GitHub Releases 正文格式；Release 页面是发布说明的标准口径。
 
+# v6.1.3
+
+## 更新内容
+
+### 新增
+
+- 登录失败诊断现在会提供最后一次认证状态、当前登录 URL 和页面错误提示，并明确提示检查平台登录 ID、代理连通性以及 CAPTCHA / MFA 等人工验证步骤。
+- Debug 日志新增 CAS 请求代理来源与脱敏后的代理配置，便于定位登录和网络问题，同时避免泄露代理凭据。
+
+### 修复
+
+- 修复受限 Notebook 显式使用 `--account <name>` 时，JupyterTerminal 执行可能回退到当前 Active Account 登录态或代理的问题；Notebook 解析、Lab 打开、Terminal REST / WebSocket 和 Playwright Proxy 现在复用同一个目标账号 Web Session。
+- 修复 JupyterTerminal 完成标记与退出码跨 WebSocket Frame 返回时可能过早结束、继而误报超时或丢失退出状态的问题；现在等待完整 `marker:exit:<code>` 后再关闭连接。
+- 修复用户命令包含 `exit`、`exec` 等 Shell 控制语句时可能无法回传退出码的问题；用户命令现在在子 Shell 中执行，远端非零退出状态可可靠传回。
+- 修正 qz Compute Group 调度区提示：由不准确的“小卡区 / 整卡区”口径改为“开发区 / 训练区”，并同步修正 Quota 查询输出及匹配失败、Group 不匹配和多行冲突时的建议。
+
+### 变更
+
+- 平台已明确不可上网的 H100 / H200 Notebook 现在直接选择 JupyterTerminal，不再先创建一次远端 Terminal 执行公网探测；GPU 类型识别同时兼容 `resource_spec_price` 为空以及型号位于 Node 或 Compute Group 信息中的平台响应。
+- `notebook exec` 和受限区 `notebook shell` 优先直达 `{prefix}/notebook/lab/{notebook_id}`，完整 `/ide?notebook_id=...` 页面仅作为兼容回退，并取消与 Terminal REST / WebSocket 无关的“加载中”UI 等待。
+- Lab 发现阶段现在遵守调用方命令 Timeout，避免内部固定等待放大长尾延迟。
+- 对可能联网或 GPU 类型未知的 Notebook 继续执行 Live Network Probe；多个公网端点改为并行探测，降低传输策略判定耗时。
+- qz 调度建议现在明确：开发区推荐用于开发调试和小卡任务，训练区推荐用于 8 GPU 或 8 GPU 倍数训练；`--group` 与 `--quota` 仍须从同一条 Live Quota Row 选取。
+
+### 文档
+
+- 更新 Notebook Reference，说明受限 Notebook 的临时 Terminal 生命周期、H100 / H200 快速选路、Direct Lab 优先策略及跨账号 Web Session / Proxy 复用规则。
+- 更新 Browser API Reference，记录 JupyterTerminal 的 Direct Lab、Terminal REST、WebSocket、完整退出标记和 IDE Fallback 链路。
+- 更新 `SKILL.md` 与资源 Reference，统一 qz 开发区 / 训练区调度语义。
+
+### 验证
+
+- 完整测试套件通过：`1112 passed`
+- `uv lock --check`
+- `uv run ruff check inspire tests`
+- `uv run mypy`
+- `uv build`
+- `git diff --check`
+- 真实受限区 H100 Notebook Smoke Test 覆盖普通命令、输出捕获、远端非零退出码和显式 `--account`；完整 CLI 耗时约 3.7–5.7 秒，原一分钟级长尾已消除。
+
 # v6.1.2
 
 ## 更新内容
