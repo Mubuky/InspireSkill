@@ -123,10 +123,10 @@ PricesLoader = Callable[[str], list[dict]]
 GroupsLoader = Callable[[], list[dict]]
 
 QZ_SCHEDULING_ZONE_HINT = (
-    "QZ scheduling zones: 开发区 is recommended for development/debug and "
-    "small-card workloads; 训练区 is recommended for 8-GPU or "
-    "8-GPU-multiple training. Use --group and --quota from the same live "
-    "quota row."
+    "QZ scheduling zones: 开发区 supports both full-node and partial-node GPU "
+    "workloads; 训练区 prioritizes full-node workloads, and partial-node GPU "
+    "workloads there are restricted to low priority. Use --group and --quota "
+    "from the same live quota row."
 )
 
 

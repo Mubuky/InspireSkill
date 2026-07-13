@@ -242,8 +242,9 @@ def test_qz_scheduling_zone_hint_detects_zone_names() -> None:
     hint = qz_scheduling_zone_hint_for_group_names(["开发区-H100", "训练区-H200"])
 
     assert hint is not None
-    assert "development/debug and small-card workloads" in hint
-    assert "8-GPU or 8-GPU-multiple training" in hint
+    assert "supports both full-node and partial-node GPU workloads" in hint
+    assert "prioritizes full-node workloads" in hint
+    assert "partial-node GPU workloads there are restricted to low priority" in hint
     assert "same live quota row" in hint
     assert qz_scheduling_zone_hint_for_group_names(["CPU资源-2"]) is None
 
