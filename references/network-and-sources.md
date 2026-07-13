@@ -15,7 +15,7 @@
 
 只缺内部源覆盖的包、系统依赖、内部镜像或 OSS 时，可以在目标 notebook 里直接配置内部源并验证；跑通后保存镜像，避免后续 workload 每次启动重新安装。
 
-`public_internet` 的 live probe 使用国内公网端点，例如 `www.baidu.com:443`、`www.qq.com:443`、`www.163.com:443` 和 `mirrors.tuna.tsinghua.edu.cn:443`。不要把 GitHub、Hugging Face、OpenAI、Anthropic 等海外模型或代码站点作为默认 probe 目标；probe 只判断普通公网出站能力，不授权远端使用海外模型 API。
+`public_internet` 的 live probe 使用国内公网端点，例如 `www.baidu.com:443`、`www.qq.com:443`、`www.163.com:443` 和 `mirrors.tuna.tsinghua.edu.cn:443`。不要把 GitHub、Hugging Face、OpenAI、Anthropic 等海外模型或代码站点作为默认 probe 目标；probe 只判断普通公网出站能力，不授权对不可上网区服务器实施网络穿透，也不授权调用仅限海外使用的模型 API 或使用不向中国境内提供服务的 vibecoding 程序。
 
 ## 2. 准备结果放哪
 
