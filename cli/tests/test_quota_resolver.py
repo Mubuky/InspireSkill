@@ -238,15 +238,42 @@ def test_resolve_quota_swallows_price_loader_errors() -> None:
     assert result.quota_id == "q-ok"
 
 
-def test_qz_scheduling_zone_hint_detects_zone_names() -> None:
-    hint = qz_scheduling_zone_hint_for_group_names(["开发区-H100", "训练区-H200"])
+@pytest.mark.parametrize("group_name", ["开发区-H100", "训练区-H200"])
+def test_qz_scheduling_zone_hint_detects_each_zone_name(group_name: str) -> None:
+    hint = qz_scheduling_zone_hint_for_group_names([group_name])
 
     assert hint is not None
     assert "supports both full-node and partial-node GPU workloads" in hint
     assert "prioritizes full-node workloads" in hint
-    assert "partial-node GPU workloads there are restricted to low priority" in hint
+    assert "partial-node GPU workloads there require LOW priority" in hint
+    assert "1-3, preemptible" in hint
+    assert "per instance/node quota, not aggregate GPU count" in hint
     assert "same live quota row" in hint
+
+
+def test_qz_scheduling_zone_hint_ignores_unrelated_groups() -> None:
     assert qz_scheduling_zone_hint_for_group_names(["CPU资源-2"]) is None
+
+
+def test_resolve_quota_qz_exact_group_miss_adds_scheduling_zone_hint() -> None:
+    groups = [
+        _make_group("lcg-dev", "开发区-H100"),
+        _make_group("lcg-train", "训练区-H200"),
+    ]
+
+    with pytest.raises(QuotaMatchError) as exc:
+        resolve_quota(
+            spec=QuotaSpec(4, 55, 900),
+            workspace_id="ws-qz",
+            groups=groups,
+            prices_loader=lambda lcg: [],
+            group_override="训练区",
+        )
+
+    message = str(exc.value)
+    assert "No compute group name exactly matches --group" in message
+    assert "QZ scheduling zones:" in message
+    assert "require LOW priority (1-3, preemptible)" in message
 
 
 def test_resolve_quota_qz_group_quota_mismatch_adds_scheduling_zone_hint() -> None:
@@ -276,6 +303,36 @@ def test_resolve_quota_qz_group_quota_mismatch_adds_scheduling_zone_hint() -> No
     assert "matches no quota row" in message
     assert "QZ scheduling zones:" in message
     assert "Use --group and --quota from the same live quota row" in message
+
+
+def test_resolve_quota_qz_multi_match_adds_scheduling_zone_hint() -> None:
+    groups = [
+        _make_group("lcg-dev", "开发区-H100"),
+        _make_group("lcg-train", "训练区-H200"),
+    ]
+    prices = {
+        "lcg-dev": [
+            _make_price(quota_id="q-dev", gpu=8, cpu=160, mem=1800, gpu_type="H100")
+        ],
+        "lcg-train": [
+            _make_price(
+                quota_id="q-train", gpu=8, cpu=160, mem=1800, gpu_type="H200"
+            )
+        ],
+    }
+
+    with pytest.raises(QuotaMatchError) as exc:
+        resolve_quota(
+            spec=QuotaSpec(8, 160, 1800),
+            workspace_id="ws-qz",
+            groups=groups,
+            prices_loader=lambda lcg: prices.get(lcg, []),
+        )
+
+    message = str(exc.value)
+    assert "matches multiple quota rows" in message
+    assert "QZ scheduling zones:" in message
+    assert "per instance/node quota, not aggregate GPU count" in message
 
 
 def test_build_resource_spec_price_shape() -> None:

@@ -125,8 +125,9 @@ GroupsLoader = Callable[[], list[dict]]
 QZ_SCHEDULING_ZONE_HINT = (
     "QZ scheduling zones: 开发区 supports both full-node and partial-node GPU "
     "workloads; 训练区 prioritizes full-node workloads, and partial-node GPU "
-    "workloads there are restricted to low priority. Use --group and --quota "
-    "from the same live quota row."
+    "workloads there require LOW priority (1-3, preemptible). Zone semantics "
+    "apply per instance/node quota, not aggregate GPU count. Use --group and "
+    "--quota from the same live quota row."
 )
 
 
