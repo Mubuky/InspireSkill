@@ -46,6 +46,8 @@ Notebook 是交互工作台，不只是“开一个终端”。
 
 `--workspace` 主要用于首次解析或同名 Notebook 消歧；连接缓存建立后，后续命令通常可按名称使用。缓存是性能和连接复用工具，不是平台事实来源。
 
+连接方式只解决 Transport，不提供外部服务的合规授权。即使 Notebook 可上网并允许 SSH，也仍要按实际接入端点、服务地域、使用条款和项目政策判断模型 API 或 AI 编程服务是否可用；不可上网区不得自建反向隧道、代理、VPN 或中继绕过限制。完整边界见 [`network-and-sources.md`](network-and-sources.md)。
+
 受限 Notebook 的 `exec` 每次仍使用独立临时 Jupyter Terminal，命令结束后立即回收，不共享 `cwd`、环境变量或 Shell 状态。对 H100 / H200 等平台已明确不可上网的类型，CLI 会直接选择 JupyterTerminal，不会先重复执行公网探测；真正执行时优先直达 Notebook Lab 代理，只有直接入口不可用时才回退到完整 IDE 页面发现。
 
 ### 跨账号 Notebook 连接
