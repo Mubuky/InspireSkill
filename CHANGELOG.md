@@ -2,6 +2,37 @@
 
 本文件同步 GitHub Releases 正文格式；Release 页面是发布说明的标准口径。
 
+# v6.1.4
+
+## 更新内容
+
+### 修复
+
+- 修正 qz `开发区` / `训练区` 调度语义：开发区同时支持整节点和碎卡 GPU 任务；训练区优先保障整节点任务，碎卡任务只能使用 LOW 优先级（当前 CLI 为 1–3，可抢占）。
+- 同步修正 Workload Quota 的人类可读提示，以及 Group 精确匹配失败、Quota 无匹配和同三元组多行冲突时的诊断建议；JSON 输出和 Quota 解析行为保持不变。
+
+### 变更
+
+- 整节点 / 碎卡现在明确按每个 Workload 实例或节点选择的 Live Quota Row 判断，不按多节点任务的 GPU 总数判断；`--nodes` 只放大实例数，不改变单节点 Quota 的调度区语义。
+- 远端合规判断不再按 `codex`、`claude` 等客户端名称一刀切，改为区分网络连通能力与服务授权，并按实际接入端点、服务地域、使用条款和项目政策判断。
+- 明确三项远端合规边界：不可上网区不得通过反向隧道、代理、VPN 或中继实施网络穿透；不得调用仅限海外使用或不向中国境内提供服务的模型 API；不得在远端使用关键能力不向中国境内提供的 AI 辅助编程服务。
+
+### 文档
+
+- 网络与内部源 Reference 新增受限 Notebook、联网 Notebook、外部模型 API、AI 编程服务和 SII 内部源的判断表，以及信息不足时回退到本地或已批准联网环境的五步闭环。
+- Notebook Reference 补充 Transport 选择不等于外部服务授权；资源与 Workload Reference 补充开发区 / 训练区对照表、LOW 优先级范围、可抢占语义和多节点反例。
+- `SKILL.md` 同步收敛为 Agent 可直接执行的合规与调度硬约束，并继续将详细判断路由到对应 Reference。
+
+### 验证
+
+- 完整测试套件通过：`1116 passed`
+- `uv lock --check`
+- `uv run ruff check inspire tests`
+- `uv run mypy`
+- `uv build`
+- `git diff --check`
+- GitHub CI 在 Python 3.10、3.11、3.12 上通过。
+
 # v6.1.3
 
 ## 更新内容
