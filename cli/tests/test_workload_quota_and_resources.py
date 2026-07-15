@@ -204,8 +204,11 @@ def test_qz_quota_human_output_explains_scheduling_zones(
 
     assert result.exit_code == 0, result.output
     assert "QZ scheduling zones:" in result.output
-    assert "开发区 is recommended for development/debug and small-card workloads" in result.output
-    assert "训练区 is recommended for 8-GPU or 8-GPU-multiple training" in result.output
+    assert "开发区 supports both full-node and partial-node GPU workloads" in result.output
+    assert "训练区 prioritizes full-node workloads" in result.output
+    assert "partial-node GPU workloads there require LOW priority" in result.output
+    assert "1-3, preemptible" in result.output
+    assert "per instance/node quota, not aggregate GPU count" in result.output
     assert "Use --group and --quota from the same live quota row" in result.output
 
 
