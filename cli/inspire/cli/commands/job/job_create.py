@@ -47,6 +47,7 @@ def run_job_create(
     dry_run: bool = False,
     auto_fault_tolerance: Optional[bool] = None,
     fault_tolerance_max_retry: Optional[int] = None,
+    enable_notification: Optional[bool] = None,
     exclude_nodes: tuple[str, ...] | None = None,
     shm_size: Optional[int] = None,
 ) -> None:
@@ -78,6 +79,8 @@ def run_job_create(
             auto_fault_tolerance = config.job_auto_fault_tolerance
         if fault_tolerance_max_retry is None:
             fault_tolerance_max_retry = config.job_fault_tolerance_max_retry
+        if enable_notification is None:
+            enable_notification = config.job_enable_notification
 
         if not group:
             _handle_error(
@@ -212,6 +215,7 @@ def run_job_create(
                 project_name=selected.name,
                 auto_fault_tolerance=auto_fault_tolerance,
                 fault_tolerance_max_retry=fault_tolerance_max_retry,
+                enable_notification=enable_notification,
                 exclude_nodes=exclude_nodes,
                 shm_size=shm_size,
             )
@@ -236,6 +240,8 @@ def run_job_create(
                 click.echo(f"Priority: {priority}")
             if nodes > 1:
                 click.echo(f"Nodes: {nodes}")
+            if enable_notification:
+                click.echo("Status notifications: enabled")
             if plan.shm_size_gib is not None:
                 click.echo(f"Shared memory: {plan.shm_size_gib} GiB")
             if plan_exclude_nodes:
@@ -263,6 +269,7 @@ def run_job_create(
             project_name=selected.name,
             auto_fault_tolerance=auto_fault_tolerance,
             fault_tolerance_max_retry=fault_tolerance_max_retry,
+            enable_notification=enable_notification,
             exclude_nodes=exclude_nodes,
             shm_size=shm_size,
         )
@@ -277,6 +284,7 @@ def run_job_create(
         if ctx.json_output:
             payload = dict(data if data else result)
             payload.setdefault("name", name)
+            payload.setdefault("enable_notification", bool(enable_notification))
             if plan.shm_size_gib is not None:
                 payload.setdefault("shm_size_gib", plan.shm_size_gib)
             click.echo(json_formatter.format_json(payload))
@@ -289,6 +297,8 @@ def run_job_create(
                 click.echo(f"Priority: {priority}")
             if nodes > 1:
                 click.echo(f"Nodes:    {nodes}")
+            if enable_notification:
+                click.echo("Status notifications: enabled")
             if plan.shm_size_gib is not None:
                 click.echo(f"Shared memory: {plan.shm_size_gib} GiB")
             if plan_exclude_nodes:
@@ -380,6 +390,15 @@ def run_job_create(
     ),
 )
 @click.option(
+    "--enable-notification/--no-enable-notification",
+    default=None,
+    help=(
+        "Enable Feishu status notifications for this job. The platform sends "
+        "updates to the current user's bound Feishu account. Default from "
+        "INSPIRE_JOB_ENABLE_NOTIFICATION or [job].enable_notification; otherwise False."
+    ),
+)
+@click.option(
     "--max-time",
     type=click.FloatRange(min=0, min_open=True),
     default=None,
@@ -456,6 +475,7 @@ def create(
     priority: Optional[int],
     auto_fault_tolerance: Optional[bool],
     fault_tolerance_max_retry: Optional[int],
+    enable_notification: Optional[bool],
     max_time: Optional[float],
     workspace: Optional[str],
     profile_name: Optional[str],
@@ -507,6 +527,7 @@ def create(
         dry_run=dry_run,
         auto_fault_tolerance=auto_fault_tolerance,
         fault_tolerance_max_retry=fault_tolerance_max_retry,
+        enable_notification=enable_notification,
         exclude_nodes=exclude_nodes,
         shm_size=shm_size,
     )
