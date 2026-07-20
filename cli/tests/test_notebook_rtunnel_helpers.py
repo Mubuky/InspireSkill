@@ -1066,6 +1066,13 @@ def test_build_rtunnel_setup_commands_installs_openssh_via_internal_ubuntu_apt()
     assert "$_OS_CODENAME-security main restricted universe multiverse" in script
     assert "Dir::Etc::sourcelist=$_apt_source" in script
     assert "Dir::State::lists=$_apt_lists" in script
+    assert "unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY" in script
+    assert (
+        'nexus.sii.shaipower.online,.shaipower.online,shaipower.online'
+        in script
+    )
+    assert "Acquire::http::Proxy=false" in script
+    assert "Acquire::https::Proxy=false" in script
     assert "apt-cache $_apt_opts policy openssh-server" in script
     assert "apt-cache $_apt_opts policy openssh-client" in script
     assert "apt-cache $_apt_opts policy openssh-sftp-server" in script

@@ -181,9 +181,15 @@ def build_rtunnel_setup_commands(
         '"deb $SII_UBUNTU_APT_MIRROR $_OS_CODENAME-updates main restricted universe multiverse" '
         '"deb $SII_UBUNTU_APT_MIRROR $_OS_CODENAME-security main restricted universe multiverse" '
         '> "$_apt_source"; '
+        # The apt process runs inside the notebook container. Keep this
+        # bootstrap path independent from container-wide proxy settings.
+        'unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY; '
+        'export no_proxy="${no_proxy:+$no_proxy,}nexus.sii.shaipower.online,.shaipower.online,shaipower.online"; '
+        'export NO_PROXY="${NO_PROXY:+$NO_PROXY,}nexus.sii.shaipower.online,.shaipower.online,shaipower.online"; '
         '_apt_opts="-o Dir::Etc::sourcelist=$_apt_source '
         "-o Dir::Etc::sourceparts=$_apt_sourceparts -o Dir::State::lists=$_apt_lists "
-        '-o APT::Get::List-Cleanup=0"; '
+        '-o APT::Get::List-Cleanup=0 '
+        '-o Acquire::http::Proxy=false -o Acquire::https::Proxy=false"; '
         "export DEBIAN_FRONTEND=noninteractive; "
         "if ! timeout 45 apt-get $_apt_opts -o Acquire::Retries=2 -o Acquire::http::Timeout=15 update -qq "
         '>>"$OPENSSH_INSTALL_LOG" 2>&1; then '
