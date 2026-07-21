@@ -2,25 +2,35 @@
 
 本文件同步 GitHub Releases 正文格式；Release 页面是发布说明的标准口径。
 
-# Unreleased
+# v6.2.0
 
 ## 更新内容
 
 ### 新增
 
+- GPU Job 现在支持平台原生状态通知：`inspire job create` 新增 `--enable-notification/--no-enable-notification`，平台会向当前用户绑定的飞书账号发送任务状态更新；CLI 不接收也不保存任意收件人标识。
+- Job 通知开关支持 `[job].enable_notification`、`INSPIRE_JOB_ENABLE_NOTIFICATION` 和 `job batch`；显式 CLI / Batch item 设置优先于持久默认值，未配置时继续默认关闭。Dry Run、人类输出和 JSON 输出都会展示最终解析结果。
 - 新增 Qoder Work Harness 支持；安装器和 `inspire update` 会自动探测 `~/.qoderwork`，并把 InspireSkill 刷到 `~/.qoderwork/skills/inspire/`。
 - 新增 Kimi Desktop Harness 支持；安装器和 `inspire update` 会自动探测其 macOS daemon 数据目录，并把 InspireSkill 刷到 `~/Library/Application Support/kimi-desktop/daimon-share/daimon/skills/inspire/`。
 
 ### 修复
 
 - 修复 request-based CAS 登录在代理来源为通用 Shell `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` 时手工注入代理并关闭 Requests 环境解析、从而忽略 `NO_PROXY` 的问题；该路径现在与登录后的 Requests Browser API 一致，由 Requests 原生解析 Shell proxy 和 bypass。
-- `inspire config show --compact --filter Proxy` 现在即使没有设置 Inspire 专用代理字段，也会显示 Requests、Playwright 和 rtunnel 的脱敏有效代理来源与目标路由；`config check` 的人类和 JSON 输出同步包含相同摘要，认证失败时仍可用于诊断。
-- 登录失败诊断现在会记录 Playwright 的脱敏代理来源、base URL 路由和 bypass 是否配置，并明确说明 CAS / Keycloak 重定向主机可能匹配不同的 bypass；检测到 Shell proxy 时会提示检查 `NO_PROXY` 或临时取消相关变量。
+- 修复 Notebook OpenSSH Bootstrap 内部 APT 访问继承容器代理的问题；Bootstrap 现在取消大小写 HTTP(S) / ALL proxy 环境变量，为 SII 内部镜像补齐 `NO_PROXY`，并用 APT `Acquire::*::Proxy=false` 强制直连，避免 `127.0.0.1` 等容器内无效代理导致 502 或安装失败。
+- 修复分层配置字段集合遗漏 `job_auto_fault_tolerance` 和 `job_fault_tolerance_max_retry` 的问题；已有 `[job].auto_fault_tolerance` / `[job].fault_tolerance_max_retry` 默认值现在能稳定进入 `job create` 和 `job batch` 运行时。
 - Proxy 配置与 Debug 摘要不再暴露 URL userinfo、path、query 或 fragment，避免代理密码和 URL token 出现在终端或日志中。
+
+### 变更
+
+- `inspire config show --compact --filter Proxy` 现在即使没有设置 Inspire 专用代理字段，也会显示 Requests、Playwright 和 rtunnel 的脱敏有效代理来源、目标路由及 `NO_PROXY` 匹配结果；`config check` 的人类和 JSON 输出同步包含相同摘要，认证失败时仍可用于诊断。
+- 登录失败诊断现在记录 Playwright 的脱敏代理来源、base URL 路由和 bypass 状态，并明确说明 CAS / Keycloak 重定向主机可能匹配不同的 `NO_PROXY` 规则；检测到 Shell proxy 时会提示检查 bypass 或临时取消相关变量。
+- 账号级或显式 Inspire Proxy 仍保持最高优先级；只有代理来源确实是 Shell 环境时，Requests 才交回原生环境解析，以获得标准 `NO_PROXY` 行为。
+- Harness 支持矩阵由 8 家扩展到 10 家；已存在 Qoder Work 或 Kimi Desktop 数据目录的环境会在安装和 `inspire update` 时自动刷新对应 Skill。
 
 ### 文档
 
 - 安装与配置 Reference 明确通用 Shell proxy 的兼容继承、账号级 proxy 优先级、有效代理查询方式，以及直连 SII 时的 `NO_PROXY` / 单次取消代理方法。
+- Workload Reference 补充 Job 状态通知、容错默认值、CLI / 环境变量 / 项目配置 / Batch item 的覆盖顺序和收件人边界。
 - README 和安装 Reference 同步更新为 10 家 Harness，并补充 Qoder Work 与 Kimi Desktop 的安装目录和显式安装参数。
 
 ### 验证
@@ -32,6 +42,7 @@
 - `uv build`
 - `bash -n scripts/install.sh`
 - `git diff --check`
+- GitHub CI 在 Python 3.10、3.11、3.12 上通过。
 
 # v6.1.4
 

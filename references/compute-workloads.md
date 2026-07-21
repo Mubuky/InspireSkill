@@ -33,6 +33,8 @@ Job 的关键边界：
 
 - 日志和工作目录依赖共享盘约定；训练 Repo 建议在 `me:<repo>`，启动命令里使用相对共享盘路径或让脚本自己切目录。
 - Shared Memory 是每个 Job Instance 的 `/dev/shm` / IPC 资源，不等同于 `--quota gpu,cpu,mem` 里的 `mem`，但不能超过该 `mem`。PyTorch DataLoader Workers、多进程数据管线或大模型训练需要更大 `/dev/shm` 时，用 `--shm-size <GiB>` 显式设置；也可用 `INSPIRE_SHM_SIZE` 或 `[job] shm_size` 作为默认值，命令行参数优先。提交前用 `job create --dry-run` 看解析后的 Shared Memory；提交后用 `job list/status` 确认平台返回的 Per-Instance SHM。
+- 需要平台在任务状态变化时通知当前用户，可在 `job create` 使用 `--enable-notification`；平台收件人来自当前用户绑定的飞书账号，CLI 不接受任意收件人 ID。持久默认值用 `[job].enable_notification` 或 `INSPIRE_JOB_ENABLE_NOTIFICATION`，显式 `--enable-notification/--no-enable-notification` 优先。`job batch` 在 item 未设置时继承该默认值，item 内布尔值优先。
+- 自动容错默认值用 `[job].auto_fault_tolerance` / `[job].fault_tolerance_max_retry` 或对应环境变量管理；CLI 显式参数和 Batch item 仍优先。通知与自动容错默认都保持关闭，除非明确启用；提交前用 `job create --dry-run` 或 `job batch --dry-run` 检查最终 Payload。
 - 多节点训练要关注每个 Pod 的 GPU、显存、CPU 和网络曲线是否同步；某个 Worker 长期低负载通常比日志更早暴露问题。
 - 排除坏节点是“不要调度到这些 Ready 节点”，不是固定节点；候选节点来自所选 Compute Group。
 
