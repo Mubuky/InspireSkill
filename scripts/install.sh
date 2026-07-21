@@ -14,7 +14,8 @@
 #   curl -fsSL .../install.sh | bash -s -- --no-schedule
 #
 # Flags:
-#   --harness claude[,codex,antigravity,cursor,openclaw,opencode,qoder,kimi-code]
+#   --harness claude[,codex,antigravity,cursor,openclaw,opencode,qoder,qoder-work,
+#                    kimi-code,kimi-desktop]
 #                                     explicit harness list (default: auto-detect)
 #   --no-cli                          skip installing the Python package (skill-only)
 #   --no-schedule                     skip the macOS launchd update-check agent
@@ -31,6 +32,7 @@ INSTALL_CLI=1
 INSTALL_SCHEDULE=1
 INSTALLER=""
 KIMI_CODE_HOME_DIR="${KIMI_CODE_HOME:-$HOME/.kimi-code}"
+KIMI_DESKTOP_ROOT="$HOME/Library/Application Support/kimi-desktop/daimon-share/daimon"
 
 color()  { local c="$1"; shift; printf '\033[%sm%s\033[0m' "$c" "$*"; }
 bold()   { color "1"  "$@"; }
@@ -67,22 +69,24 @@ detect_harnesses() {
   [[ -d "$HOME/.openclaw"                                    ]] && found+=("openclaw")
   [[ -d "${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"     ]] && found+=("opencode")
   [[ -d "$HOME/.qoder"                                       ]] && found+=("qoder")
+  [[ -d "$HOME/.qoderwork"                                   ]] && found+=("qoder-work")
   [[ -d "$KIMI_CODE_HOME_DIR"                                ]] && found+=("kimi-code")
+  [[ -d "$KIMI_DESKTOP_ROOT"                                 ]] && found+=("kimi-desktop")
   (IFS=,; echo "${found[*]:-}")
 }
 
 if [[ -z "$HARNESSES" ]]; then
   HARNESSES="$(detect_harnesses)"
   [[ -n "$HARNESSES" ]] \
-    || die "no agent harness detected (checked \$HOME/.claude, .codex, .gemini, .cursor, .openclaw, \$OPENCODE_CONFIG_DIR or \$HOME/.config/opencode, .qoder, and \$KIMI_CODE_HOME or \$HOME/.kimi-code). Pass --harness explicitly."
+    || die "no agent harness detected (checked \$HOME/.claude, .codex, .gemini, .cursor, .openclaw, \$OPENCODE_CONFIG_DIR or \$HOME/.config/opencode, .qoder, .qoderwork, \$KIMI_CODE_HOME or \$HOME/.kimi-code, and Kimi Desktop's Application Support directory). Pass --harness explicitly."
   log "auto-detected harnesses: $(bold "$HARNESSES")"
 fi
 
 IFS=',' read -r -a HARNESS_LIST <<<"$HARNESSES"
 for h in "${HARNESS_LIST[@]}"; do
   case "$h" in
-    claude|codex|antigravity|cursor|openclaw|opencode|qoder|kimi-code) ;;
-    *) die "unknown harness: $h (pick from claude,codex,antigravity,cursor,openclaw,opencode,qoder,kimi-code)" ;;
+    claude|codex|antigravity|cursor|openclaw|opencode|qoder|qoder-work|kimi-code|kimi-desktop) ;;
+    *) die "unknown harness: $h (pick from claude,codex,antigravity,cursor,openclaw,opencode,qoder,qoder-work,kimi-code,kimi-desktop)" ;;
   esac
 done
 
@@ -230,7 +234,9 @@ install_skill() {
     openclaw) target="$HOME/.openclaw/skills/inspire"                                  ;;
     opencode) target="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}/skills/inspire"   ;;
     qoder)    target="$HOME/.qoder/skills/inspire"                                     ;;
+    qoder-work) target="$HOME/.qoderwork/skills/inspire"                               ;;
     kimi-code) target="$KIMI_CODE_HOME_DIR/skills/inspire"                             ;;
+    kimi-desktop) target="$KIMI_DESKTOP_ROOT/skills/inspire"                           ;;
   esac
 
   if [[ -n "$legacy_target" && "$legacy_target" != "$target" && ( -L "$legacy_target" || -e "$legacy_target" ) ]]; then

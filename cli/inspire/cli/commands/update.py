@@ -68,6 +68,18 @@ def _kimi_code_home() -> Path:
     return Path.home() / ".kimi-code"
 
 
+def _kimi_desktop_root() -> Path:
+    """Resolve Kimi Desktop's macOS daemon data root."""
+    return (
+        Path.home()
+        / "Library"
+        / "Application Support"
+        / "kimi-desktop"
+        / "daimon-share"
+        / "daimon"
+    )
+
+
 HARNESS_SKILL_DIRS = {
     "claude": Path.home() / ".claude" / "skills" / "inspire",
     "codex": Path.home() / ".codex" / "skills" / "inspire",
@@ -76,7 +88,9 @@ HARNESS_SKILL_DIRS = {
     "openclaw": Path.home() / ".openclaw" / "skills" / "inspire",
     "opencode": _opencode_config_dir() / "skills" / "inspire",
     "qoder": Path.home() / ".qoder" / "skills" / "inspire",
+    "qoder-work": Path.home() / ".qoderwork" / "skills" / "inspire",
     "kimi-code": _kimi_code_home() / "skills" / "inspire",
+    "kimi-desktop": _kimi_desktop_root() / "skills" / "inspire",
 }
 HARNESS_LEGACY_SKILL_DIRS = {
     "antigravity": [Path.home() / ".gemini" / "skills" / "inspire"],
@@ -89,7 +103,9 @@ HARNESS_ROOTS = {
     "openclaw": Path.home() / ".openclaw",
     "opencode": _opencode_config_dir(),
     "qoder": Path.home() / ".qoder",
+    "qoder-work": Path.home() / ".qoderwork",
     "kimi-code": _kimi_code_home(),
+    "kimi-desktop": _kimi_desktop_root(),
 }
 
 SKILL_ASSETS = ("SKILL.md", "references")
@@ -814,8 +830,9 @@ def _refresh_skill_files(silent: bool, *, latest_version: str | None = None) -> 
             click.secho(
                 "! No agent harness detected "
                 "(checked ~/.claude, ~/.codex, ~/.gemini, ~/.cursor, ~/.openclaw, "
-                "$OPENCODE_CONFIG_DIR or ~/.config/opencode, ~/.qoder, and "
-                "$KIMI_CODE_HOME or ~/.kimi-code); "
+                "$OPENCODE_CONFIG_DIR or ~/.config/opencode, ~/.qoder, ~/.qoderwork, "
+                "$KIMI_CODE_HOME or ~/.kimi-code, and Kimi Desktop's Application Support "
+                "directory); "
                 "skipping SKILL refresh.",
                 fg="yellow",
                 err=True,

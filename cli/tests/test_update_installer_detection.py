@@ -35,6 +35,7 @@ from inspire.cli.commands.update import (
     _ensure_global_playwright_runtime,
     _ensure_playwright_runtime,
     _kimi_code_home,
+    _kimi_desktop_root,
     _release_entries_between,
     _is_local_requirement,
     _parse_uv_tool_list,
@@ -80,7 +81,7 @@ def test_detect_installer_from_prefix(
     assert _detect_installer() == expected
 
 
-def test_detect_harnesses_includes_antigravity_cursor_qoder_and_kimi_code(
+def test_detect_harnesses_includes_all_supported_desktop_and_cli_harnesses(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -89,14 +90,18 @@ def test_detect_harnesses_includes_antigravity_cursor_qoder_and_kimi_code(
         "antigravity": tmp_path / ".gemini",
         "cursor": tmp_path / ".cursor",
         "qoder": tmp_path / ".qoder",
+        "qoder-work": tmp_path / ".qoderwork",
         "kimi-code": tmp_path / ".kimi-code",
+        "kimi-desktop": tmp_path / "Library" / "Application Support" / "kimi-desktop",
         "opencode": tmp_path / ".config" / "opencode",
     }
     roots["claude"].mkdir()
     roots["antigravity"].mkdir()
     roots["cursor"].mkdir()
     roots["qoder"].mkdir()
+    roots["qoder-work"].mkdir()
     roots["kimi-code"].mkdir()
+    roots["kimi-desktop"].mkdir(parents=True)
     monkeypatch.setattr(update_module, "HARNESS_ROOTS", roots)
 
     assert update_module._detect_harnesses() == [
@@ -104,7 +109,9 @@ def test_detect_harnesses_includes_antigravity_cursor_qoder_and_kimi_code(
         "antigravity",
         "cursor",
         "qoder",
+        "qoder-work",
         "kimi-code",
+        "kimi-desktop",
     ]
 
 
@@ -125,6 +132,28 @@ def test_cursor_skill_dir_uses_cursor_global_skills_path() -> None:
 def test_kimi_code_skill_dir_uses_kimi_code_global_skills_path() -> None:
     assert update_module.HARNESS_SKILL_DIRS["kimi-code"] == (
         Path.home() / ".kimi-code" / "skills" / "inspire"
+    )
+
+
+def test_qoder_work_skill_dir_uses_qoder_work_global_skills_path() -> None:
+    assert update_module.HARNESS_SKILL_DIRS["qoder-work"] == (
+        Path.home() / ".qoderwork" / "skills" / "inspire"
+    )
+
+
+def test_kimi_desktop_skill_dir_uses_daemon_shared_skills_path() -> None:
+    expected_root = (
+        Path.home()
+        / "Library"
+        / "Application Support"
+        / "kimi-desktop"
+        / "daimon-share"
+        / "daimon"
+    )
+    assert _kimi_desktop_root() == expected_root
+    assert update_module.HARNESS_ROOTS["kimi-desktop"] == expected_root
+    assert update_module.HARNESS_SKILL_DIRS["kimi-desktop"] == (
+        expected_root / "skills" / "inspire"
     )
 
 

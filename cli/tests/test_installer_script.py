@@ -21,11 +21,21 @@ def test_installer_first_uv_install_without_inspire_on_path(tmp_path: Path) -> N
     home.mkdir()
     bin_dir.mkdir()
     kimi_home = home / "custom-kimi-code"
+    kimi_desktop_root = (
+        home
+        / "Library"
+        / "Application Support"
+        / "kimi-desktop"
+        / "daimon-share"
+        / "daimon"
+    )
 
     (home / ".codex").mkdir()
     (home / ".gemini").mkdir()
     (home / ".cursor").mkdir()
+    (home / ".qoderwork").mkdir()
     (home / ".kimi-code").mkdir()
+    kimi_desktop_root.mkdir(parents=True)
     legacy_gemini_skill = home / ".gemini" / "skills" / "inspire"
     legacy_gemini_skill.mkdir(parents=True)
     (legacy_gemini_skill / "SKILL.md").write_text("# stale\n", encoding="utf-8")
@@ -76,7 +86,7 @@ def test_installer_first_uv_install_without_inspire_on_path(tmp_path: Path) -> N
             "bash",
             str(installer),
             "--harness",
-            "codex,antigravity,cursor,qoder,kimi-code",
+            "codex,antigravity,cursor,qoder,qoder-work,kimi-code,kimi-desktop",
             "--no-schedule",
         ],
         cwd=installer.parent.parent,
@@ -93,7 +103,9 @@ def test_installer_first_uv_install_without_inspire_on_path(tmp_path: Path) -> N
     assert not (home / ".gemini" / "skills" / "inspire").exists()
     assert (home / ".cursor" / "skills" / "inspire" / "SKILL.md").exists()
     assert (home / ".qoder" / "skills" / "inspire" / "SKILL.md").exists()
+    assert (home / ".qoderwork" / "skills" / "inspire" / "SKILL.md").exists()
     assert (kimi_home / "skills" / "inspire" / "SKILL.md").exists()
+    assert (kimi_desktop_root / "skills" / "inspire" / "SKILL.md").exists()
     assert not (home / ".kimi-code" / "skills" / "inspire" / "SKILL.md").exists()
 
 
@@ -103,7 +115,9 @@ def test_installer_advertises_antigravity_not_gemini_cli() -> None:
 
     assert "antigravity" in text
     assert "cursor" in text
+    assert "qoder-work" in text
     assert "kimi-code" in text
+    assert "kimi-desktop" in text
     assert "gemini)" not in text
     assert 'legacy_target="$HOME/.gemini/skills/inspire"' in text
     assert '  target="$HOME/.gemini/skills/inspire"' not in text

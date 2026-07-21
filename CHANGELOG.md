@@ -6,6 +6,11 @@
 
 ## 更新内容
 
+### 新增
+
+- 新增 Qoder Work Harness 支持；安装器和 `inspire update` 会自动探测 `~/.qoderwork`，并把 InspireSkill 刷到 `~/.qoderwork/skills/inspire/`。
+- 新增 Kimi Desktop Harness 支持；安装器和 `inspire update` 会自动探测其 macOS daemon 数据目录，并把 InspireSkill 刷到 `~/Library/Application Support/kimi-desktop/daimon-share/daimon/skills/inspire/`。
+
 ### 修复
 
 - 修复 request-based CAS 登录在代理来源为通用 Shell `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` 时手工注入代理并关闭 Requests 环境解析、从而忽略 `NO_PROXY` 的问题；该路径现在与登录后的 Requests Browser API 一致，由 Requests 原生解析 Shell proxy 和 bypass。
@@ -16,14 +21,16 @@
 ### 文档
 
 - 安装与配置 Reference 明确通用 Shell proxy 的兼容继承、账号级 proxy 优先级、有效代理查询方式，以及直连 SII 时的 `NO_PROXY` / 单次取消代理方法。
+- README 和安装 Reference 同步更新为 10 家 Harness，并补充 Qoder Work 与 Kimi Desktop 的安装目录和显式安装参数。
 
 ### 验证
 
-- 完整测试套件通过：`1136 passed`
+- 完整测试套件通过：`1138 passed`
 - `uv lock --check`
 - `uv run ruff check inspire tests`
 - `uv run mypy`
 - `uv build`
+- `bash -n scripts/install.sh`
 - `git diff --check`
 
 # v6.1.4
